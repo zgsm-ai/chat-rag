@@ -1,0 +1,26 @@
+Name: chat-rag
+Host: 0.0.0.0
+Port: 8080
+
+# Model endpoints configuration
+MainModelEndpoint: "http://localhost:8000/v1/chat/completions"
+SummaryModelEndpoint: "http://localhost:8001/v1/chat/completions"
+
+# Token processing configuration
+TokenThreshold: 5000
+
+# Semantic API configuration
+SemanticApiEndpoint: "http://localhost:8002/codebase-indexer/api/v1/semantics"
+TopK: 5
+
+# Feature flags
+EnableCompression: true
+
+# Logging configuration
+LogFilePath: "logs/chat-rag.log"
+LokiEndpoint: "http://localhost:3100/loki/api/v1/push"
+LogBatchSize: 100
+LogScanIntervalSec: 60
+
+# Model configuration
+SummaryModel: "deepseek-chat"
