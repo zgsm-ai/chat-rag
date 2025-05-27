@@ -8,7 +8,6 @@ type ChatCompletionRequest struct {
 	Messages    []Message `json:"messages"`
 	Stream      bool      `json:"stream,optional"`
 	Temperature float64   `json:"temperature,optional"`
-	MaxTokens   int       `json:"max_tokens,optional"`
 	ClientId    string    `json:"client_id,optional"`
 	ProjectPath string    `json:"project_path,optional"`
 }

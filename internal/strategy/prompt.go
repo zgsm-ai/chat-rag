@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zgsm-ai/chat-rag/internal/client"
 	"github.com/zgsm-ai/chat-rag/internal/types"
 )
@@ -48,17 +49,17 @@ func (p *DirectProcessor) ProcessPrompt(ctx context.Context, req *types.ChatComp
 
 // CompressionProcessor processes prompts with RAG compression
 type CompressionProcessor struct {
-	semanticClient *client.SemanticClient
-	llmClient      *client.LLMClient
-	topK           int
+	semanticClient   *client.SemanticClient
+	summaryProcessor *SummaryProcessor
+	topK             int
 }
 
 // NewCompressionProcessor creates a new compression processor
 func NewCompressionProcessor(semanticClient *client.SemanticClient, llmClient *client.LLMClient, topK int) *CompressionProcessor {
 	return &CompressionProcessor{
-		semanticClient: semanticClient,
-		llmClient:      llmClient,
-		topK:           topK,
+		semanticClient:   semanticClient,
+		summaryProcessor: NewSummaryProcessor(llmClient),
+		topK:             topK,
 	}
 }
 
@@ -86,69 +87,41 @@ func (p *CompressionProcessor) ProcessPrompt(ctx context.Context, req *types.Cha
 	}
 
 	semanticResp, err := p.semanticClient.Search(ctx, semanticReq)
-	if err != nil {
-		return nil, fmt.Errorf("semantic search failed: %w", err)
-	}
 
 	// Build context from semantic results
 	var contextParts []string
-	for _, result := range semanticResp.Results {
-		contextParts = append(contextParts, fmt.Sprintf("File: %s (Line %d)\n%s",
-			result.FilePath, result.LineNumber, result.Content))
-	}
-	semanticContext := strings.Join(contextParts, "\n\n")
+	var semanticContext string
 
-	// Build summary prompt
-	var historyParts []string
-	for _, msg := range req.Messages {
-		if msg.Role != "system" {
-			historyParts = append(historyParts, fmt.Sprintf("%s: %s", msg.Role, msg.Content))
-		}
-	}
-	history := strings.Join(historyParts, "\n")
-
-	summaryPrompt := fmt.Sprintf(`Please summarize the following information while preserving key details and context:
-
-SEMANTIC CONTEXT:
-%s
-
-CONVERSATION HISTORY:
-%s
-
-CURRENT QUERY:
-%s
-
-Please provide a concise summary that maintains the essential information needed to answer the current query.`,
-		semanticContext, history, latestUserMessage)
-
-	// Generate summary using LLM
-	summary, err := p.llmClient.SummarizeContent(ctx, summaryPrompt)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate summary: %w", err)
+		// If semantic search fails, continue without context
+		logx.Errorf("Semantic search failed: %v", err)
+		semanticContext = "No semantic context available due to search failure"
+	} else {
+		for _, result := range semanticResp.Results {
+			contextParts = append(contextParts, fmt.Sprintf("File: %s (Line %d)\n%s",
+				result.FilePath, result.LineNumber, result.Content))
+		}
+		semanticContext = strings.Join(contextParts, "\n\n")
+	}
+
+	// Generate summary
+	summary, err := p.summaryProcessor.GenerateSummary(ctx, semanticContext, req.Messages)
+	if err != nil {
+		logx.Errorf("Failed to generate summary: %v", err)
+		// On error, proceed with original messages
+		return &ProcessedPrompt{
+			Messages:         req.Messages,
+			IsCompressed:     false,
+			OriginalTokens:   0, // Will be calculated by caller
+			CompressedTokens: 0, // Will be calculated by caller
+			CompressionRatio: 1.0,
+			SemanticLatency:  0,
+			SummaryLatency:   0,
+		}, nil
 	}
 
 	// Build final messages
-	var finalMessages []types.Message
-
-	// Add system message if exists
-	for _, msg := range req.Messages {
-		if msg.Role == "system" {
-			finalMessages = append(finalMessages, msg)
-			break
-		}
-	}
-
-	// Add summary as context
-	finalMessages = append(finalMessages, types.Message{
-		Role:    "assistant",
-		Content: fmt.Sprintf("Based on the codebase context and conversation history: %s", summary),
-	})
-
-	// Add latest user message
-	finalMessages = append(finalMessages, types.Message{
-		Role:    "user",
-		Content: latestUserMessage,
-	})
+	finalMessages := p.summaryProcessor.BuildSummaryMessages(req.Messages, summary)
 
 	return &ProcessedPrompt{
 		Messages:         finalMessages,
@@ -163,24 +136,24 @@ Please provide a concise summary that maintains the essential information needed
 
 // PromptProcessorFactory creates prompt processors based on configuration
 type PromptProcessorFactory struct {
-	semanticClient *client.SemanticClient
-	llmClient      *client.LLMClient
-	topK           int
+	semanticClient     *client.SemanticClient
+	summaryModelClient *client.LLMClient
+	topK               int
 }
 
 // NewPromptProcessorFactory creates a new factory
-func NewPromptProcessorFactory(semanticClient *client.SemanticClient, llmClient *client.LLMClient, topK int) *PromptProcessorFactory {
+func NewPromptProcessorFactory(semanticClient *client.SemanticClient, summaryModelClient *client.LLMClient, topK int) *PromptProcessorFactory {
 	return &PromptProcessorFactory{
-		semanticClient: semanticClient,
-		llmClient:      llmClient,
-		topK:           topK,
+		semanticClient:     semanticClient,
+		summaryModelClient: summaryModelClient,
+		topK:               topK,
 	}
 }
 
 // CreateProcessor creates a processor based on whether compression is needed
 func (f *PromptProcessorFactory) CreateProcessor(needsCompression bool) PromptProcessor {
 	if needsCompression {
-		return NewCompressionProcessor(f.semanticClient, f.llmClient, f.topK)
+		return NewCompressionProcessor(f.semanticClient, f.summaryModelClient, f.topK)
 	}
 	return NewDirectProcessor()
 }

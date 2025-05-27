@@ -8,7 +8,7 @@ type Config struct {
 
 	// Model endpoints configuration
 	MainModelEndpoint    string `json:",default=http://localhost:8000/v1/chat/completions"`
-	SummaryModelEndpoint string `json:",default=http://localhost:8001/v1/chat/completions"`
+	SummaryModelEndpoint string `json:",default=http://localhost:8080/v1/chat/completions"`
 
 	// Token processing configuration
 	TokenThreshold int `json:",default=5000"`
@@ -27,5 +27,6 @@ type Config struct {
 	LogScanIntervalSec int    `json:",default=60"`
 
 	// Model configuration
-	SummaryModel string `json:",default=deepseek-chat"`
+	SummaryModel  string `json:",default=gpt-3.5-turbo"`
+	ClassifyModel string `json:",default=deepseek-v3"`
 }

@@ -108,7 +108,7 @@ func (l *ChatCompletionLogic) handleNonStreamingCompletion(req *types.ChatComple
 	prompt := l.buildPromptFromMessages(processedPrompt.Messages)
 
 	// Generate completion
-	completion, err := l.svcCtx.LLMClient.GenerateCompletion(l.ctx, prompt)
+	completion, err := l.svcCtx.SummaryModelClient.GenerateCompletion(l.ctx, prompt)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate completion: %w", err)
 	}

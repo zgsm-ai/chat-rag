@@ -18,17 +18,6 @@ func ChatCompletionHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 			return
 		}
 
-		// Set default values if not provided
-		if req.Model == "" {
-			req.Model = "gpt-3.5-turbo"
-		}
-		if req.Temperature == 0 {
-			req.Temperature = 0.7
-		}
-		if req.MaxTokens == 0 {
-			req.MaxTokens = 2048
-		}
-
 		l := logic.NewChatCompletionLogic(r.Context(), svcCtx)
 		resp, err := l.ChatCompletion(&req)
 		if err != nil {

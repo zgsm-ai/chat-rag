@@ -14,7 +14,6 @@ type ServiceContext struct {
 
 	// Clients
 	SemanticClient *client.SemanticClient
-	LLMClient      *client.LLMClient
 
 	// Services
 	LoggerService *service.LoggerService
@@ -32,7 +31,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	semanticClient := client.NewSemanticClient(c.SemanticApiEndpoint)
 
 	// Initialize LLM client
-	llmClient, err := client.NewLLMClient(c.MainModelEndpoint, c.SummaryModelEndpoint)
+	summaryModelClient, err := client.NewLLMClient(c.SummaryModelEndpoint, c.SummaryModel)
 	if err != nil {
 		panic("Failed to initialize LLM client: " + err.Error())
 	}
@@ -50,13 +49,13 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		c.LokiEndpoint,
 		c.LogBatchSize,
 		c.LogScanIntervalSec,
-		llmClient,
+		summaryModelClient, // TODO: change to classify model client
 	)
 
 	// Initialize strategy factory
 	promptProcessorFactory := strategy.NewPromptProcessorFactory(
 		semanticClient,
-		llmClient,
+		summaryModelClient,
 		c.TopK,
 	)
 
@@ -66,7 +65,6 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	return &ServiceContext{
 		Config:                 c,
 		SemanticClient:         semanticClient,
-		LLMClient:              llmClient,
 		LoggerService:          loggerService,
 		TokenCounter:           tokenCounter,
 		PromptProcessorFactory: promptProcessorFactory,
