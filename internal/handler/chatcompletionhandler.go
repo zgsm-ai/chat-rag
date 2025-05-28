@@ -19,18 +19,33 @@ func ChatCompletionHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 		}
 
 		l := logic.NewChatCompletionLogic(r.Context(), svcCtx)
-		resp, err := l.ChatCompletion(&req)
-		if err != nil {
-			httpx.ErrorCtx(r.Context(), w, err)
-		} else {
-			// Set appropriate headers for OpenAI compatibility
-			w.Header().Set("Content-Type", "application/json")
-			if req.Stream {
-				w.Header().Set("Cache-Control", "no-cache")
-				w.Header().Set("Connection", "keep-alive")
-				w.Header().Set("Transfer-Encoding", "chunked")
+
+		if req.Stream {
+			// Handle streaming response with SSE
+			w.Header().Set("Content-Type", "text/event-stream")
+			w.Header().Set("Cache-Control", "no-cache")
+			w.Header().Set("Connection", "keep-alive")
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Headers", "Cache-Control")
+
+			// Flush headers immediately
+			if flusher, ok := w.(http.Flusher); ok {
+				flusher.Flush()
 			}
-			httpx.OkJsonCtx(r.Context(), w, resp)
+
+			err := l.ChatCompletionStream(&req, w, r.Header)
+			if err != nil {
+				httpx.ErrorCtx(r.Context(), w, err)
+			}
+		} else {
+			// Handle non-streaming response
+			resp, err := l.ChatCompletion(&req, r.Header)
+			if err != nil {
+				httpx.ErrorCtx(r.Context(), w, err)
+			} else {
+				w.Header().Set("Content-Type", "application/json")
+				httpx.OkJsonCtx(r.Context(), w, resp)
+			}
 		}
 	}
 }

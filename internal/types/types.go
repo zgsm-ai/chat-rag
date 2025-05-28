@@ -4,12 +4,13 @@
 package types
 
 type ChatCompletionRequest struct {
-	Model       string    `json:"model"`
-	Messages    []Message `json:"messages"`
-	Stream      bool      `json:"stream,optional"`
-	Temperature float64   `json:"temperature,optional"`
-	ClientId    string    `json:"client_id,optional"`
-	ProjectPath string    `json:"project_path,optional"`
+	Model         string        `json:"model"`
+	Messages      []Message     `json:"messages"`
+	Stream        bool          `json:"stream,optional"`
+	Temperature   float64       `json:"temperature,optional"`
+	ClientId      string        `json:"client_id,optional"`
+	ProjectPath   string        `json:"project_path,optional"`
+	StreamOptions StreamOptions `json:"stream_options,optional"`
 }
 
 type ChatCompletionResponse struct {
@@ -19,6 +20,20 @@ type ChatCompletionResponse struct {
 	Model   string   `json:"model"`
 	Choices []Choice `json:"choices"`
 	Usage   Usage    `json:"usage,optional"`
+}
+
+type ChatLLMRequest struct {
+	Model       string    `json:"model"`
+	Messages    []Message `json:"messages"`
+	Temperature float64   `json:"temperature,optional"`
+}
+
+type ChatLLMRequestStream struct {
+	Model         string        `json:"model"`
+	Messages      []Message     `json:"messages"`
+	Stream        bool          `json:"stream,optional"`
+	Temperature   float64       `json:"temperature,optional"`
+	StreamOptions StreamOptions `json:"stream_options,optional"`
 }
 
 type Choice struct {
@@ -31,6 +46,10 @@ type Choice struct {
 type Message struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
+}
+
+type StreamOptions struct {
+	IncludeUsage bool `json:"include_usage"`
 }
 
 type Usage struct {

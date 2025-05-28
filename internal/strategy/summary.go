@@ -61,7 +61,7 @@ func NewSummaryProcessor(llmClient *client.LLMClient) *SummaryProcessor {
 
 // GenerateSummary generates a summary of the conversation
 func (p *SummaryProcessor) GenerateSummary(ctx context.Context, semanticContext string, messages []types.Message) (string, error) {
-	fmt.Println("==> messages:", messages)
+	fmt.Println("==> GenerateSummary messages:", messages)
 
 	// Create a new slice of messages for the summary request
 	var summaryMessages []types.Message
@@ -84,13 +84,13 @@ func (p *SummaryProcessor) GenerateSummary(ctx context.Context, semanticContext 
 		Content: "Summarize the conversation so far, as described in the prompt instructions.",
 	})
 
-	fmt.Println("==> summary messages:", summaryMessages)
-
 	// Generate summary using LLM with the new message format
-	summary, err := p.llmClient.SummarizeContentWithMessages(ctx, summaryMessages)
+	summary, err := p.llmClient.ChatLLMWithMessages(ctx, summaryMessages)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate summary: %w", err)
 	}
+
+	fmt.Println("==> GenerateSummary summary:", summary)
 
 	return summary, nil
 }
@@ -110,7 +110,7 @@ func (p *SummaryProcessor) BuildSummaryMessages(messages []types.Message, summar
 	// Add summary as context
 	finalMessages = append(finalMessages, types.Message{
 		Role:    "assistant",
-		Content: fmt.Sprintf("Based on the codebase context and conversation history: %s", summary),
+		Content: summary,
 	})
 
 	return finalMessages

@@ -1,2 +1,20 @@
-bin/*
-logs/*
+# Binaries
+*.exe
+bin/
+
+# Logs
+logs/
+
+# Dependency directories
+vendor/
+go/pkg/
+
+# IDE specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment files
+.env
+.DS_Store

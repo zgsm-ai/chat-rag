@@ -13,14 +13,29 @@ type (
 		Role    string `json:"role"`
 		Content string `json:"content"`
 	}
-	// OpenAI compatible chat completion request
+	// custom chat completion request
 	ChatCompletionRequest {
+		Model         string        `json:"model"`
+		Messages      []Message     `json:"messages"`
+		Stream        bool          `json:"stream,optional"`
+		Temperature   float64       `json:"temperature,optional"`
+		ClientId      string        `json:"client_id,optional"`
+		ProjectPath   string        `json:"project_path,optional"`
+		StreamOptions StreamOptions `json:"stream_options,optional"`
+	}
+	// OpenAI compatible message structure
+	ChatLLMRequest {
 		Model       string    `json:"model"`
 		Messages    []Message `json:"messages"`
-		Stream      bool      `json:"stream,optional"`
 		Temperature float64   `json:"temperature,optional"`
-		ClientId    string    `json:"client_id,optional"`
-		ProjectPath string    `json:"project_path,optional"`
+	}
+	// OpenAI compatible message structure
+	ChatLLMRequestStream {
+		Model         string        `json:"model"`
+		Messages      []Message     `json:"messages"`
+		Stream        bool          `json:"stream,optional"`
+		Temperature   float64       `json:"temperature,optional"`
+		StreamOptions StreamOptions `json:"stream_options,optional"`
 	}
 	// OpenAI compatible choice structure
 	Choice {
@@ -34,6 +49,9 @@ type (
 		PromptTokens     int `json:"prompt_tokens"`
 		CompletionTokens int `json:"completion_tokens"`
 		TotalTokens      int `json:"total_tokens"`
+	}
+	StreamOptions {
+		IncludeUsage bool `json:"include_usage"`
 	}
 	// OpenAI compatible chat completion response
 	ChatCompletionResponse {

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/zgsm-ai/chat-rag/internal/types"
 )
 
 const testLLMEndpoint = "http://localhost:8080/v1"
@@ -62,20 +64,28 @@ func TestLLMClient_CountTokens(t *testing.T) {
 	}
 }
 
-func TestLLMClient_SummarizeContent_FormatCheck(t *testing.T) {
-	// Simple string format validation without creating an actual client
-	content := "This is test content that needs to be summarized"
+func TestLLMClient_ChatLLMWithMessages_FormatCheck(t *testing.T) {
+	// Simple message format validation without creating an actual client
+	messages := []struct {
+		Role    string
+		Content string
+	}{
+		{"system", "You are a helpful assistant that summarizes content."},
+		{"user", "This is test content that needs to be summarized"},
+	}
 
-	// Check expected prompt format
-	expectedPromptPart := "Please summarize the following content while preserving the key information and context: " + content
-
-	// Verify expected prompt contains original content
-	if !strings.Contains(expectedPromptPart, content) {
-		t.Errorf("Summary prompt should contain the original content")
+	// Verify messages contain expected content
+	for _, msg := range messages {
+		if msg.Content == "" {
+			t.Errorf("Message content should not be empty")
+		}
+		if msg.Role == "" {
+			t.Errorf("Message role should not be empty")
+		}
 	}
 }
 
-func TestLLMClient_SummarizeContent(t *testing.T) {
+func TestLLMClient_ChatLLMWithMessages(t *testing.T) {
 	// Create client for actual API testing
 	client, err := NewLLMClient(testLLMEndpoint, testModel)
 	if err != nil {
@@ -85,22 +95,37 @@ func TestLLMClient_SummarizeContent(t *testing.T) {
 	// Test cases
 	testCases := []struct {
 		name        string
-		content     string
+		messages    []types.Message
 		expectError bool
 	}{
 		{
-			name:        "Empty content",
-			content:     "",
-			expectError: false, // Even empty content can be summarized
+			name:        "Empty messages",
+			messages:    []types.Message{},
+			expectError: true, // Empty messages should return an error
 		},
 		{
-			name:        "Short content",
-			content:     "This is a short text to summarize.",
+			name: "Single user message",
+			messages: []types.Message{
+				{Role: "user", Content: "This is a short text to summarize."},
+			},
 			expectError: false,
 		},
 		{
-			name:        "Longer content",
-			content:     "This is a longer text that contains multiple sentences. It discusses various topics and should be summarized properly. The summary should retain the key information while being concise.",
+			name: "System and user messages",
+			messages: []types.Message{
+				{Role: "system", Content: "You are a helpful assistant that summarizes content."},
+				{Role: "user", Content: "This is a longer text that contains multiple sentences. It discusses various topics and should be summarized properly. The summary should retain the key information while being concise."},
+			},
+			expectError: false,
+		},
+		{
+			name: "Conversation with assistant",
+			messages: []types.Message{
+				{Role: "system", Content: "You are a helpful assistant."},
+				{Role: "user", Content: "Please summarize this content."},
+				{Role: "assistant", Content: "I'll help you summarize the content."},
+				{Role: "user", Content: "Here is the content: This is important information that needs to be condensed."},
+			},
 			expectError: false,
 		},
 	}
@@ -109,7 +134,7 @@ func TestLLMClient_SummarizeContent(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			summary, err := client.SummarizeContentWithMessages(ctx, tc.content)
+			summary, err := client.ChatLLMWithMessages(ctx, tc.messages)
 
 			if tc.expectError && err == nil {
 				t.Errorf("Expected error but got none")
@@ -123,7 +148,7 @@ func TestLLMClient_SummarizeContent(t *testing.T) {
 					t.Error("Received empty summary")
 				}
 			}
-			fmt.Println("content:", tc.content)
+			fmt.Println("messages:", tc.messages)
 			fmt.Println("summary:", summary)
 		})
 	}

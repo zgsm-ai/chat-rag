@@ -2,9 +2,12 @@ package logic
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"time"
 
+	"github.com/zgsm-ai/chat-rag/internal/client"
 	"github.com/zgsm-ai/chat-rag/internal/model"
 	"github.com/zgsm-ai/chat-rag/internal/strategy"
 	"github.com/zgsm-ai/chat-rag/internal/svc"
@@ -29,11 +32,11 @@ func NewChatCompletionLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Ch
 	}
 }
 
-func (l *ChatCompletionLogic) ChatCompletion(req *types.ChatCompletionRequest) (resp *types.ChatCompletionResponse, err error) {
+// processRequest handles common request processing logic
+func (l *ChatCompletionLogic) processRequest(req *types.ChatCompletionRequest) (*model.ChatLog, *strategy.ProcessedPrompt, error) {
 	startTime := time.Now()
 	requestID := uuid.New().String()
 
-	// Initialize log entry
 	chatLog := &model.ChatLog{
 		RequestID:   requestID,
 		Timestamp:   startTime,
@@ -45,10 +48,9 @@ func (l *ChatCompletionLogic) ChatCompletion(req *types.ChatCompletionRequest) (
 	// Defer logging
 	defer func() {
 		chatLog.TotalLatency = time.Since(startTime).Milliseconds()
-		if err != nil {
-			chatLog.Error = err.Error()
+		if l.svcCtx.LoggerService != nil {
+			l.svcCtx.LoggerService.LogAsync(chatLog)
 		}
-		l.svcCtx.LoggerService.LogAsync(chatLog)
 	}()
 
 	// Count original tokens
@@ -63,20 +65,20 @@ func (l *ChatCompletionLogic) ChatCompletion(req *types.ChatCompletionRequest) (
 	// Process prompt using strategy pattern
 	processor := l.svcCtx.PromptProcessorFactory.CreateProcessor(needsCompression)
 
-	var semanticStart, summaryStart time.Time
+	var semanticStart time.Time
 	if needsCompression {
 		semanticStart = time.Now()
 	}
 
 	processedPrompt, err := processor.ProcessPrompt(l.ctx, req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to process prompt: %w", err)
+		return nil, nil, fmt.Errorf("failed to process prompt: %w", err)
 	}
 
-	if needsCompression {
+	// Record timing information from processed prompt
+	if needsCompression && processedPrompt.IsCompressed {
 		chatLog.SemanticLatency = time.Since(semanticStart).Milliseconds()
-		summaryStart = time.Now()
-		chatLog.SummaryLatency = time.Since(summaryStart).Milliseconds()
+		chatLog.SummaryLatency = processedPrompt.SummaryLatency
 	}
 
 	// Update log with processed prompt info
@@ -90,63 +92,83 @@ func (l *ChatCompletionLogic) ChatCompletion(req *types.ChatCompletionRequest) (
 
 	chatLog.CompressedPromptSample = model.TruncateContent(l.getPromptSample(processedPrompt.Messages), 200)
 
-	// Generate completion using LLM
-	modelStart := time.Now()
-
-	if req.Stream {
-		// Handle streaming response
-		return l.handleStreamingCompletion(req, processedPrompt, chatLog, modelStart)
-	} else {
-		// Handle non-streaming response
-		return l.handleNonStreamingCompletion(req, processedPrompt, chatLog, modelStart)
-	}
+	return chatLog, processedPrompt, nil
 }
 
-// handleNonStreamingCompletion handles non-streaming chat completion
-func (l *ChatCompletionLogic) handleNonStreamingCompletion(req *types.ChatCompletionRequest, processedPrompt *strategy.ProcessedPrompt, chatLog *model.ChatLog, modelStart time.Time) (*types.ChatCompletionResponse, error) {
-	// Build prompt string from messages
-	prompt := l.buildPromptFromMessages(processedPrompt.Messages)
+// ChatCompletion handles chat completion requests
+func (l *ChatCompletionLogic) ChatCompletion(req *types.ChatCompletionRequest, headers http.Header) (resp *types.ChatCompletionResponse, err error) {
+	chatLog, processedPrompt, err := l.processRequest(req)
+	if err != nil {
+		return nil, err
+	}
 
-	// Generate completion
-	completion, err := l.svcCtx.SummaryModelClient.GenerateCompletion(l.ctx, prompt)
+	modelStart := time.Now()
+	// Create LLM client for main model
+	llmClient, err := client.NewLLMClient(l.svcCtx.Config.MainModelEndpoint, req.Model)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create LLM client: %w", err)
+	}
+
+	// Generate completion using structured messages
+	response, err := llmClient.ChatLLMWithMessagesRaw(l.ctx, processedPrompt.Messages, headers)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate completion: %w", err)
 	}
 
 	chatLog.MainModelLatency = time.Since(modelStart).Milliseconds()
-
-	// Build response
-	response := &types.ChatCompletionResponse{
-		Id:      "chatcmpl-" + uuid.New().String(),
-		Object:  "chat.completion",
-		Created: time.Now().Unix(),
-		Model:   req.Model,
-		Choices: []types.Choice{
-			{
-				Index: 0,
-				Message: types.Message{
-					Role:    "assistant",
-					Content: completion,
-				},
-				FinishReason: "stop",
-			},
-		},
-		Usage: types.Usage{
-			PromptTokens:     chatLog.CompressedTokens,
-			CompletionTokens: l.countTokens(completion),
-			TotalTokens:      chatLog.CompressedTokens + l.countTokens(completion),
-		},
-	}
-
-	return response, nil
+	return &response, nil
 }
 
-// handleStreamingCompletion handles streaming chat completion
-func (l *ChatCompletionLogic) handleStreamingCompletion(req *types.ChatCompletionRequest, processedPrompt *strategy.ProcessedPrompt, chatLog *model.ChatLog, modelStart time.Time) (*types.ChatCompletionResponse, error) {
-	// For streaming, we would need to modify the handler to support Server-Sent Events
-	// For now, return a non-streaming response
-	// TODO: Implement proper streaming support
-	return l.handleNonStreamingCompletion(req, processedPrompt, chatLog, modelStart)
+// ChatCompletionStream handles streaming chat completion with SSE
+func (l *ChatCompletionLogic) ChatCompletionStream(req *types.ChatCompletionRequest, w http.ResponseWriter, headers http.Header) error {
+	chatLog, processedPrompt, err := l.processRequest(req)
+	if err != nil {
+		l.sendSSEError(w, "Failed to process request", err)
+		return err
+	}
+
+	// Create LLM client for main model
+	llmClient, err := client.NewLLMClient(l.svcCtx.Config.MainModelEndpoint, req.Model)
+	if err != nil {
+		l.sendSSEError(w, "Failed to create LLM client", err)
+		return fmt.Errorf("failed to create LLM client: %w", err)
+	}
+
+	// Generate completion using LLM
+	modelStart := time.Now()
+
+	// Get flusher for immediate response sending
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		return fmt.Errorf("streaming not supported")
+	}
+
+	// Stream completion using structured messages with raw response
+	err = llmClient.ChatLLMWithMessagesStreamRaw(l.ctx, processedPrompt.Messages, headers, func(rawLine string) error {
+		// 直接发送原始行数据，不做任何处理
+		if rawLine != "" {
+			_, writeErr := fmt.Fprintf(w, "%s\n", rawLine)
+			if writeErr != nil {
+				l.Errorf("Failed to write raw stream line: %v", writeErr)
+				return writeErr
+			}
+
+			// Flush immediately
+			flusher.Flush()
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		l.sendSSEError(w, "Failed to generate streaming completion", err)
+		return fmt.Errorf("failed to generate streaming completion: %w", err)
+	}
+
+	// Update chat log with completion info
+	chatLog.MainModelLatency = time.Since(modelStart).Milliseconds()
+
+	return nil
 }
 
 // Helper methods
@@ -200,4 +222,34 @@ func (l *ChatCompletionLogic) buildPromptFromMessages(messages []types.Message) 
 		prompt += fmt.Sprintf("%s: %s\n", msg.Role, msg.Content)
 	}
 	return prompt
+}
+
+// sendSSEError sends an error message in SSE format
+func (l *ChatCompletionLogic) sendSSEError(w http.ResponseWriter, message string, err error) {
+	l.Errorf("%s: %v", message, err)
+
+	// Create error response in OpenAI format
+	errorResponse := map[string]interface{}{
+		"error": map[string]interface{}{
+			"message": fmt.Sprintf("%s: %v", message, err),
+			"type":    "server_error",
+			"code":    "internal_error",
+		},
+	}
+
+	errorData, marshalErr := json.Marshal(errorResponse)
+	if marshalErr != nil {
+		l.Errorf("Failed to marshal error response: %v", marshalErr)
+		fmt.Fprintf(w, "data: {\"error\":{\"message\":\"Internal server error\",\"type\":\"server_error\"}}\n\n")
+	} else {
+		fmt.Fprintf(w, "data: %s\n\n", string(errorData))
+	}
+
+	// Send [DONE] signal to close the stream
+	fmt.Fprintf(w, "data: [DONE]\n\n")
+
+	// Flush if possible
+	if flusher, ok := w.(http.Flusher); ok {
+		flusher.Flush()
+	}
 }

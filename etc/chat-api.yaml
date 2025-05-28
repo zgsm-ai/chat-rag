@@ -1,9 +1,9 @@
 Name: chat-rag
 Host: 0.0.0.0
-Port: 8080
+Port: 8888
 
 # Model endpoints configuration
-MainModelEndpoint: "http://localhost:8000/v1"
+MainModelEndpoint: "http://localhost:8080/v1"
 SummaryModelEndpoint: "http://localhost:8080/v1"
 
 # Token processing configuration

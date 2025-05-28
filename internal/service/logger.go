@@ -15,6 +15,7 @@ import (
 
 	"github.com/zgsm-ai/chat-rag/internal/client"
 	"github.com/zgsm-ai/chat-rag/internal/model"
+	"github.com/zgsm-ai/chat-rag/internal/types"
 )
 
 // LoggerService handles logging operations
@@ -231,7 +232,13 @@ Please respond with only the category name.`,
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	category, err := ls.llmClient.SummarizeContent(ctx, prompt)
+	var classifyMessages []types.Message
+	classifyMessages = append(classifyMessages, types.Message{
+		Role:    "system",
+		Content: prompt,
+	})
+
+	category, err := ls.llmClient.ChatLLMWithMessages(ctx, classifyMessages)
 	if err != nil {
 		fmt.Printf("Failed to classify log: %v\n", err)
 		return "unknown"
