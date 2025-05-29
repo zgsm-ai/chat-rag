@@ -20,11 +20,12 @@ import (
 
 // LoggerService handles logging operations
 type LoggerService struct {
-	logFilePath  string
-	lokiEndpoint string
-	batchSize    int
-	scanInterval time.Duration
-	llmClient    *client.LLMClient
+	logFilePath     string // 永久存储的日志文件夹路径
+	tempLogFilePath string // 临时日志文件路径
+	lokiEndpoint    string
+	batchSize       int
+	scanInterval    time.Duration
+	llmClient       *client.LLMClient
 
 	logChan  chan *model.ChatLog
 	stopChan chan struct{}
@@ -34,23 +35,32 @@ type LoggerService struct {
 
 // NewLoggerService creates a new logger service
 func NewLoggerService(logFilePath, lokiEndpoint string, batchSize int, scanIntervalSec int, llmClient *client.LLMClient) *LoggerService {
+	// 在logFilePath下创建temp文件夹作为临时日志文件路径
+	tempLogFilePath := filepath.Join(logFilePath, "temp", "chat-rag-temp.log")
+
 	return &LoggerService{
-		logFilePath:  logFilePath,
-		lokiEndpoint: lokiEndpoint,
-		batchSize:    batchSize,
-		scanInterval: time.Duration(scanIntervalSec) * time.Second,
-		llmClient:    llmClient,
-		logChan:      make(chan *model.ChatLog, 1000),
-		stopChan:     make(chan struct{}),
+		logFilePath:     logFilePath,     // 永久存储文件夹
+		tempLogFilePath: tempLogFilePath, // 临时日志文件
+		lokiEndpoint:    lokiEndpoint,
+		batchSize:       batchSize,
+		scanInterval:    time.Duration(scanIntervalSec) * time.Second,
+		llmClient:       llmClient,
+		logChan:         make(chan *model.ChatLog, 1000),
+		stopChan:        make(chan struct{}),
 	}
 }
 
 // Start starts the logger service
-func (ls *LoggerService) Start() {
-	// Ensure log directory exists
-	if err := os.MkdirAll(filepath.Dir(ls.logFilePath), 0755); err != nil {
-		fmt.Printf("Failed to create log directory: %v\n", err)
-		return
+func (ls *LoggerService) Start() error {
+	fmt.Println("==> Starting logger")
+	// Ensure permanent log directory exists
+	if err := os.MkdirAll(ls.logFilePath, 0755); err != nil {
+		return fmt.Errorf("failed to create permanent log directory: %w", err)
+	}
+
+	// Ensure temp log directory exists
+	if err := os.MkdirAll(filepath.Dir(ls.tempLogFilePath), 0755); err != nil {
+		return fmt.Errorf("failed to create temp log directory: %w", err)
 	}
 
 	// Start log writer goroutine
@@ -60,6 +70,8 @@ func (ls *LoggerService) Start() {
 	// Start log processor goroutine
 	ls.wg.Add(1)
 	go ls.logProcessor()
+
+	return nil
 }
 
 // Stop stops the logger service
@@ -71,6 +83,7 @@ func (ls *LoggerService) Stop() {
 
 // LogAsync logs a chat completion asynchronously
 func (ls *LoggerService) LogAsync(log *model.ChatLog) {
+	fmt.Printf("==> start LogAsync: log: %+v", log)
 	select {
 	case ls.logChan <- log:
 	default:
@@ -81,6 +94,7 @@ func (ls *LoggerService) LogAsync(log *model.ChatLog) {
 
 // logWriter writes logs to file
 func (ls *LoggerService) logWriter() {
+	fmt.Println("==> start logWriter")
 	defer ls.wg.Done()
 
 	for {
@@ -102,14 +116,16 @@ func (ls *LoggerService) logWriter() {
 	}
 }
 
-// logSync writes a log entry to file synchronously
+// logSync writes a log entry to temp file synchronously
 func (ls *LoggerService) logSync(log *model.ChatLog) {
+	fmt.Printf("==> logSync: log: %v", log)
 	ls.mu.Lock()
 	defer ls.mu.Unlock()
 
-	file, err := os.OpenFile(ls.logFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	// 写入临时文件
+	file, err := os.OpenFile(ls.tempLogFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		fmt.Printf("Failed to open log file: %v\n", err)
+		fmt.Printf("Failed to open temp log file: %v\n", err)
 		return
 	}
 	defer file.Close()
@@ -127,6 +143,7 @@ func (ls *LoggerService) logSync(log *model.ChatLog) {
 
 // logProcessor processes logs periodically
 func (ls *LoggerService) logProcessor() {
+	fmt.Println("==> start logProcessor")
 	defer ls.wg.Done()
 
 	ticker := time.NewTicker(ls.scanInterval)
@@ -146,7 +163,8 @@ func (ls *LoggerService) logProcessor() {
 
 // processLogs reads logs from file, classifies them, and uploads to Loki
 func (ls *LoggerService) processLogs() {
-	// Read logs from file
+	fmt.Println("==> processLogs")
+	// Read logs from temp file
 	logs, err := ls.readLogsFromFile()
 	if err != nil {
 		fmt.Printf("Failed to read logs: %v\n", err)
@@ -161,15 +179,23 @@ func (ls *LoggerService) processLogs() {
 	ls.classifyLogs(logs)
 
 	// Upload to Loki in batches
-	ls.uploadToLoki(logs)
+	success := ls.uploadToLoki(logs)
+	if !success {
+		fmt.Println("Loki upload failed, keeping logs in temp file for retry")
+		return
+	}
 
-	// Clear processed logs from file
+	// Save logs to permanent storage before clearing temp file
+	ls.saveToPermanentStorage(logs)
+
+	// Clear processed logs from temp file
 	ls.clearLogFile()
 }
 
-// readLogsFromFile reads all logs from the log file
+// readLogsFromFile reads all logs from the temp log file
 func (ls *LoggerService) readLogsFromFile() ([]*model.ChatLog, error) {
-	file, err := os.Open(ls.logFilePath)
+	fmt.Println("==> readLogsFromFile")
+	file, err := os.Open(ls.tempLogFilePath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return []*model.ChatLog{}, nil
@@ -201,12 +227,14 @@ func (ls *LoggerService) readLogsFromFile() ([]*model.ChatLog, error) {
 
 // classifyLogs classifies logs using LLM
 func (ls *LoggerService) classifyLogs(logs []*model.ChatLog) {
+	fmt.Println("==> classifyLogs")
 	for _, log := range logs {
 		if log.Category != "" {
 			continue // Already classified
 		}
 
 		category := ls.classifyLog(log)
+		fmt.Printf("==> classifyLog category: %s", category)
 		log.Category = category
 	}
 }
@@ -250,7 +278,8 @@ Please respond with only the category name.`,
 }
 
 // uploadToLoki uploads logs to Loki in batches
-func (ls *LoggerService) uploadToLoki(logs []*model.ChatLog) {
+func (ls *LoggerService) uploadToLoki(logs []*model.ChatLog) bool {
+	fmt.Println("==> uploadToLoki")
 	for i := 0; i < len(logs); i += ls.batchSize {
 		end := i + ls.batchSize
 		if end > len(logs) {
@@ -258,24 +287,27 @@ func (ls *LoggerService) uploadToLoki(logs []*model.ChatLog) {
 		}
 
 		batch := logs[i:end]
-		ls.uploadBatch(batch)
+		if !ls.uploadBatch(batch) {
+			return false // 如果任何一个批次失败，返回失败
+		}
 	}
+	return true // 所有批次都成功
 }
 
 // uploadBatch uploads a single batch to Loki
-func (ls *LoggerService) uploadBatch(logs []*model.ChatLog) {
+func (ls *LoggerService) uploadBatch(logs []*model.ChatLog) bool {
 	lokiBatch := model.CreateLokiBatch(logs)
 
 	jsonData, err := json.Marshal(lokiBatch)
 	if err != nil {
 		fmt.Printf("Failed to marshal Loki batch: %v\n", err)
-		return
+		return false
 	}
 
 	req, err := http.NewRequest("POST", ls.lokiEndpoint, bytes.NewBuffer(jsonData))
 	if err != nil {
 		fmt.Printf("Failed to create Loki request: %v\n", err)
-		return
+		return false
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -284,22 +316,69 @@ func (ls *LoggerService) uploadBatch(logs []*model.ChatLog) {
 	resp, err := client.Do(req)
 	if err != nil {
 		fmt.Printf("Failed to upload to Loki: %v\n", err)
-		return
+		return false
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusNoContent {
 		fmt.Printf("Loki upload failed with status: %d\n", resp.StatusCode)
+		return false
 	}
+
+	return true // 上传成功
 }
 
-// clearLogFile clears the log file after processing
+// saveToPermanentStorage saves logs to permanent storage with date-based directory structure
+func (ls *LoggerService) saveToPermanentStorage(logs []*model.ChatLog) {
+	fmt.Println("==> saveToPermanentStorage")
+	if len(logs) == 0 {
+		return
+	}
+
+	now := time.Now()
+	yearMonth := now.Format("2006-01")
+	dateStr := now.Format("2006-01-02")
+
+	// 创建年-月子文件夹
+	yearMonthDir := filepath.Join(ls.logFilePath, yearMonth)
+	if err := os.MkdirAll(yearMonthDir, 0755); err != nil {
+		fmt.Printf("Failed to create year-month directory: %v\n", err)
+		return
+	}
+
+	// 创建当天的日志文件路径
+	dailyLogFile := filepath.Join(yearMonthDir, fmt.Sprintf("%s.log", dateStr))
+
+	// 追加写入日志到当天的文件
+	file, err := os.OpenFile(dailyLogFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		fmt.Printf("Failed to open permanent log file: %v\n", err)
+		return
+	}
+	defer file.Close()
+
+	for _, log := range logs {
+		logJSON, err := log.ToJSON()
+		if err != nil {
+			fmt.Printf("Failed to marshal log for permanent storage: %v\n", err)
+			continue
+		}
+
+		if _, err := file.WriteString(logJSON + "\n"); err != nil {
+			fmt.Printf("Failed to write log to permanent storage: %v\n", err)
+		}
+	}
+
+	fmt.Printf("Saved %d logs to permanent storage: %s\n", len(logs), dailyLogFile)
+}
+
+// clearLogFile clears the temp log file after processing
 func (ls *LoggerService) clearLogFile() {
 	ls.mu.Lock()
 	defer ls.mu.Unlock()
 
-	if err := os.Truncate(ls.logFilePath, 0); err != nil {
-		fmt.Printf("Failed to clear log file: %v\n", err)
+	if err := os.Truncate(ls.tempLogFilePath, 0); err != nil {
+		fmt.Printf("Failed to clear temp log file: %v\n", err)
 	}
 }
 

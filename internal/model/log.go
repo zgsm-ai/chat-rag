@@ -3,6 +3,8 @@ package model
 import (
 	"encoding/json"
 	"time"
+
+	"github.com/zgsm-ai/chat-rag/internal/types"
 )
 
 // ChatLog represents a single chat completion log entry
@@ -29,8 +31,12 @@ type ChatLog struct {
 	TotalLatency     int64 `json:"total_latency_ms"`
 
 	// Content samples (truncated for logging)
-	OriginalPromptSample   string `json:"original_prompt_sample"`
-	CompressedPromptSample string `json:"compressed_prompt_sample"`
+	OriginalPromptSample   []types.Message `json:"original_prompt_sample"`
+	CompressedPromptSample []types.Message `json:"compressed_prompt_sample"`
+
+	// Response information
+	ResponseContent string      `json:"response_content,omitempty"`
+	Usage           types.Usage `json:"usage,omitempty"`
 
 	// Classification (will be filled by async processor)
 	Category string `json:"category,omitempty"`

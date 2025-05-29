@@ -17,7 +17,7 @@ TopK: 5
 EnableCompression: true
 
 # Logging configuration
-LogFilePath: "logs/chat-rag.log"
+LogFilePath: "logs/"
 LokiEndpoint: "http://localhost:3100/loki/api/v1/push"
 LogBatchSize: 100
 LogScanIntervalSec: 60

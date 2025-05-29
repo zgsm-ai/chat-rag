@@ -8,6 +8,7 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zgsm-ai/chat-rag/internal/client"
 	"github.com/zgsm-ai/chat-rag/internal/types"
+	"github.com/zgsm-ai/chat-rag/internal/utils"
 )
 
 // PromptProcessor defines the interface for prompt processing strategies
@@ -69,7 +70,7 @@ func (p *CompressionProcessor) ProcessPrompt(ctx context.Context, req *types.Cha
 	var latestUserMessage string
 	for i := len(req.Messages) - 1; i >= 0; i-- {
 		if req.Messages[i].Role == "user" {
-			latestUserMessage = req.Messages[i].Content
+			latestUserMessage = utils.GetContentAsString(req.Messages[i].Content)
 			break
 		}
 	}

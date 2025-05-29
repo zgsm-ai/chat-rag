@@ -12,6 +12,7 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/rest/httpc"
 	"github.com/zgsm-ai/chat-rag/internal/types"
+	"github.com/zgsm-ai/chat-rag/internal/utils"
 )
 
 // LLMClient handles communication with language models
@@ -99,7 +100,7 @@ func (c *LLMClient) ChatLLMWithMessages(ctx context.Context, messages []types.Me
 			msgType = llms.ChatMessageTypeHuman
 		}
 
-		langchainMessages = append(langchainMessages, llms.TextParts(msgType, msg.Content))
+		langchainMessages = append(langchainMessages, llms.TextParts(msgType, utils.GetContentAsString(msg.Content)))
 	}
 
 	// Generate using structured messages
@@ -136,7 +137,7 @@ func (c *LLMClient) ChatLLMWithMessagesStream(ctx context.Context, messages []ty
 			msgType = llms.ChatMessageTypeHuman
 		}
 
-		langchainMessages = append(langchainMessages, llms.TextParts(msgType, msg.Content))
+		langchainMessages = append(langchainMessages, llms.TextParts(msgType, utils.GetContentAsString(msg.Content)))
 	}
 
 	// Generate streaming content using structured messages

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/zgsm-ai/chat-rag/internal/client"
@@ -45,18 +46,10 @@ func (l *ChatCompletionLogic) processRequest(req *types.ChatCompletionRequest) (
 		Model:       req.Model,
 	}
 
-	// Defer logging
-	defer func() {
-		chatLog.TotalLatency = time.Since(startTime).Milliseconds()
-		if l.svcCtx.LoggerService != nil {
-			l.svcCtx.LoggerService.LogAsync(chatLog)
-		}
-	}()
-
 	// Count original tokens
 	originalTokens := l.countTokensInMessages(req.Messages)
 	chatLog.OriginalTokens = originalTokens
-	chatLog.OriginalPromptSample = model.TruncateContent(l.getPromptSample(req.Messages), 200)
+	chatLog.OriginalPromptSample = req.Messages
 
 	// Determine if compression is needed
 	needsCompression := l.svcCtx.Config.EnableCompression && originalTokens > l.svcCtx.Config.TokenThreshold
@@ -90,7 +83,7 @@ func (l *ChatCompletionLogic) processRequest(req *types.ChatCompletionRequest) (
 		chatLog.CompressionRatio = float64(compressedTokens) / float64(originalTokens)
 	}
 
-	chatLog.CompressedPromptSample = model.TruncateContent(l.getPromptSample(processedPrompt.Messages), 200)
+	chatLog.CompressedPromptSample = processedPrompt.Messages
 
 	return chatLog, processedPrompt, nil
 }
@@ -101,6 +94,14 @@ func (l *ChatCompletionLogic) ChatCompletion(req *types.ChatCompletionRequest, h
 	if err != nil {
 		return nil, err
 	}
+
+	// Defer logging for non-streaming requests
+	defer func() {
+		chatLog.TotalLatency = time.Since(chatLog.Timestamp).Milliseconds()
+		if l.svcCtx.LoggerService != nil {
+			l.svcCtx.LoggerService.LogAsync(chatLog)
+		}
+	}()
 
 	modelStart := time.Now()
 	// Create LLM client for main model
@@ -116,6 +117,10 @@ func (l *ChatCompletionLogic) ChatCompletion(req *types.ChatCompletionRequest, h
 	}
 
 	chatLog.MainModelLatency = time.Since(modelStart).Milliseconds()
+
+	// Extract response content and usage information
+	l.extractResponseInfo(chatLog, &response)
+
 	return &response, nil
 }
 
@@ -126,6 +131,14 @@ func (l *ChatCompletionLogic) ChatCompletionStream(req *types.ChatCompletionRequ
 		l.sendSSEError(w, "Failed to process request", err)
 		return err
 	}
+
+	// Defer logging for streaming requests - will be called after streaming completes
+	defer func() {
+		chatLog.TotalLatency = time.Since(chatLog.Timestamp).Milliseconds()
+		if l.svcCtx.LoggerService != nil {
+			l.svcCtx.LoggerService.LogAsync(chatLog)
+		}
+	}()
 
 	// Create LLM client for main model
 	llmClient, err := client.NewLLMClient(l.svcCtx.Config.MainModelEndpoint, req.Model)
@@ -143,10 +156,17 @@ func (l *ChatCompletionLogic) ChatCompletionStream(req *types.ChatCompletionRequ
 		return fmt.Errorf("streaming not supported")
 	}
 
+	// Variables to collect streaming response data
+	var responseContent strings.Builder
+	var finalUsage *types.Usage
+
 	// Stream completion using structured messages with raw response
 	err = llmClient.ChatLLMWithMessagesStreamRaw(l.ctx, processedPrompt.Messages, headers, func(rawLine string) error {
 		// 直接发送原始行数据，不做任何处理
 		if rawLine != "" {
+			// Extract content and usage from streaming data
+			l.extractStreamingData(rawLine, &responseContent, &finalUsage)
+
 			_, writeErr := fmt.Fprintf(w, "%s\n", rawLine)
 			if writeErr != nil {
 				l.Errorf("Failed to write raw stream line: %v", writeErr)
@@ -167,6 +187,20 @@ func (l *ChatCompletionLogic) ChatCompletionStream(req *types.ChatCompletionRequ
 
 	// Update chat log with completion info
 	chatLog.MainModelLatency = time.Since(modelStart).Milliseconds()
+
+	// Set response content and usage information
+	responseText := responseContent.String()
+	if responseText != "" {
+		chatLog.ResponseContent = model.TruncateContent(responseText, 500)
+	}
+
+	if finalUsage != nil {
+		chatLog.Usage = *finalUsage
+	} else {
+		// Calculate usage if not provided in streaming response
+		chatLog.Usage = l.calculateUsage(chatLog.CompressedTokens, responseText)
+		l.Infof("Calculated usage for streaming response - TotalTokens: %d", chatLog.Usage.TotalTokens)
+	}
 
 	return nil
 }
@@ -189,7 +223,7 @@ func (l *ChatCompletionLogic) countTokensInMessages(messages []types.Message) in
 	// Fallback to simple estimation
 	totalText := ""
 	for _, msg := range messages {
-		totalText += msg.Role + ": " + msg.Content + "\n"
+		totalText += msg.Role + ": " + utils.GetContentAsString(msg.Content) + "\n"
 	}
 	return utils.EstimateTokens(totalText)
 }
@@ -201,6 +235,7 @@ func (l *ChatCompletionLogic) countTokens(text string) int {
 	return utils.EstimateTokens(text)
 }
 
+// TODO deprecated
 func (l *ChatCompletionLogic) getPromptSample(messages []types.Message) string {
 	if len(messages) == 0 {
 		return ""
@@ -209,11 +244,11 @@ func (l *ChatCompletionLogic) getPromptSample(messages []types.Message) string {
 	// Get the last user message as sample
 	for i := len(messages) - 1; i >= 0; i-- {
 		if messages[i].Role == "user" {
-			return messages[i].Content
+			return utils.GetContentAsString(messages[i].Content)
 		}
 	}
 
-	return messages[len(messages)-1].Content
+	return utils.GetContentAsString(messages[len(messages)-1].Content)
 }
 
 func (l *ChatCompletionLogic) buildPromptFromMessages(messages []types.Message) string {
@@ -251,5 +286,91 @@ func (l *ChatCompletionLogic) sendSSEError(w http.ResponseWriter, message string
 	// Flush if possible
 	if flusher, ok := w.(http.Flusher); ok {
 		flusher.Flush()
+	}
+}
+
+// extractResponseInfo extracts response content and usage from non-streaming response
+func (l *ChatCompletionLogic) extractResponseInfo(chatLog *model.ChatLog, response *types.ChatCompletionResponse) {
+	l.Infof("Extracting response info - Choices count: %d", len(response.Choices))
+
+	// Extract response content from choices
+	if len(response.Choices) > 0 {
+		contentStr := utils.GetContentAsString(response.Choices[0].Message.Content)
+		l.Infof("Response content length: %d", len(contentStr))
+		if contentStr != "" {
+			chatLog.ResponseContent = model.TruncateContent(contentStr, 500)
+		}
+	}
+
+	// Extract usage information
+	l.Infof("Response usage - TotalTokens: %d, PromptTokens: %d, CompletionTokens: %d",
+		response.Usage.TotalTokens, response.Usage.PromptTokens, response.Usage.CompletionTokens)
+
+	if response.Usage.TotalTokens > 0 {
+		chatLog.Usage = response.Usage
+	} else {
+		// Calculate usage if not provided
+		chatLog.Usage = l.calculateUsage(chatLog.CompressedTokens, chatLog.ResponseContent)
+		l.Infof("Calculated usage - TotalTokens: %d", chatLog.Usage.TotalTokens)
+	}
+}
+
+// extractStreamingData extracts content and usage from streaming response lines
+func (l *ChatCompletionLogic) extractStreamingData(rawLine string, responseContent *strings.Builder, finalUsage **types.Usage) {
+	// Skip non-data lines
+	if !strings.HasPrefix(rawLine, "data: ") {
+		return
+	}
+
+	// Extract JSON data
+	jsonData := strings.TrimPrefix(rawLine, "data: ")
+	if jsonData == "[DONE]" {
+		l.Infof("Streaming completed, final content length: %d", responseContent.Len())
+		return
+	}
+
+	// Parse streaming chunk
+	var chunk map[string]interface{}
+	if err := json.Unmarshal([]byte(jsonData), &chunk); err != nil {
+		l.Errorf("Failed to parse streaming chunk: %v, data: %s", err, jsonData)
+		return
+	}
+
+	// Extract content from choices
+	if choices, ok := chunk["choices"].([]interface{}); ok && len(choices) > 0 {
+		if choice, ok := choices[0].(map[string]interface{}); ok {
+			if delta, ok := choice["delta"].(map[string]interface{}); ok {
+				if content, ok := delta["content"].(string); ok && content != "" {
+					responseContent.WriteString(content)
+				}
+			}
+		}
+	}
+
+	// Extract usage information (usually in the last chunk)
+	if usage, ok := chunk["usage"].(map[string]interface{}); ok {
+		l.Infof("Found usage information in streaming response")
+		*finalUsage = &types.Usage{}
+		if promptTokens, ok := usage["prompt_tokens"].(float64); ok {
+			(*finalUsage).PromptTokens = int(promptTokens)
+		}
+		if completionTokens, ok := usage["completion_tokens"].(float64); ok {
+			(*finalUsage).CompletionTokens = int(completionTokens)
+		}
+		if totalTokens, ok := usage["total_tokens"].(float64); ok {
+			(*finalUsage).TotalTokens = int(totalTokens)
+		}
+		l.Infof("Extracted usage - PromptTokens: %d, CompletionTokens: %d, TotalTokens: %d",
+			(*finalUsage).PromptTokens, (*finalUsage).CompletionTokens, (*finalUsage).TotalTokens)
+	}
+}
+
+// calculateUsage calculates usage information when not provided by the model
+func (l *ChatCompletionLogic) calculateUsage(promptTokens int, responseContent string) types.Usage {
+	completionTokens := l.countTokens(responseContent)
+	return types.Usage{
+		PromptTokens:     promptTokens,
+		CompletionTokens: completionTokens,
+		TotalTokens:      promptTokens + completionTokens,
 	}
 }

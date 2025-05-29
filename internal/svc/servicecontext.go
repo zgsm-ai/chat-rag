@@ -60,7 +60,9 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	)
 
 	// Start logger service
-	loggerService.Start()
+	if err := loggerService.Start(); err != nil {
+		panic("Failed to start logger service:" + err.Error())
+	}
 
 	return &ServiceContext{
 		Config:                 c,
