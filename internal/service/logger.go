@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -82,13 +83,13 @@ func (ls *LoggerService) Stop() {
 }
 
 // LogAsync logs a chat completion asynchronously
-func (ls *LoggerService) LogAsync(log *model.ChatLog) {
-	fmt.Printf("==> start LogAsync: log: %+v", log)
+func (ls *LoggerService) LogAsync(logs *model.ChatLog, headers *http.Header) {
+	ls.llmClient.SetHeaders(headers)
 	select {
-	case ls.logChan <- log:
+	case ls.logChan <- logs:
 	default:
 		// Channel is full, log synchronously to avoid blocking
-		ls.logSync(log)
+		ls.logSync(logs)
 	}
 }
 
@@ -117,8 +118,7 @@ func (ls *LoggerService) logWriter() {
 }
 
 // logSync writes a log entry to temp file synchronously
-func (ls *LoggerService) logSync(log *model.ChatLog) {
-	fmt.Printf("==> logSync: log: %v", log)
+func (ls *LoggerService) logSync(logs *model.ChatLog) {
 	ls.mu.Lock()
 	defer ls.mu.Unlock()
 
@@ -130,7 +130,7 @@ func (ls *LoggerService) logSync(log *model.ChatLog) {
 	}
 	defer file.Close()
 
-	logJSON, err := log.ToJSON()
+	logJSON, err := logs.ToJSON()
 	if err != nil {
 		fmt.Printf("Failed to marshal log: %v\n", err)
 		return
@@ -234,28 +234,23 @@ func (ls *LoggerService) classifyLogs(logs []*model.ChatLog) {
 		}
 
 		category := ls.classifyLog(log)
-		fmt.Printf("==> classifyLog category: %s", category)
 		log.Category = category
 	}
 }
 
 // classifyLog classifies a single log entry
-func (ls *LoggerService) classifyLog(log *model.ChatLog) string {
+func (ls *LoggerService) classifyLog(logs *model.ChatLog) string {
 	prompt := fmt.Sprintf(`Classify the following chat interaction into one of these categories:
-- code_generation: Creating new code or projects
-- bug_fixing: Debugging or fixing issues
-- exploration: Asking questions about code or concepts
-- documentation: Querying documentation or explanations
-- optimization: Improving performance or code quality
+- 代码生成: Creating new code or projects
+- 修复BUG: Debugging or fixing issues
+- 代码解释: Asking questions about code or concepts
+- 文档编写: Querying documentation or explanations
 
 Context:
-- Client ID: %s
-- Project Path: %s
 - Original Prompt Sample: %s
-- Compressed: %t
 
 Please respond with only the category name.`,
-		log.ClientID, log.ProjectPath, log.OriginalPromptSample, log.IsCompressed)
+		logs.OriginalPromptSample)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -266,11 +261,13 @@ Please respond with only the category name.`,
 		Content: prompt,
 	})
 
-	category, err := ls.llmClient.ChatLLMWithMessages(ctx, classifyMessages)
+	category, err := ls.llmClient.GenerateContent(ctx, classifyMessages)
 	if err != nil {
 		fmt.Printf("Failed to classify log: %v\n", err)
 		return "unknown"
 	}
+
+	log.Printf("==> [classifyLog] category: %s \n", category)
 
 	// Clean up the response
 	category = cleanCategory(category)

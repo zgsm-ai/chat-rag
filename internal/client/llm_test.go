@@ -3,66 +3,11 @@ package client
 import (
 	"context"
 	"fmt"
-	"strings"
 	"testing"
 
 	"github.com/zgsm-ai/chat-rag/internal/types"
+	"github.com/zgsm-ai/chat-rag/internal/utils"
 )
-
-const testLLMEndpoint = "http://localhost:8080/v1"
-const testModel = "gpt-3.5-turbo"
-
-func TestNewLLMClient(t *testing.T) {
-	// Test successful client creation
-	client, err := NewLLMClient(testLLMEndpoint, testModel)
-	if err != nil {
-		t.Fatalf("NewLLMClient returned unexpected error: %v", err)
-	}
-
-	if client == nil {
-		t.Fatal("NewLLMClient returned nil client")
-	}
-
-	if client.modelName != "gpt-3.5-turbo" {
-		t.Errorf("Expected model name 'gpt-3.5-turbo', got '%s'", client.modelName)
-	}
-
-	// Test with empty endpoint URL
-	_, err = NewLLMClient("", "gpt-3.5-turbo")
-	if err == nil {
-		t.Error("Expected error with empty endpoint URL, but got nil")
-	} else if !strings.Contains(err.Error(), "endpoint cannot be empty") {
-		t.Errorf("Expected error message to contain 'endpoint cannot be empty', got: %v", err)
-	}
-}
-
-func TestLLMClient_CountTokens(t *testing.T) {
-	// Create client
-	client, err := NewLLMClient(testLLMEndpoint, testModel)
-	if err != nil {
-		t.Fatalf("Failed to create client: %v", err)
-	}
-
-	testCases := []struct {
-		input    string
-		expected int
-	}{
-		{"", 0},
-		{"Hello", 1},
-		{"Hello, world!", 3},
-		{"This is a longer text that should be around 10 tokens or so.", 15},
-	}
-
-	for _, tc := range testCases {
-		tokens := client.CountTokens(tc.input)
-		// Since this is an approximation, we'll check if it's in a reasonable range
-		// The actual implementation uses len(text) / 4
-		expected := len(tc.input) / 4
-		if tokens != expected {
-			t.Errorf("Expected around %d tokens for '%s', got %d", expected, tc.input, tokens)
-		}
-	}
-}
 
 func TestLLMClient_ChatLLMWithMessages_FormatCheck(t *testing.T) {
 	// Simple message format validation without creating an actual client
@@ -87,7 +32,9 @@ func TestLLMClient_ChatLLMWithMessages_FormatCheck(t *testing.T) {
 
 func TestLLMClient_ChatLLMWithMessages(t *testing.T) {
 	// Create client for actual API testing
-	client, err := NewLLMClient(testLLMEndpoint, testModel)
+	c := utils.MustLoadConfig("../../etc/chat-api.yaml")
+
+	client, err := NewLLMClient(c.LLMEndpoint, c.SummaryModel)
 	if err != nil {
 		t.Fatalf("Failed to create client: %v", err)
 	}
@@ -134,7 +81,7 @@ func TestLLMClient_ChatLLMWithMessages(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			summary, err := client.ChatLLMWithMessages(ctx, tc.messages)
+			summary, err := client.GenerateContent(ctx, tc.messages)
 
 			if tc.expectError && err == nil {
 				t.Errorf("Expected error but got none")

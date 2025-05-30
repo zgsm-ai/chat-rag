@@ -1,6 +1,6 @@
 # Chat-RAG: OpenAI Compatible Chat Completion API with RAG Compression
 
-A high-performance, maintainable microservice built with go-zero framework that provides OpenAI-compatible `/v1/chat/completions` endpoint with intelligent prompt compression using RAG (Retrieval-Augmented Generation).
+A high-performance, maintainable microservice built with Gin framework that provides OpenAI-compatible `/v1/chat/completions` endpoint with intelligent prompt compression using RAG (Retrieval-Augmented Generation).
 
 ## Features
 
@@ -10,7 +10,7 @@ A high-performance, maintainable microservice built with go-zero framework that 
 - **Token Management**: Built-in token counting and threshold-based compression
 - **Comprehensive Logging**: Detailed logging with async processing and Loki integration
 - **Design Patterns**: Implements Strategy, Factory, and Decorator patterns for maintainability
-- **High Performance**: Built on go-zero framework with proper dependency injection
+- **High Performance**: Built with Gin framework with proper dependency injection
 
 ## Architecture
 
@@ -28,14 +28,12 @@ A high-performance, maintainable microservice built with go-zero framework that 
 - **Strategy Pattern**: Different prompt processing strategies based on token count
 - **Factory Pattern**: Creates appropriate processors and clients
 - **Decorator Pattern**: Middleware for logging and metrics
-- **Dependency Injection**: go-zero native service context management
 
 ## Quick Start
 
 ### Prerequisites
 
 - Go 1.22+
-- goctl (go-zero CLI tool)
 
 ### Installation
 
@@ -48,7 +46,6 @@ cd chat-rag
 make bootstrap
 
 # Or step by step:
-make install-tools  # Install goctl
 make setup         # Generate API code and download deps
 make build         # Build the application
 ```
@@ -166,8 +163,6 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 
 ```
 chat-rag/
-├── api/                    # API definitions
-│   └── chat.api           # go-zero API specification
 ├── etc/                   # Configuration files
 │   └── chat-api.yaml     # Service configuration
 ├── internal/              # Internal packages
@@ -246,7 +241,7 @@ make deps           # Update dependencies
 
 ### Core Dependencies
 
-- **go-zero**: Web framework and microservice toolkit
+- **gin**: Web framework and microservice toolkit
 - **langchaingo**: LLM integration and chaining
 - **tiktoken-go**: Token counting (with fallback)
 - **uuid**: Request ID generation

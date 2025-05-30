@@ -1,12 +1,21 @@
 package svc
 
 import (
+	"net/http"
+
 	"github.com/zgsm-ai/chat-rag/internal/client"
 	"github.com/zgsm-ai/chat-rag/internal/config"
 	"github.com/zgsm-ai/chat-rag/internal/service"
 	"github.com/zgsm-ai/chat-rag/internal/strategy"
+	"github.com/zgsm-ai/chat-rag/internal/types"
 	"github.com/zgsm-ai/chat-rag/internal/utils"
 )
+
+type RequestContext struct {
+	Request *types.ChatCompletionRequest
+	Writer  http.ResponseWriter
+	Headers *http.Header
+}
 
 // ServiceContext holds all service dependencies
 type ServiceContext struct {
@@ -23,6 +32,9 @@ type ServiceContext struct {
 
 	// Strategy factory
 	PromptProcessorFactory *strategy.PromptProcessorFactory
+
+	// Request context
+	ReqCtx *RequestContext
 }
 
 // NewServiceContext creates a new service context with all dependencies
@@ -31,7 +43,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	semanticClient := client.NewSemanticClient(c.SemanticApiEndpoint)
 
 	// Initialize LLM client
-	summaryModelClient, err := client.NewLLMClient(c.SummaryModelEndpoint, c.SummaryModel)
+	summaryModelClient, err := client.NewLLMClient(c.LLMEndpoint, c.SummaryModel)
 	if err != nil {
 		panic("Failed to initialize LLM client: " + err.Error())
 	}
@@ -71,6 +83,10 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		TokenCounter:           tokenCounter,
 		PromptProcessorFactory: promptProcessorFactory,
 	}
+}
+
+func (svc *ServiceContext) SetRequestContext(reqCtx *RequestContext) {
+	svc.ReqCtx = reqCtx
 }
 
 // Stop gracefully stops all services

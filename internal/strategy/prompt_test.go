@@ -2,14 +2,14 @@ package strategy
 
 import (
 	"context"
+	"net/http"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zgsm-ai/chat-rag/internal/client"
-	"github.com/zgsm-ai/chat-rag/internal/config"
 	"github.com/zgsm-ai/chat-rag/internal/types"
+	"github.com/zgsm-ai/chat-rag/internal/utils"
 )
 
 func TestDirectProcessor_ProcessPrompt(t *testing.T) {
@@ -210,9 +210,10 @@ func TestPromptProcessorFactory_CreateProcessor(t *testing.T) {
 		},
 	}
 
+	header := make(http.Header)
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			processor := factory.CreateProcessor(tc.needsCompression)
+			processor := factory.CreateProcessor(tc.needsCompression, &header)
 
 			if processor == nil {
 				t.Error("CreateProcessor returned nil")
@@ -377,13 +378,12 @@ func TestDirectProcessor_ProcessPrompt_PreservesOriginalMessages(t *testing.T) {
 
 func TestCompressionProcessor_ProcessPrompt_WithRealLLMClient(t *testing.T) {
 	// load config
-	var c config.Config
-	conf.MustLoad("../../etc/chat-api.yaml", &c)
+	c := utils.MustLoadConfig("../../etc/chat-api.yaml")
 
 	// create llm client
 	llmClient, err := client.NewLLMClient(
-		c.SummaryModelEndpoint, // summary endpoint
-		c.SummaryModel,         // summary model
+		c.LLMEndpoint,  // summary endpoint
+		c.SummaryModel, // summary model
 	)
 	assert.NoError(t, err)
 
@@ -434,13 +434,12 @@ func TestCompressionProcessor_ProcessPrompt_WithRealLLMClient(t *testing.T) {
 
 func TestCompressionProcessor_ProcessPrompt_WithRealClients(t *testing.T) {
 	// load config
-	var c config.Config
-	conf.MustLoad("../../etc/chat-api.yaml", &c)
+	c := utils.MustLoadConfig("../../etc/chat-api.yaml")
 
 	// create llm client
 	llmClient, err := client.NewLLMClient(
-		c.SummaryModelEndpoint, // summary endpoint
-		c.SummaryModel,         // summary model
+		c.LLMEndpoint,  // summary endpoint
+		c.SummaryModel, // summary model
 	)
 	assert.NoError(t, err)
 

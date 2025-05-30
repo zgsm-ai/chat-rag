@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -16,21 +17,30 @@ import (
 	"github.com/zgsm-ai/chat-rag/internal/utils"
 
 	"github.com/google/uuid"
-	"github.com/zeromicro/go-zero/core/logx"
 )
 
 type ChatCompletionLogic struct {
-	logx.Logger
 	ctx    context.Context
 	svcCtx *svc.ServiceContext
 }
 
 func NewChatCompletionLogic(ctx context.Context, svcCtx *svc.ServiceContext) *ChatCompletionLogic {
 	return &ChatCompletionLogic{
-		Logger: logx.WithContext(ctx),
 		ctx:    ctx,
 		svcCtx: svcCtx,
 	}
+}
+
+func (l *ChatCompletionLogic) getHeaders() *http.Header {
+	return l.svcCtx.ReqCtx.Headers
+}
+
+func (l *ChatCompletionLogic) getRequest() *types.ChatCompletionRequest {
+	return l.svcCtx.ReqCtx.Request
+}
+
+func (l *ChatCompletionLogic) getWriter() http.ResponseWriter {
+	return l.svcCtx.ReqCtx.Writer
 }
 
 // processRequest handles common request processing logic
@@ -53,10 +63,11 @@ func (l *ChatCompletionLogic) processRequest(req *types.ChatCompletionRequest) (
 
 	// Determine if compression is needed
 	needsCompression := l.svcCtx.Config.EnableCompression && originalTokens > l.svcCtx.Config.TokenThreshold
+	log.Printf("[processRequest] originalTokens: %v, needsCompression: %v", originalTokens, needsCompression)
 	chatLog.CompressionTriggered = needsCompression
 
 	// Process prompt using strategy pattern
-	processor := l.svcCtx.PromptProcessorFactory.CreateProcessor(needsCompression)
+	processor := l.svcCtx.PromptProcessorFactory.CreateProcessor(needsCompression, l.getHeaders())
 
 	var semanticStart time.Time
 	if needsCompression {
@@ -89,8 +100,8 @@ func (l *ChatCompletionLogic) processRequest(req *types.ChatCompletionRequest) (
 }
 
 // ChatCompletion handles chat completion requests
-func (l *ChatCompletionLogic) ChatCompletion(req *types.ChatCompletionRequest, headers http.Header) (resp *types.ChatCompletionResponse, err error) {
-	chatLog, processedPrompt, err := l.processRequest(req)
+func (l *ChatCompletionLogic) ChatCompletion() (resp *types.ChatCompletionResponse, err error) {
+	chatLog, processedPrompt, err := l.processRequest(l.getRequest())
 	if err != nil {
 		return nil, err
 	}
@@ -99,19 +110,20 @@ func (l *ChatCompletionLogic) ChatCompletion(req *types.ChatCompletionRequest, h
 	defer func() {
 		chatLog.TotalLatency = time.Since(chatLog.Timestamp).Milliseconds()
 		if l.svcCtx.LoggerService != nil {
-			l.svcCtx.LoggerService.LogAsync(chatLog)
+			l.svcCtx.LoggerService.LogAsync(chatLog, l.getHeaders())
 		}
 	}()
 
 	modelStart := time.Now()
 	// Create LLM client for main model
-	llmClient, err := client.NewLLMClient(l.svcCtx.Config.MainModelEndpoint, req.Model)
+	llmClient, err := client.NewLLMClient(l.svcCtx.Config.LLMEndpoint, l.getRequest().Model)
+	llmClient.SetHeaders(l.getHeaders())
 	if err != nil {
 		return nil, fmt.Errorf("failed to create LLM client: %w", err)
 	}
 
 	// Generate completion using structured messages
-	response, err := llmClient.ChatLLMWithMessagesRaw(l.ctx, processedPrompt.Messages, headers)
+	response, err := llmClient.ChatLLMWithMessagesRaw(l.ctx, processedPrompt.Messages)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate completion: %w", err)
 	}
@@ -125,10 +137,10 @@ func (l *ChatCompletionLogic) ChatCompletion(req *types.ChatCompletionRequest, h
 }
 
 // ChatCompletionStream handles streaming chat completion with SSE
-func (l *ChatCompletionLogic) ChatCompletionStream(req *types.ChatCompletionRequest, w http.ResponseWriter, headers http.Header) error {
-	chatLog, processedPrompt, err := l.processRequest(req)
+func (l *ChatCompletionLogic) ChatCompletionStream() error {
+	chatLog, processedPrompt, err := l.processRequest(l.getRequest())
 	if err != nil {
-		l.sendSSEError(w, "Failed to process request", err)
+		l.sendSSEError(l.getWriter(), "Failed to process request", err)
 		return err
 	}
 
@@ -136,14 +148,15 @@ func (l *ChatCompletionLogic) ChatCompletionStream(req *types.ChatCompletionRequ
 	defer func() {
 		chatLog.TotalLatency = time.Since(chatLog.Timestamp).Milliseconds()
 		if l.svcCtx.LoggerService != nil {
-			l.svcCtx.LoggerService.LogAsync(chatLog)
+			l.svcCtx.LoggerService.LogAsync(chatLog, l.getHeaders())
 		}
 	}()
 
 	// Create LLM client for main model
-	llmClient, err := client.NewLLMClient(l.svcCtx.Config.MainModelEndpoint, req.Model)
+	llmClient, err := client.NewLLMClient(l.svcCtx.Config.LLMEndpoint, l.getRequest().Model)
+	llmClient.SetHeaders(l.getHeaders())
 	if err != nil {
-		l.sendSSEError(w, "Failed to create LLM client", err)
+		l.sendSSEError(l.getWriter(), "Failed to create LLM client", err)
 		return fmt.Errorf("failed to create LLM client: %w", err)
 	}
 
@@ -151,7 +164,7 @@ func (l *ChatCompletionLogic) ChatCompletionStream(req *types.ChatCompletionRequ
 	modelStart := time.Now()
 
 	// Get flusher for immediate response sending
-	flusher, ok := w.(http.Flusher)
+	flusher, ok := l.getWriter().(http.Flusher)
 	if !ok {
 		return fmt.Errorf("streaming not supported")
 	}
@@ -161,15 +174,15 @@ func (l *ChatCompletionLogic) ChatCompletionStream(req *types.ChatCompletionRequ
 	var finalUsage *types.Usage
 
 	// Stream completion using structured messages with raw response
-	err = llmClient.ChatLLMWithMessagesStreamRaw(l.ctx, processedPrompt.Messages, headers, func(rawLine string) error {
+	err = llmClient.ChatLLMWithMessagesStreamRaw(l.ctx, processedPrompt.Messages, func(rawLine string) error {
 		// 直接发送原始行数据，不做任何处理
 		if rawLine != "" {
 			// Extract content and usage from streaming data
 			l.extractStreamingData(rawLine, &responseContent, &finalUsage)
 
-			_, writeErr := fmt.Fprintf(w, "%s\n", rawLine)
+			_, writeErr := fmt.Fprintf(l.getWriter(), "%s\n", rawLine)
 			if writeErr != nil {
-				l.Errorf("Failed to write raw stream line: %v", writeErr)
+				log.Printf("Failed to write raw stream line: %v", writeErr)
 				return writeErr
 			}
 
@@ -181,7 +194,7 @@ func (l *ChatCompletionLogic) ChatCompletionStream(req *types.ChatCompletionRequ
 	})
 
 	if err != nil {
-		l.sendSSEError(w, "Failed to generate streaming completion", err)
+		l.sendSSEError(l.getWriter(), "Failed to generate streaming completion", err)
 		return fmt.Errorf("failed to generate streaming completion: %w", err)
 	}
 
@@ -199,7 +212,7 @@ func (l *ChatCompletionLogic) ChatCompletionStream(req *types.ChatCompletionRequ
 	} else {
 		// Calculate usage if not provided in streaming response
 		chatLog.Usage = l.calculateUsage(chatLog.CompressedTokens, responseText)
-		l.Infof("Calculated usage for streaming response - TotalTokens: %d", chatLog.Usage.TotalTokens)
+		log.Printf("Calculated usage for streaming response - TotalTokens: %d", chatLog.Usage.TotalTokens)
 	}
 
 	return nil
@@ -235,33 +248,9 @@ func (l *ChatCompletionLogic) countTokens(text string) int {
 	return utils.EstimateTokens(text)
 }
 
-// TODO deprecated
-func (l *ChatCompletionLogic) getPromptSample(messages []types.Message) string {
-	if len(messages) == 0 {
-		return ""
-	}
-
-	// Get the last user message as sample
-	for i := len(messages) - 1; i >= 0; i-- {
-		if messages[i].Role == "user" {
-			return utils.GetContentAsString(messages[i].Content)
-		}
-	}
-
-	return utils.GetContentAsString(messages[len(messages)-1].Content)
-}
-
-func (l *ChatCompletionLogic) buildPromptFromMessages(messages []types.Message) string {
-	var prompt string
-	for _, msg := range messages {
-		prompt += fmt.Sprintf("%s: %s\n", msg.Role, msg.Content)
-	}
-	return prompt
-}
-
 // sendSSEError sends an error message in SSE format
 func (l *ChatCompletionLogic) sendSSEError(w http.ResponseWriter, message string, err error) {
-	l.Errorf("%s: %v", message, err)
+	log.Printf("%s: %v", message, err)
 
 	// Create error response in OpenAI format
 	errorResponse := map[string]interface{}{
@@ -274,7 +263,7 @@ func (l *ChatCompletionLogic) sendSSEError(w http.ResponseWriter, message string
 
 	errorData, marshalErr := json.Marshal(errorResponse)
 	if marshalErr != nil {
-		l.Errorf("Failed to marshal error response: %v", marshalErr)
+		log.Printf("Failed to marshal error response: %v", marshalErr)
 		fmt.Fprintf(w, "data: {\"error\":{\"message\":\"Internal server error\",\"type\":\"server_error\"}}\n\n")
 	} else {
 		fmt.Fprintf(w, "data: %s\n\n", string(errorData))
@@ -291,19 +280,19 @@ func (l *ChatCompletionLogic) sendSSEError(w http.ResponseWriter, message string
 
 // extractResponseInfo extracts response content and usage from non-streaming response
 func (l *ChatCompletionLogic) extractResponseInfo(chatLog *model.ChatLog, response *types.ChatCompletionResponse) {
-	l.Infof("Extracting response info - Choices count: %d", len(response.Choices))
+	log.Printf("Extracting response info - Choices count: %d", len(response.Choices))
 
 	// Extract response content from choices
 	if len(response.Choices) > 0 {
 		contentStr := utils.GetContentAsString(response.Choices[0].Message.Content)
-		l.Infof("Response content length: %d", len(contentStr))
+		log.Printf("Response content length: %d", len(contentStr))
 		if contentStr != "" {
 			chatLog.ResponseContent = model.TruncateContent(contentStr, 500)
 		}
 	}
 
 	// Extract usage information
-	l.Infof("Response usage - TotalTokens: %d, PromptTokens: %d, CompletionTokens: %d",
+	log.Printf("Response usage - TotalTokens: %d, PromptTokens: %d, CompletionTokens: %d",
 		response.Usage.TotalTokens, response.Usage.PromptTokens, response.Usage.CompletionTokens)
 
 	if response.Usage.TotalTokens > 0 {
@@ -311,7 +300,7 @@ func (l *ChatCompletionLogic) extractResponseInfo(chatLog *model.ChatLog, respon
 	} else {
 		// Calculate usage if not provided
 		chatLog.Usage = l.calculateUsage(chatLog.CompressedTokens, chatLog.ResponseContent)
-		l.Infof("Calculated usage - TotalTokens: %d", chatLog.Usage.TotalTokens)
+		log.Printf("Calculated usage - TotalTokens: %d", chatLog.Usage.TotalTokens)
 	}
 }
 
@@ -325,14 +314,14 @@ func (l *ChatCompletionLogic) extractStreamingData(rawLine string, responseConte
 	// Extract JSON data
 	jsonData := strings.TrimPrefix(rawLine, "data: ")
 	if jsonData == "[DONE]" {
-		l.Infof("Streaming completed, final content length: %d", responseContent.Len())
+		log.Printf("Streaming completed, final content length: %d", responseContent.Len())
 		return
 	}
 
 	// Parse streaming chunk
 	var chunk map[string]interface{}
 	if err := json.Unmarshal([]byte(jsonData), &chunk); err != nil {
-		l.Errorf("Failed to parse streaming chunk: %v, data: %s", err, jsonData)
+		log.Printf("Failed to parse streaming chunk: %v, data: %s", err, jsonData)
 		return
 	}
 
@@ -349,7 +338,7 @@ func (l *ChatCompletionLogic) extractStreamingData(rawLine string, responseConte
 
 	// Extract usage information (usually in the last chunk)
 	if usage, ok := chunk["usage"].(map[string]interface{}); ok {
-		l.Infof("Found usage information in streaming response")
+		log.Printf("Found usage information in streaming response")
 		*finalUsage = &types.Usage{}
 		if promptTokens, ok := usage["prompt_tokens"].(float64); ok {
 			(*finalUsage).PromptTokens = int(promptTokens)
@@ -360,7 +349,7 @@ func (l *ChatCompletionLogic) extractStreamingData(rawLine string, responseConte
 		if totalTokens, ok := usage["total_tokens"].(float64); ok {
 			(*finalUsage).TotalTokens = int(totalTokens)
 		}
-		l.Infof("Extracted usage - PromptTokens: %d, CompletionTokens: %d, TotalTokens: %d",
+		log.Printf("Extracted usage - PromptTokens: %d, CompletionTokens: %d, TotalTokens: %d",
 			(*finalUsage).PromptTokens, (*finalUsage).CompletionTokens, (*finalUsage).TotalTokens)
 	}
 }

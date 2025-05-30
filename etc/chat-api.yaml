@@ -3,8 +3,7 @@ Host: 0.0.0.0
 Port: 8888
 
 # Model endpoints configuration
-MainModelEndpoint: "http://localhost:8080/v1"
-SummaryModelEndpoint: "http://localhost:8080/v1"
+LLMEndpoint: "http://localhost:8080/v1/chat/completions"
 
 # Token processing configuration
 TokenThreshold: 5000
@@ -23,5 +22,5 @@ LogBatchSize: 100
 LogScanIntervalSec: 60
 
 # Model configuration
-SummaryModel: "gpt-3.5-turbo"
+SummaryModel: "deepseek-v3"
 ClassifyModel: "deepseek-v3"

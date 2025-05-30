@@ -85,7 +85,7 @@ func (p *SummaryProcessor) GenerateSummary(ctx context.Context, semanticContext 
 	})
 
 	// Generate summary using LLM with the new message format
-	summary, err := p.llmClient.ChatLLMWithMessages(ctx, summaryMessages)
+	summary, err := p.llmClient.GenerateContent(ctx, summaryMessages)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate summary: %w", err)
 	}

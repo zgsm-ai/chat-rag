@@ -6,21 +6,19 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zgsm-ai/chat-rag/internal/client"
-	"github.com/zgsm-ai/chat-rag/internal/config"
 	"github.com/zgsm-ai/chat-rag/internal/types"
+	"github.com/zgsm-ai/chat-rag/internal/utils"
 )
 
 func TestSummaryProcessor_GenerateSummary(t *testing.T) {
 	// load config
-	var c config.Config
-	conf.MustLoad("../../etc/chat-api.yaml", &c)
+	c := utils.MustLoadConfig("../../etc/chat-api.yaml")
 
 	// create llm client
 	llmClient, err := client.NewLLMClient(
-		c.SummaryModelEndpoint, // summary endpoint
-		c.SummaryModel,         // summary model
+		c.LLMEndpoint,  // summary endpoint
+		c.SummaryModel, // summary model
 	)
 	assert.NoError(t, err)
 

@@ -3,41 +3,47 @@ package handler
 import (
 	"net/http"
 
-	"github.com/zeromicro/go-zero/rest/httpx"
+	"github.com/gin-gonic/gin"
 	"github.com/zgsm-ai/chat-rag/internal/logic"
 	"github.com/zgsm-ai/chat-rag/internal/svc"
 	"github.com/zgsm-ai/chat-rag/internal/types"
 )
 
 // ChatCompletionHandler handles chat completion requests
-func ChatCompletionHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+func ChatCompletionHandler(svcCtx *svc.ServiceContext) gin.HandlerFunc {
+	return func(c *gin.Context) {
 		var req types.ChatCompletionRequest
-		if err := httpx.Parse(r, &req); err != nil {
-			httpx.ErrorCtx(r.Context(), w, err)
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 
-		l := logic.NewChatCompletionLogic(r.Context(), svcCtx)
+		// 创建 RequestContext
+		reqCtx := &svc.RequestContext{
+			Request: &req,
+			Writer:  c.Writer,
+			Headers: &c.Request.Header,
+		}
+
+		svcCtx.SetRequestContext(reqCtx)
+		l := logic.NewChatCompletionLogic(c.Request.Context(), svcCtx)
 
 		if req.Stream {
-			// Flush headers immediately
-			if flusher, ok := w.(http.Flusher); ok {
+			flusher, ok := c.Writer.(http.Flusher)
+			if ok {
 				flusher.Flush()
 			}
 
-			err := l.ChatCompletionStream(&req, w, r.Header)
+			err := l.ChatCompletionStream()
 			if err != nil {
-				httpx.ErrorCtx(r.Context(), w, err)
+				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			}
 		} else {
-			// Handle non-streaming response
-			resp, err := l.ChatCompletion(&req, r.Header)
+			resp, err := l.ChatCompletion()
 			if err != nil {
-				httpx.ErrorCtx(r.Context(), w, err)
+				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			} else {
-				w.Header().Set("Content-Type", "application/json")
-				httpx.OkJsonCtx(r.Context(), w, resp)
+				c.JSON(http.StatusOK, resp)
 			}
 		}
 	}

@@ -1,14 +1,13 @@
 package config
 
-import "github.com/zeromicro/go-zero/rest"
-
 // Config holds all service configuration
 type Config struct {
-	rest.RestConf
+	// Server configuration
+	Host string `json:"host,default=0.0.0.0"`
+	Port int    `json:"port,default=8888"`
 
 	// Model endpoints configuration
-	MainModelEndpoint    string `json:",default=http://localhost:8000/v1/chat/completions"`
-	SummaryModelEndpoint string `json:",default=http://localhost:8080/v1/chat/completions"`
+	LLMEndpoint string `json:",default=http://localhost:8000/v1/chat/completions"`
 
 	// Token processing configuration
 	TokenThreshold int `json:",default=5000"`

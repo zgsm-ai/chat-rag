@@ -34,14 +34,6 @@ deps:
 	go mod download
 	go mod tidy
 
-# Generate API code from .api file
-api-gen:
-	goctl api go -api api/chat.api -dir .
-
-# Install required tools
-install-tools:
-	go install github.com/zeromicro/go-zero/tools/goctl@latest
-
 # Setup project (install tools and generate code)
 setup: install-tools api-gen deps
 

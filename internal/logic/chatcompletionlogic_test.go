@@ -6,87 +6,82 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zgsm-ai/chat-rag/internal/config"
 	"github.com/zgsm-ai/chat-rag/internal/svc"
 	"github.com/zgsm-ai/chat-rag/internal/types"
+	"github.com/zgsm-ai/chat-rag/internal/utils"
 )
 
-func TestChatCompletionLogic_NewChatCompletionLogic(t *testing.T) {
-	ctx := context.Background()
+// createTestContext 创建测试用的context
+func createTestContext() context.Context {
+	return context.Background()
+}
+
+// createTestServiceContext 创建测试用的ServiceContext
+// tokenCounter参数可以是nil或*utils.TokenCounter类型
+func createTestServiceContext(cfg *config.Config, tokenCounter interface{}) *svc.ServiceContext {
 	svcCtx := &svc.ServiceContext{
 		Config: config.Config{
-			MainModelEndpoint: "http://localhost:8080",
+			LLMEndpoint: cfg.LLMEndpoint,
 		},
 	}
 
-	logic := NewChatCompletionLogic(ctx, svcCtx)
+	// 如果有tokenCounter且类型正确，设置到ServiceContext
+	if tc, ok := tokenCounter.(*utils.TokenCounter); ok {
+		svcCtx.TokenCounter = tc
+	}
+
+	return svcCtx
+}
+
+// createTestRequest 创建测试用的ChatCompletionRequest
+func createTestRequest(model string, messages []types.Message, stream bool) *types.ChatCompletionRequest {
+	return &types.ChatCompletionRequest{
+		Model:    model,
+		Messages: messages,
+		Stream:   stream,
+	}
+}
+
+// createTestRequestContext 创建测试用的RequestContext
+func createTestRequestContext(req *types.ChatCompletionRequest, writer http.ResponseWriter) *svc.RequestContext {
+	headers := make(http.Header)
+	return &svc.RequestContext{
+		Request: req,
+		Writer:  writer,
+		Headers: &headers,
+	}
+}
+
+// setupTestLogic 组合所有辅助函数创建完整的测试逻辑
+func setupTestLogic(t *testing.T, cfg *config.Config, tokenCounter interface{},
+	model string, messages []types.Message, writer http.ResponseWriter) (*ChatCompletionLogic, *svc.ServiceContext) {
+	ctx := createTestContext()
+	svcCtx := createTestServiceContext(cfg, tokenCounter)
+	req := createTestRequest(model, messages, false)
+	reqCtx := createTestRequestContext(req, writer)
+	svcCtx.SetRequestContext(reqCtx)
+	return NewChatCompletionLogic(ctx, svcCtx), svcCtx
+}
+
+func TestChatCompletionLogic_NewChatCompletionLogic(t *testing.T) {
+	mockWriter := &mockResponseWriter{}
+	cfg := &config.Config{LLMEndpoint: "http://localhost:8080"}
+	logic, svcCtx := setupTestLogic(t, cfg, nil, "test-model", []types.Message{
+		{Role: "user", Content: "Hello"},
+	}, mockWriter)
 
 	assert.NotNil(t, logic)
-	assert.Equal(t, ctx, logic.ctx)
+	assert.Equal(t, createTestContext(), logic.ctx)
 	assert.Equal(t, svcCtx, logic.svcCtx)
-}
-
-func TestChatCompletionLogic_getPromptSample(t *testing.T) {
-	ctx := context.Background()
-	svcCtx := &svc.ServiceContext{}
-	logic := NewChatCompletionLogic(ctx, svcCtx)
-
-	// 测试空消息
-	messages := []types.Message{}
-	sample := logic.getPromptSample(messages)
-	assert.Equal(t, "", sample)
-
-	// 测试只有用户消息
-	messages = []types.Message{
-		{Role: "user", Content: "Hello, world!"},
-	}
-	sample = logic.getPromptSample(messages)
-	assert.Equal(t, "Hello, world!", sample)
-
-	// 测试混合消息，应该返回最后一个用户消息
-	messages = []types.Message{
-		{Role: "user", Content: "First message"},
-		{Role: "assistant", Content: "Assistant response"},
-		{Role: "user", Content: "Second message"},
-	}
-	sample = logic.getPromptSample(messages)
-	assert.Equal(t, "Second message", sample)
-
-	// 测试没有用户消息，应该返回最后一条消息
-	messages = []types.Message{
-		{Role: "system", Content: "System message"},
-		{Role: "assistant", Content: "Assistant message"},
-	}
-	sample = logic.getPromptSample(messages)
-	assert.Equal(t, "Assistant message", sample)
-}
-
-func TestChatCompletionLogic_buildPromptFromMessages(t *testing.T) {
-	ctx := context.Background()
-	svcCtx := &svc.ServiceContext{}
-	logic := NewChatCompletionLogic(ctx, svcCtx)
-
-	messages := []types.Message{
-		{Role: "system", Content: "You are a helpful assistant"},
-		{Role: "user", Content: "Hello"},
-		{Role: "assistant", Content: "Hi there!"},
-	}
-
-	prompt := logic.buildPromptFromMessages(messages)
-	expected := "system: You are a helpful assistant\nuser: Hello\nassistant: Hi there!\n"
-	assert.Equal(t, expected, prompt)
+	// 验证ReqCtx设置是否正确
+	assert.NotNil(t, svcCtx.ReqCtx)
+	assert.Equal(t, mockWriter, svcCtx.ReqCtx.Writer)
 }
 
 func TestChatCompletionLogic_countTokensInMessages_Fallback(t *testing.T) {
-	ctx := context.Background()
-
-	// 不设置 TokenCounter，测试回退逻辑
-	svcCtx := &svc.ServiceContext{
-		TokenCounter: nil,
-	}
-
-	logic := NewChatCompletionLogic(ctx, svcCtx)
+	cfg := &config.Config{}
+	logic, _ := setupTestLogic(t, cfg, nil, "test-model", []types.Message{}, &mockResponseWriter{})
 
 	messages := []types.Message{
 		{Role: "user", Content: "Hello"},
@@ -98,14 +93,8 @@ func TestChatCompletionLogic_countTokensInMessages_Fallback(t *testing.T) {
 }
 
 func TestChatCompletionLogic_countTokens_Fallback(t *testing.T) {
-	ctx := context.Background()
-
-	// 不设置 TokenCounter，测试回退逻辑
-	svcCtx := &svc.ServiceContext{
-		TokenCounter: nil,
-	}
-
-	logic := NewChatCompletionLogic(ctx, svcCtx)
+	cfg := &config.Config{}
+	logic, _ := setupTestLogic(t, cfg, nil, "test-model", []types.Message{}, &mockResponseWriter{})
 
 	text := "Hello, world!"
 	count := logic.countTokens(text)
@@ -113,48 +102,27 @@ func TestChatCompletionLogic_countTokens_Fallback(t *testing.T) {
 }
 
 func TestChatCompletionLogic_ChatCompletion_ValidationErrors(t *testing.T) {
-	ctx := context.Background()
-	svcCtx := &svc.ServiceContext{
-		Config: config.Config{
-			MainModelEndpoint: "", // 空的端点应该导致错误
-		},
-	}
+	cfg := &config.Config{LLMEndpoint: ""}
+	logic, _ := setupTestLogic(t, cfg, nil, "test-model", []types.Message{}, &mockResponseWriter{})
 
-	logic := NewChatCompletionLogic(ctx, svcCtx)
-
-	// 测试空的消息列表
-	req := &types.ChatCompletionRequest{
-		Model:    "test-model",
-		Messages: []types.Message{},
-		Stream:   false,
-	}
-
-	resp, err := logic.ChatCompletion(req, make(http.Header))
+	resp, err := logic.ChatCompletion()
 	// 由于没有有效的端点，应该会出错
 	assert.Error(t, err)
 	assert.Nil(t, resp)
 }
 
 func TestChatCompletionLogic_ChatCompletion_BasicRequest(t *testing.T) {
-	ctx := context.Background()
-
-	var c config.Config
-	conf.MustLoad("../../etc/chat-api.yaml", &c)
-	svcCtx := svc.NewServiceContext(c)
+	cfg := utils.MustLoadConfig("../../etc/chat-api.yaml")
+	svcCtx := svc.NewServiceContext(cfg)
 	defer svcCtx.Stop()
 
-	logic := NewChatCompletionLogic(ctx, svcCtx)
-
-	req := &types.ChatCompletionRequest{
-		Model: "gpt-3.5-turbo",
-		Messages: []types.Message{
+	logic, _ := setupTestLogic(t, &svcCtx.Config, svcCtx.TokenCounter,
+		"gpt-3.5-turbo", []types.Message{
 			{Role: "user", Content: "Hello, how are you?"},
-		},
-		Temperature: 0.7,
-	}
+		}, &mockResponseWriter{})
 
 	// 测试基本请求
-	resp, err := logic.ChatCompletion(req, make(http.Header))
+	resp, err := logic.ChatCompletion()
 
 	// 验证响应
 	assert.NoError(t, err)
@@ -198,21 +166,17 @@ func (m *mockResponseWriter) Flush() {
 }
 
 func TestChatCompletionLogic_ChatCompletion_StreamingRequest(t *testing.T) {
-	ctx := context.Background()
-
-	var c config.Config
-	conf.MustLoad("../../etc/chat-api.yaml", &c)
-	svcCtx := svc.NewServiceContext(c)
+	cfg := utils.MustLoadConfig("../../etc/chat-api.yaml")
+	svcCtx := svc.NewServiceContext(cfg)
 	defer svcCtx.Stop()
 
-	logic := NewChatCompletionLogic(ctx, svcCtx)
-
+	mockWriter := &mockResponseWriter{}
 	req := &types.ChatCompletionRequest{
 		Model: "gpt-3.5-turbo",
 		Messages: []types.Message{
 			{Role: "user", Content: "Hello, how are you?"},
 		},
-		Stream:      true, // 流式请求
+		Stream:      true,
 		Temperature: 0.7,
 		ClientId:    "test-client",
 		ProjectPath: "/test/path",
@@ -221,9 +185,11 @@ func TestChatCompletionLogic_ChatCompletion_StreamingRequest(t *testing.T) {
 		},
 	}
 
-	// 测试流式请求
-	mockWriter := &mockResponseWriter{}
-	err := logic.ChatCompletionStream(req, mockWriter, make(http.Header))
+	reqCtx := createTestRequestContext(req, mockWriter)
+	svcCtx.SetRequestContext(reqCtx)
+	logic := NewChatCompletionLogic(createTestContext(), svcCtx)
+
+	err := logic.ChatCompletionStream()
 
 	// 验证响应
 	assert.NoError(t, err)

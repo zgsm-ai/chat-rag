@@ -3,9 +3,10 @@ package strategy
 import (
 	"context"
 	"fmt"
+	"log"
+	"net/http"
 	"strings"
 
-	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zgsm-ai/chat-rag/internal/client"
 	"github.com/zgsm-ai/chat-rag/internal/types"
 	"github.com/zgsm-ai/chat-rag/internal/utils"
@@ -95,7 +96,7 @@ func (p *CompressionProcessor) ProcessPrompt(ctx context.Context, req *types.Cha
 
 	if err != nil {
 		// If semantic search fails, continue without context
-		logx.Errorf("Semantic search failed: %v", err)
+		log.Printf("Semantic search failed: %v", err)
 		semanticContext = "No semantic context available due to search failure"
 	} else {
 		for _, result := range semanticResp.Results {
@@ -108,7 +109,7 @@ func (p *CompressionProcessor) ProcessPrompt(ctx context.Context, req *types.Cha
 	// Generate summary
 	summary, err := p.summaryProcessor.GenerateSummary(ctx, semanticContext, req.Messages)
 	if err != nil {
-		logx.Errorf("Failed to generate summary: %v", err)
+		log.Printf("Failed to generate summary: %v", err)
 		// On error, proceed with original messages
 		return &ProcessedPrompt{
 			Messages:         req.Messages,
@@ -152,8 +153,9 @@ func NewPromptProcessorFactory(semanticClient *client.SemanticClient, summaryMod
 }
 
 // CreateProcessor creates a processor based on whether compression is needed
-func (f *PromptProcessorFactory) CreateProcessor(needsCompression bool) PromptProcessor {
+func (f *PromptProcessorFactory) CreateProcessor(needsCompression bool, headers *http.Header) PromptProcessor {
 	if needsCompression {
+		f.summaryModelClient.SetHeaders(headers)
 		return NewCompressionProcessor(f.semanticClient, f.summaryModelClient, f.topK)
 	}
 	return NewDirectProcessor()
