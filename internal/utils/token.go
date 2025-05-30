@@ -47,8 +47,8 @@ func (tc *TokenCounter) CountMessagesTokens(messages []map[string]interface{}) i
 		}
 
 		// Count tokens for content
-		if content, ok := message["content"].(string); ok {
-			totalTokens += tc.CountTokens(content)
+		if content, ok := message["content"]; ok {
+			totalTokens += tc.CountTokens(GetContentAsString(content))
 		}
 
 		// Add overhead tokens per message (approximately 3 tokens per message)
@@ -57,7 +57,6 @@ func (tc *TokenCounter) CountMessagesTokens(messages []map[string]interface{}) i
 
 	// Add overhead tokens for the conversation (approximately 3 tokens)
 	totalTokens += 3
-
 	return totalTokens
 }
 

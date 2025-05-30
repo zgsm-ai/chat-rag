@@ -61,8 +61,6 @@ func NewSummaryProcessor(llmClient *client.LLMClient) *SummaryProcessor {
 
 // GenerateSummary generates a summary of the conversation
 func (p *SummaryProcessor) GenerateSummary(ctx context.Context, semanticContext string, messages []types.Message) (string, error) {
-	fmt.Println("==> GenerateSummary messages:", messages)
-
 	// Create a new slice of messages for the summary request
 	var summaryMessages []types.Message
 
@@ -85,12 +83,13 @@ func (p *SummaryProcessor) GenerateSummary(ctx context.Context, semanticContext 
 	})
 
 	// Generate summary using LLM with the new message format
+	fmt.Println("==> [GenerateSummary] GenerateSummary messages:", summaryMessages)
 	summary, err := p.llmClient.GenerateContent(ctx, summaryMessages)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate summary: %w", err)
 	}
 
-	fmt.Println("==> GenerateSummary summary:", summary)
+	fmt.Println("==> [GenerateSummary] summary:", summary)
 
 	return summary, nil
 }
@@ -112,6 +111,14 @@ func (p *SummaryProcessor) BuildSummaryMessages(messages []types.Message, summar
 		Role:    "assistant",
 		Content: summary,
 	})
+
+	// Add last user message
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role == "user" {
+			finalMessages = append(finalMessages, messages[i])
+			break
+		}
+	}
 
 	return finalMessages
 }

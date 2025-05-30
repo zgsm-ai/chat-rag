@@ -6,7 +6,7 @@ Port: 8888
 LLMEndpoint: "http://localhost:8080/v1/chat/completions"
 
 # Token processing configuration
-TokenThreshold: 5000
+TokenThreshold: 1000
 
 # Semantic API configuration
 SemanticApiEndpoint: "http://localhost:8002/codebase-indexer/api/v1/semantics"
@@ -19,7 +19,7 @@ EnableCompression: true
 LogFilePath: "logs/"
 LokiEndpoint: "http://localhost:3100/loki/api/v1/push"
 LogBatchSize: 100
-LogScanIntervalSec: 60
+LogScanIntervalSec: 600
 
 # Model configuration
 SummaryModel: "deepseek-v3"

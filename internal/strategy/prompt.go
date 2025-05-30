@@ -106,8 +106,18 @@ func (p *CompressionProcessor) ProcessPrompt(ctx context.Context, req *types.Cha
 		semanticContext = strings.Join(contextParts, "\n\n")
 	}
 
-	// Generate summary
-	summary, err := p.summaryProcessor.GenerateSummary(ctx, semanticContext, req.Messages)
+	// Get messages to summarize (exclude system messages and last user message)
+	var messagesToSummarize []types.Message
+	for i := 0; i < len(req.Messages); i++ {
+		// Skip system messages and the last user message
+		if req.Messages[i].Role == "system" ||
+			(req.Messages[i].Role == "user" && i >= len(req.Messages)-1) {
+			continue
+		}
+		messagesToSummarize = append(messagesToSummarize, req.Messages[i])
+	}
+
+	summary, err := p.summaryProcessor.GenerateSummary(ctx, semanticContext, messagesToSummarize)
 	if err != nil {
 		log.Printf("Failed to generate summary: %v", err)
 		// On error, proceed with original messages
