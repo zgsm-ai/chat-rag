@@ -19,7 +19,7 @@ func ChatCompletionHandler(svcCtx *svc.ServiceContext) gin.HandlerFunc {
 			return
 		}
 
-		// 创建 RequestContext
+		// Create RequestContext
 		reqCtx := &svc.RequestContext{
 			Request: &req,
 			Writer:  c.Writer,
@@ -30,7 +30,7 @@ func ChatCompletionHandler(svcCtx *svc.ServiceContext) gin.HandlerFunc {
 		l := logic.NewChatCompletionLogic(c.Request.Context(), svcCtx)
 
 		if req.Stream {
-			// 设置SSE响应头
+			// Set SSE response headers
 			c.Header("Content-Type", "text/event-stream; charset=utf-8")
 			c.Header("Cache-Control", "no-cache")
 			c.Header("Connection", "keep-alive")

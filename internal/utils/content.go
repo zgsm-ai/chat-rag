@@ -1,5 +1,7 @@
 package utils
 
+import "github.com/zgsm-ai/chat-rag/internal/types"
+
 const (
 	ContentTypeText     = "text"
 	ContentTypeImageURL = "image_url"
@@ -29,4 +31,23 @@ func GetContentAsString(content interface{}) string {
 		return contentStr
 	}
 	return ""
+}
+
+// GetUserMessages 过滤出非system消息
+func GetUserMessages(messages []types.Message) []types.Message {
+	filtered := make([]types.Message, 0, len(messages))
+	for _, msg := range messages {
+		if msg.Role != "system" {
+			filtered = append(filtered, msg)
+		}
+	}
+	return filtered
+}
+
+// TruncateContent truncates content to a specified length for logging
+func TruncateContent(content string, maxLength int) string {
+	if len(content) <= maxLength {
+		return content
+	}
+	return content[:maxLength] + "..."
 }

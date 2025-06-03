@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -56,14 +57,15 @@ func (l *ChatCompletionLogic) processRequest(req *types.ChatCompletionRequest) (
 		Model:       req.Model,
 	}
 
-	// Count original tokens
-	originalTokens := l.countTokensInMessages(req.Messages)
-	chatLog.OriginalTokens = originalTokens
+	// Count original tokens (excluding system messages)
+	userMessageTokens := l.countTokensInMessages(utils.GetUserMessages(req.Messages))
+	originalAllMessageTokens := l.countTokensInMessages(req.Messages)
+	chatLog.OriginalTokens = originalAllMessageTokens
 	chatLog.OriginalPromptSample = req.Messages
 
 	// Determine if compression is needed
-	needsCompression := l.svcCtx.Config.EnableCompression && originalTokens > l.svcCtx.Config.TokenThreshold
-	fmt.Printf("[processRequest] originalTokens: %v, needsCompression: %v\n\n", originalTokens, needsCompression)
+	needsCompression := l.svcCtx.Config.EnableCompression && userMessageTokens > l.svcCtx.Config.TokenThreshold
+	fmt.Printf("[processRequest] userMessageTokens: %v, needsCompression: %v\n\n", userMessageTokens, needsCompression)
 	chatLog.CompressionTriggered = needsCompression
 
 	// Process prompt using strategy pattern
@@ -90,8 +92,9 @@ func (l *ChatCompletionLogic) processRequest(req *types.ChatCompletionRequest) (
 	compressedTokens := l.countTokensInMessages(processedPrompt.Messages)
 	chatLog.CompressedTokens = compressedTokens
 
-	if originalTokens > 0 {
-		chatLog.CompressionRatio = float64(compressedTokens) / float64(originalTokens)
+	if originalAllMessageTokens > 0 {
+		ratio := float64(compressedTokens) / float64(originalAllMessageTokens)
+		chatLog.CompressionRatio, _ = strconv.ParseFloat(strconv.FormatFloat(ratio, 'f', 2, 64), 64)
 	}
 
 	chatLog.CompressedPromptSample = processedPrompt.Messages
@@ -177,12 +180,12 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 
 	// Stream completion using structured messages with raw response
 	err = llmClient.ChatLLMWithMessagesStreamRaw(l.ctx, processedPrompt.Messages, func(rawLine string) error {
-		// 处理原始行数据，确保SSE格式正确
+		// Handle raw line data, ensure correct SSE format
 		if rawLine != "" {
 			// Extract content and usage from streaming data
 			l.extractStreamingData(rawLine, &responseContent, &finalUsage)
 
-			// 确保SSE格式正确：如果rawLine已经包含"data: "前缀，直接使用；否则添加前缀
+			// Ensure correct SSE format: if rawLine already has 'data: ' prefix, use directly; otherwise add prefix
 			var sseData string
 			if strings.HasPrefix(rawLine, "data: ") {
 				sseData = rawLine
@@ -190,14 +193,14 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 				sseData = "data: " + rawLine
 			}
 
-			// 输出SSE格式数据，确保有正确的换行符
+			// Output SSE formatted data, ensuring correct line breaks
 			_, writeErr := fmt.Fprintf(l.getWriter(), "%s\n\n", sseData)
 			if writeErr != nil {
 				log.Printf("Failed to write SSE stream line: %v", writeErr)
 				return writeErr
 			}
 
-			// 立即刷新缓冲区
+			// Flush buffer immediately
 			flusher.Flush()
 		}
 
@@ -214,9 +217,7 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 
 	// Set response content and usage information
 	responseText := responseContent.String()
-	if responseText != "" {
-		chatLog.ResponseContent = model.TruncateContent(responseText, 500)
-	}
+	chatLog.ResponseContent = responseText
 
 	if finalUsage != nil {
 		chatLog.Usage = *finalUsage
@@ -226,7 +227,7 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 		log.Printf("Calculated usage for streaming response - TotalTokens: %d", chatLog.Usage.TotalTokens)
 	}
 
-	// 发送流式响应结束标记
+	// Send stream response end marker
 	// fmt.Fprintf(l.getWriter(), "data: [DONE]\n\n")
 	flusher.Flush()
 
@@ -301,9 +302,7 @@ func (l *ChatCompletionLogic) extractResponseInfo(chatLog *model.ChatLog, respon
 	if len(response.Choices) > 0 {
 		contentStr := utils.GetContentAsString(response.Choices[0].Message.Content)
 		log.Printf("Response content length: %d", len(contentStr))
-		if contentStr != "" {
-			chatLog.ResponseContent = model.TruncateContent(contentStr, 500)
-		}
+		chatLog.ResponseContent = contentStr
 	}
 
 	// Extract usage information

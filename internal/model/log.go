@@ -64,14 +64,6 @@ func FromJSON(jsonStr string) (*ChatLog, error) {
 	return &log, nil
 }
 
-// TruncateContent truncates content to a specified length for logging
-func TruncateContent(content string, maxLength int) string {
-	if len(content) <= maxLength {
-		return content
-	}
-	return content[:maxLength] + "..."
-}
-
 // LogBatch represents a batch of logs for uploading to Loki
 type LogBatch struct {
 	Streams []LogStream `json:"streams"`
@@ -89,49 +81,30 @@ type LokiLogEntry struct {
 	Line      string `json:"line"`
 }
 
-// CreateLokiBatch creates a Loki-compatible log batch
-func CreateLokiBatch(logs []*ChatLog) *LogBatch {
-	streams := make(map[string]*LogStream)
-
-	for _, log := range logs {
-		// Create labels for this log entry
-		labels := map[string]string{
-			"service":    "chat-rag",
-			"client_id":  log.ClientID,
-			"compressed": boolToString(log.IsCompressed),
-		}
-
-		if log.Category != "" {
-			labels["category"] = log.Category
-		}
-
-		// Create stream key from labels
-		streamKey := createStreamKey(labels)
-
-		// Get or create stream
-		if streams[streamKey] == nil {
-			streams[streamKey] = &LogStream{
-				Stream: labels,
-				Values: [][]string{},
-			}
-		}
-
-		// Add log entry to stream
-		logJSON, _ := log.ToJSON()
-		streams[streamKey].Values = append(streams[streamKey].Values, []string{
-			timestampToNano(log.Timestamp),
-			logJSON,
-		})
+// CreateLokiStream creates a Loki-compatible log stream for a single log entry
+func CreateLokiStream(log *ChatLog) *LogStream {
+	// Create labels for this log entry
+	labels := map[string]string{
+		"service":    "chat-rag",
+		"client_id":  log.ClientID,
+		"compressed": boolToString(log.IsCompressed),
 	}
 
-	// Convert map to slice
-	var streamSlice []LogStream
-	for _, stream := range streams {
-		streamSlice = append(streamSlice, *stream)
+	if log.Category != "" {
+		labels["category"] = log.Category
 	}
 
-	return &LogBatch{
-		Streams: streamSlice,
+	// Add log entry to stream
+	logJSON, _ := log.ToJSON()
+
+	return &LogStream{
+		Stream: labels,
+		Values: [][]string{
+			{
+				timestampToNano(log.Timestamp),
+				logJSON,
+			},
+		},
 	}
 }
 
@@ -141,11 +114,6 @@ func boolToString(b bool) string {
 		return "true"
 	}
 	return "false"
-}
-
-func createStreamKey(labels map[string]string) string {
-	data, _ := json.Marshal(labels)
-	return string(data)
 }
 
 func timestampToNano(t time.Time) string {

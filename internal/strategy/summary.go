@@ -174,7 +174,7 @@ func (p *SummaryProcessor) GenerateSystemPromptSummary(ctx context.Context, syst
 }
 
 // processSystemMessageWithCache processes system message with caching logic
-func (p *SummaryProcessor) processSystemMessageWithCache(ctx context.Context, msg types.Message) types.Message {
+func (p *SummaryProcessor) processSystemMessageWithCache(msg types.Message) types.Message {
 	cache := GetSystemPromptCache()
 
 	// Convert content to string
@@ -231,7 +231,7 @@ func (p *SummaryProcessor) BuildUserSummaryMessages(ctx context.Context, message
 	// Add system message if exists, with caching logic
 	for _, msg := range messages {
 		if msg.Role == "system" {
-			finalMessages = append(finalMessages, p.processSystemMessageWithCache(ctx, msg))
+			finalMessages = append(finalMessages, p.processSystemMessageWithCache(msg))
 			break
 		}
 	}
