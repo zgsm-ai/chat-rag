@@ -81,7 +81,7 @@ func TestLLMClient_ChatLLMWithMessages(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			summary, err := client.GenerateContent(ctx, tc.messages)
+			summary, err := client.GenerateContent(ctx, "", tc.messages)
 
 			if tc.expectError && err == nil {
 				t.Errorf("Expected error but got none")

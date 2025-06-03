@@ -69,7 +69,7 @@ func TestSummaryProcessor_GenerateSummary(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			summary, err := processor.GenerateSummary(context.Background(), tt.semanticContext, tt.messages)
+			summary, err := processor.GenerateUserPromptSummary(context.Background(), tt.semanticContext, tt.messages)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -122,7 +122,7 @@ func TestSummaryProcessor_BuildSummaryMessages(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := processor.BuildSummaryMessages(tt.messages, tt.summary)
+			result := processor.BuildUserSummaryMessages(context.Background(), tt.messages, tt.summary)
 			assert.Equal(t, tt.want, len(result))
 
 			// Verify message structure

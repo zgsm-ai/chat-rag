@@ -63,7 +63,7 @@ func (l *ChatCompletionLogic) processRequest(req *types.ChatCompletionRequest) (
 
 	// Determine if compression is needed
 	needsCompression := l.svcCtx.Config.EnableCompression && originalTokens > l.svcCtx.Config.TokenThreshold
-	fmt.Printf("[processRequest] originalTokens: %v, needsCompression: %v", originalTokens, needsCompression)
+	fmt.Printf("[processRequest] originalTokens: %v, needsCompression: %v\n\n", originalTokens, needsCompression)
 	chatLog.CompressionTriggered = needsCompression
 
 	// Process prompt using strategy pattern
@@ -173,7 +173,7 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 	var responseContent strings.Builder
 	var finalUsage *types.Usage
 
-	fmt.Printf("==> [ChatCompletionStream] processedPrompt: \n%v\n", processedPrompt.Messages)
+	// fmt.Printf("==> [ChatCompletionStream] processedPrompt: \n%v\n", processedPrompt.Messages)
 
 	// Stream completion using structured messages with raw response
 	err = llmClient.ChatLLMWithMessagesStreamRaw(l.ctx, processedPrompt.Messages, func(rawLine string) error {

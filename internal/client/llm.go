@@ -43,7 +43,19 @@ func (c *LLMClient) SetHeaders(headers *http.Header) {
 }
 
 // GenerateContent generate content using a structured message format
-func (c *LLMClient) GenerateContent(ctx context.Context, messages []types.Message) (string, error) {
+func (c *LLMClient) GenerateContent(ctx context.Context, systemPrompt string, userMessages []types.Message) (string, error) {
+	// Create a new slice of messages for the summary request
+	var messages []types.Message
+
+	// Add system message with the summary prompt
+	messages = append(messages, types.Message{
+		Role:    "system",
+		Content: systemPrompt,
+	})
+
+	messages = append(messages, userMessages...)
+
+	// fmt.Printf("==> [GenerateContent] messages:\n %v\n\n", messages)
 	// Call ChatLLMWithMessagesRaw to get the raw response
 	result, err := c.ChatLLMWithMessagesRaw(ctx, messages)
 	if err != nil {
@@ -57,6 +69,7 @@ func (c *LLMClient) GenerateContent(ctx context.Context, messages []types.Messag
 
 	// Extract content from the first choice's message
 	content := utils.GetContentAsString(result.Choices[0].Message.Content)
+	// fmt.Printf("==> [GenerateContent] content:\n %v \n\n", content)
 	return content, nil
 }
 

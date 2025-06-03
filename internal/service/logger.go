@@ -261,7 +261,7 @@ Please respond with only the category name.`,
 		Content: prompt,
 	})
 
-	category, err := ls.llmClient.GenerateContent(ctx, classifyMessages)
+	category, err := ls.llmClient.GenerateContent(ctx, "", classifyMessages)
 	if err != nil {
 		fmt.Printf("Failed to classify log: %v\n", err)
 		return "unknown"

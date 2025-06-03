@@ -97,7 +97,7 @@ func (p *CompressionProcessor) ProcessPrompt(ctx context.Context, req *types.Cha
 	if err != nil {
 		// If semantic search fails, continue without context
 		log.Printf("Semantic search failed: %v", err)
-		semanticContext = "No semantic context available due to search failure"
+		semanticContext = ""
 	} else {
 		for _, result := range semanticResp.Results {
 			contextParts = append(contextParts, fmt.Sprintf("File: %s (Line %d)\n%s",
@@ -117,7 +117,7 @@ func (p *CompressionProcessor) ProcessPrompt(ctx context.Context, req *types.Cha
 		messagesToSummarize = append(messagesToSummarize, req.Messages[i])
 	}
 
-	summary, err := p.summaryProcessor.GenerateSummary(ctx, semanticContext, messagesToSummarize)
+	summary, err := p.summaryProcessor.GenerateUserPromptSummary(ctx, semanticContext, messagesToSummarize)
 	if err != nil {
 		log.Printf("Failed to generate summary: %v", err)
 		// On error, proceed with original messages
@@ -133,7 +133,7 @@ func (p *CompressionProcessor) ProcessPrompt(ctx context.Context, req *types.Cha
 	}
 
 	// Build final messages
-	finalMessages := p.summaryProcessor.BuildSummaryMessages(req.Messages, summary)
+	finalMessages := p.summaryProcessor.BuildUserSummaryMessages(ctx, req.Messages, summary)
 
 	return &ProcessedPrompt{
 		Messages:         finalMessages,
