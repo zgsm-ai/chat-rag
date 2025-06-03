@@ -98,7 +98,6 @@ func (c *LLMClient) ChatLLMWithMessagesStreamRaw(ctx context.Context, messages [
 	}
 
 	// 设置请求头
-	req.Header.Set("Content-Type", "application/json; charset=utf-8")
 	for key, values := range *c.headers {
 		for _, value := range values {
 			req.Header.Add(key, value)
@@ -116,16 +115,27 @@ func (c *LLMClient) ChatLLMWithMessagesStreamRaw(ctx context.Context, messages [
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		return fmt.Errorf("API request failed with status %d", resp.StatusCode)
+		body, _ := io.ReadAll(resp.Body)
+		bodyStr := string(body)
+		if len(bodyStr) > 200 {
+			bodyStr = bodyStr[:200] + "...(truncated)"
+		}
+		return fmt.Errorf("API request failed with status %d, response body: %s", resp.StatusCode, bodyStr)
 	}
 
 	// 逐行读取流式响应
 	scanner := bufio.NewScanner(resp.Body)
+	// 增加缓冲区大小以处理较长的响应行
+	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
+
 	for scanner.Scan() {
 		line := scanner.Text()
 
-		// 直接返回原始行数据，包括 "data: " 前缀
-		if line != "" {
+		// 调试输出
+		// fmt.Printf("Received line: %s\n", line)
+
+		// 处理非空行，包括空的data行
+		if line != "" || strings.HasPrefix(line, "data:") {
 			if err := callback(line); err != nil {
 				return fmt.Errorf("callback error: %w", err)
 			}
@@ -149,12 +159,13 @@ func (c *LLMClient) ChatLLMWithMessagesRaw(ctx context.Context, messages []types
 
 	nil_resp := types.ChatCompletionResponse{}
 
-	// 创建请求
+	// 记录请求数据用于调试
 	jsonData, err := json.Marshal(requestPayload)
 	if err != nil {
 		return nil_resp, fmt.Errorf("failed to marshal request payload: %w", err)
 	}
 
+	// 创建请求
 	reader := strings.NewReader(string(jsonData))
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint, reader)
 	if err != nil {
@@ -179,20 +190,29 @@ func (c *LLMClient) ChatLLMWithMessagesRaw(ctx context.Context, messages []types
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
-		return nil_resp, fmt.Errorf("API request failed with status %d", resp.StatusCode)
+	// 检查响应状态码
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		bodyStr := string(body)
+		if len(bodyStr) > 200 {
+			bodyStr = bodyStr[:200] + "...(truncated)"
+		}
+		return nil_resp, fmt.Errorf("API request failed with status %d, response body: %s", resp.StatusCode, bodyStr)
 	}
 
-	// 读取响应体并直接返回原始JSON
+	// 读取响应体
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil_resp, fmt.Errorf("failed to read response body: %w", err)
 	}
 
 	var result types.ChatCompletionResponse
-	err = json.Unmarshal(body, &result)
-	if err != nil {
-		return nil_resp, fmt.Errorf("failed to parse response: %w", err)
+	if err := json.Unmarshal(body, &result); err != nil {
+		bodyStr := string(body)
+		if len(bodyStr) > 200 {
+			bodyStr = bodyStr[:200] + "...(truncated)"
+		}
+		return nil_resp, fmt.Errorf("failed to parse response (invalid JSON? body: %s): %w", bodyStr, err)
 	}
 
 	return result, nil

@@ -21,8 +21,8 @@ import (
 
 // LoggerService handles logging operations
 type LoggerService struct {
-	logFilePath     string // 永久存储的日志文件夹路径
-	tempLogFilePath string // 临时日志文件路径
+	logFilePath     string // Permanent storage log directory path
+	tempLogFilePath string // Temporary log file path
 	lokiEndpoint    string
 	batchSize       int
 	scanInterval    time.Duration
@@ -36,12 +36,12 @@ type LoggerService struct {
 
 // NewLoggerService creates a new logger service
 func NewLoggerService(logFilePath, lokiEndpoint string, batchSize int, scanIntervalSec int, llmClient *client.LLMClient) *LoggerService {
-	// 在logFilePath下创建temp文件夹作为临时日志文件路径
+	// Create temp directory under logFilePath for temporary log files
 	tempLogFilePath := filepath.Join(logFilePath, "temp", "chat-rag-temp.log")
 
 	return &LoggerService{
-		logFilePath:     logFilePath,     // 永久存储文件夹
-		tempLogFilePath: tempLogFilePath, // 临时日志文件
+		logFilePath:     logFilePath,     // Permanent storage directory
+		tempLogFilePath: tempLogFilePath, // Temporary log file
 		lokiEndpoint:    lokiEndpoint,
 		batchSize:       batchSize,
 		scanInterval:    time.Duration(scanIntervalSec) * time.Second,
@@ -122,7 +122,7 @@ func (ls *LoggerService) logSync(logs *model.ChatLog) {
 	ls.mu.Lock()
 	defer ls.mu.Unlock()
 
-	// 写入临时文件
+	// Write to temp file
 	file, err := os.OpenFile(ls.tempLogFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		fmt.Printf("Failed to open temp log file: %v\n", err)
@@ -241,10 +241,10 @@ func (ls *LoggerService) classifyLogs(logs []*model.ChatLog) {
 // classifyLog classifies a single log entry
 func (ls *LoggerService) classifyLog(logs *model.ChatLog) string {
 	prompt := fmt.Sprintf(`Classify the following chat interaction into one of these categories:
-- 代码生成: Creating new code or projects
-- 修复BUG: Debugging or fixing issues
-- 代码解释: Asking questions about code or concepts
-- 文档编写: Querying documentation or explanations
+- Code Generation: Creating new code or projects
+- Bug Fixing: Debugging or fixing issues
+- Code Explanation: Asking questions about code or concepts
+- Documentation: Querying documentation or explanations
 
 Context:
 - Original Prompt Sample: %s
@@ -285,10 +285,10 @@ func (ls *LoggerService) uploadToLoki(logs []*model.ChatLog) bool {
 
 		batch := logs[i:end]
 		if !ls.uploadBatch(batch) {
-			return false // 如果任何一个批次失败，返回失败
+			return false // Return failure if any batch fails
 		}
 	}
-	return true // 所有批次都成功
+	return true // All batches succeeded
 }
 
 // uploadBatch uploads a single batch to Loki
@@ -322,7 +322,7 @@ func (ls *LoggerService) uploadBatch(logs []*model.ChatLog) bool {
 		return false
 	}
 
-	return true // 上传成功
+	return true // Upload succeeded
 }
 
 // saveToPermanentStorage saves logs to permanent storage with date-based directory structure
@@ -336,14 +336,14 @@ func (ls *LoggerService) saveToPermanentStorage(logs []*model.ChatLog) {
 	yearMonth := now.Format("2006-01")
 	dateStr := now.Format("2006-01-02")
 
-	// 创建年-月子文件夹
+	// Create year-month subdirectory
 	yearMonthDir := filepath.Join(ls.logFilePath, yearMonth)
 	if err := os.MkdirAll(yearMonthDir, 0755); err != nil {
 		fmt.Printf("Failed to create year-month directory: %v\n", err)
 		return
 	}
 
-	// 创建当天的日志文件路径
+	// Create daily log file path
 	dailyLogFile := filepath.Join(yearMonthDir, fmt.Sprintf("%s.log", dateStr))
 
 	// 追加写入日志到当天的文件

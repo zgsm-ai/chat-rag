@@ -22,5 +22,5 @@ LogBatchSize: 100
 LogScanIntervalSec: 600
 
 # Model configuration
-SummaryModel: "deepseek-v3"
-ClassifyModel: "deepseek-v3"
+SummaryModel: "deepseek-v3-test"
+ClassifyModel: "deepseek-v3-test"

@@ -213,8 +213,8 @@ func (p *SummaryProcessor) processSystemMessageWithCache(ctx context.Context, ms
 		log.Printf("[processSystemMessageWithCache] uncached, generating compressed system prompt for guidelines section\n")
 		go func(content, hash string) {
 			if compressed, err := p.GenerateSystemPromptSummary(context.Background(), content); err == nil {
-				log.Printf("==> [processSystemMessageWithCache] system prompt hash:\n %v\n\n", hash)
-				log.Printf("==> [processSystemMessageWithCache] cached compressed system prompt:\n %v\n\n", compressed)
+				// log.Printf("==> [processSystemMessageWithCache] system prompt hash:\n %v\n\n", hash)
+				// log.Printf("==> [processSystemMessageWithCache] cached compressed system prompt:\n %v\n\n", compressed)
 				cache.Set(hash, compressed)
 			}
 		}(contentToCompress, systemHash)

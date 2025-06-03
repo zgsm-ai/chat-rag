@@ -177,18 +177,27 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 
 	// Stream completion using structured messages with raw response
 	err = llmClient.ChatLLMWithMessagesStreamRaw(l.ctx, processedPrompt.Messages, func(rawLine string) error {
-		// 直接发送原始行数据，不做任何处理
+		// 处理原始行数据，确保SSE格式正确
 		if rawLine != "" {
 			// Extract content and usage from streaming data
 			l.extractStreamingData(rawLine, &responseContent, &finalUsage)
 
-			_, writeErr := fmt.Fprintf(l.getWriter(), "%s\n", rawLine)
+			// 确保SSE格式正确：如果rawLine已经包含"data: "前缀，直接使用；否则添加前缀
+			var sseData string
+			if strings.HasPrefix(rawLine, "data: ") {
+				sseData = rawLine
+			} else {
+				sseData = "data: " + rawLine
+			}
+
+			// 输出SSE格式数据，确保有正确的换行符
+			_, writeErr := fmt.Fprintf(l.getWriter(), "%s\n\n", sseData)
 			if writeErr != nil {
-				log.Printf("Failed to write raw stream line: %v", writeErr)
+				log.Printf("Failed to write SSE stream line: %v", writeErr)
 				return writeErr
 			}
 
-			// Flush immediately
+			// 立即刷新缓冲区
 			flusher.Flush()
 		}
 
@@ -216,6 +225,10 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 		chatLog.Usage = l.calculateUsage(chatLog.CompressedTokens, responseText)
 		log.Printf("Calculated usage for streaming response - TotalTokens: %d", chatLog.Usage.TotalTokens)
 	}
+
+	// 发送流式响应结束标记
+	// fmt.Fprintf(l.getWriter(), "data: [DONE]\n\n")
+	flusher.Flush()
 
 	return nil
 }

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -29,6 +30,17 @@ func ChatCompletionHandler(svcCtx *svc.ServiceContext) gin.HandlerFunc {
 		l := logic.NewChatCompletionLogic(c.Request.Context(), svcCtx)
 
 		if req.Stream {
+			// 设置SSE响应头
+			c.Header("Content-Type", "text/event-stream; charset=utf-8")
+			c.Header("Cache-Control", "no-cache")
+			c.Header("Connection", "keep-alive")
+			c.Header("Transfer-Encoding", "chunked")
+			c.Header("Access-Control-Allow-Origin", "*")
+			c.Header("Access-Control-Allow-Headers", "Cache-Control")
+			c.Header("X-Accel-Buffering", "no")
+
+			// 立即发送响应头
+			c.Status(http.StatusOK)
 			flusher, ok := c.Writer.(http.Flusher)
 			if ok {
 				flusher.Flush()
@@ -36,7 +48,12 @@ func ChatCompletionHandler(svcCtx *svc.ServiceContext) gin.HandlerFunc {
 
 			err := l.ChatCompletionStream()
 			if err != nil {
-				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				// 对于流式响应，不能使用AbortWithStatusJSON，因为响应头已经发送
+				c.Writer.Write([]byte(fmt.Sprintf("data: {\"error\":{\"message\":\"%s\"}}\n\n", err.Error())))
+				c.Writer.Write([]byte("data: [DONE]\n\n"))
+				if flusher != nil {
+					flusher.Flush()
+				}
 			}
 		} else {
 			resp, err := l.ChatCompletion()
