@@ -23,7 +23,7 @@ func TestSummaryProcessor_GenerateSummary(t *testing.T) {
 	assert.NoError(t, err)
 
 	// create summary processor
-	processor := NewSummaryProcessor(llmClient)
+	processor := NewSummaryProcessor(c.SystemPromptSplitter, llmClient)
 
 	// Test cases
 	tests := []struct {

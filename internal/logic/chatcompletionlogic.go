@@ -54,25 +54,27 @@ func (l *ChatCompletionLogic) processRequest(req *types.ChatCompletionRequest) (
 
 	// Determine if compression is needed
 	userMessageTokens := chatLog.OriginalTokens.UserTokens
-	needsCompression := l.svcCtx.Config.EnableCompression && userMessageTokens > l.svcCtx.Config.TokenThreshold
-	log.Printf("[processRequest] userMessageTokens: %v, needsCompression: %v\n\n", userMessageTokens, needsCompression)
-	chatLog.CompressionTriggered = needsCompression
+	needsCompressUserMsg := l.svcCtx.Config.EnableCompression && userMessageTokens > l.svcCtx.Config.TokenThreshold
+	log.Printf("[processRequest] userMessageTokens: %v, needsCompression: %v\n\n", userMessageTokens, needsCompressUserMsg)
+	chatLog.CompressionTriggered = needsCompressUserMsg
 
-	// Process prompt using strategy pattern
-	processor := l.svcCtx.PromptProcessorFactory.CreateProcessor(needsCompression, l.getHeaders())
+	promptProcessor, err := strategy.NewCompressionProcessor(l.svcCtx)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to new processor: %w", err)
+	}
 
 	var semanticStart time.Time
-	if needsCompression {
+	if needsCompressUserMsg {
 		semanticStart = time.Now()
 	}
 
-	processedPrompt, err := processor.ProcessPrompt(l.ctx, req)
+	processedPrompt, err := promptProcessor.ProcessPrompt(l.ctx, req, needsCompressUserMsg)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to process prompt: %w", err)
 	}
 
 	// Update chat log with processed prompt info
-	l.updateChatLogWithProcessedPrompt(chatLog, processedPrompt, semanticStart, needsCompression)
+	l.updateChatLogWithProcessedPrompt(chatLog, processedPrompt, semanticStart, needsCompressUserMsg)
 
 	return chatLog, processedPrompt, nil
 }
@@ -80,7 +82,7 @@ func (l *ChatCompletionLogic) processRequest(req *types.ChatCompletionRequest) (
 // initializeChatLog creates and initializes a new ChatLog with basic information and original token stats
 func (l *ChatCompletionLogic) initializeChatLog(requestID string, startTime time.Time, req *types.ChatCompletionRequest) *model.ChatLog {
 	// Count original tokens
-	userMessageTokens := l.countTokensInMessages(utils.GetUserMessages(req.Messages))
+	userMessageTokens := l.countTokensInMessages(utils.GetUserMsgs(req.Messages))
 	originalAllMessageTokens := l.countTokensInMessages(req.Messages)
 	systemMessageTokens := originalAllMessageTokens - userMessageTokens
 
@@ -110,7 +112,7 @@ func (l *ChatCompletionLogic) updateChatLogWithProcessedPrompt(chatLog *model.Ch
 	// Update log with processed prompt info
 	chatLog.IsCompressed = processedPrompt.IsCompressed
 	compressedAllTokens := l.countTokensInMessages(processedPrompt.Messages)
-	compressedUserTokens := l.countTokensInMessages(utils.GetUserMessages(processedPrompt.Messages))
+	compressedUserTokens := l.countTokensInMessages(utils.GetUserMsgs(processedPrompt.Messages))
 	compressedSystemTokens := compressedAllTokens - compressedUserTokens
 
 	chatLog.CompressedTokens = model.TokenStats{

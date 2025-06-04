@@ -1,15 +1,19 @@
 package utils
 
-import "github.com/zgsm-ai/chat-rag/internal/types"
+import (
+	"fmt"
+
+	"github.com/zgsm-ai/chat-rag/internal/types"
+)
 
 const (
 	ContentTypeText     = "text"
 	ContentTypeImageURL = "image_url"
 )
 
-// GetContentAsString 将内容转换为字符串，不解析内部结构
+// GetContentAsString converts content to string without parsing internal structure
 func GetContentAsString(content interface{}) string {
-	// 直接返回原始JSON内容
+	// Returns raw JSON content directly
 	con, ok := content.(string)
 	if ok {
 		return con
@@ -33,8 +37,8 @@ func GetContentAsString(content interface{}) string {
 	return ""
 }
 
-// GetUserMessages 过滤出非system消息
-func GetUserMessages(messages []types.Message) []types.Message {
+// GetUserMsgs filters out non-system messages
+func GetUserMsgs(messages []types.Message) []types.Message {
 	filtered := make([]types.Message, 0, len(messages))
 	for _, msg := range messages {
 		if msg.Role != "system" {
@@ -50,4 +54,29 @@ func TruncateContent(content string, maxLength int) string {
 		return content
 	}
 	return content[:maxLength] + "..."
+}
+
+// GetLatestUserMsg gets the newest user message content from message list
+func GetLatestUserMsg(messages []types.Message) (string, error) {
+	// Search backwards from last message to find user message
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role == "user" {
+			return GetContentAsString(messages[i].Content), nil
+		}
+	}
+	return "", fmt.Errorf("no user message found")
+}
+
+// GetOldUserMsgs filters out old user messages
+func GetOldUserMsgs(messages []types.Message) []types.Message {
+	var filtered []types.Message
+	for i := 0; i < len(messages); i++ {
+		// Skip system messages and last user message
+		if messages[i].Role == "system" ||
+			(messages[i].Role == "user" && i >= len(messages)-1) {
+			continue
+		}
+		filtered = append(filtered, messages[i])
+	}
+	return filtered
 }

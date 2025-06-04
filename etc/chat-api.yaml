@@ -7,7 +7,7 @@ Port: 8888
 LLMEndpoint: "https://zgsm.sangfor.com/v1/chat/completions"
 
 # Token processing configuration
-TokenThreshold: 5000
+TokenThreshold: 2000
 
 # Semantic API configuration
 SemanticApiEndpoint: "http://localhost:8002/codebase-indexer/api/v1/semantics"
@@ -25,3 +25,6 @@ LogScanIntervalSec: 6000
 # Model configuration
 SummaryModel: "deepseek-v3"
 ClassifyModel: "deepseek-v3"
+
+# Split system prompt, used to compress system prompt
+SystemPromptSplitter: "# Tool Use Guidelines"

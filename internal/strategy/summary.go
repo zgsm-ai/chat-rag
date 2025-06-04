@@ -35,9 +35,6 @@ Please strictly follow the requirements below for the compression task:
 * Final text length should be 30%-50% of the original to ensure readability, standardization, and structural clarity.
 * Output in English only, without additional explanations such as "This is the compressed text.`
 
-// TOOLGUIDELINEMARKER is a marker used to identify the tool guidelines section in the system prompt
-const TOOLGUIDELINEMARKER = "# Tool Use Guidelines"
-
 // USER_SUMMARY_PROMPT defines the template for conversation user prompt summarization
 const USER_SUMMARY_PROMPT = `Your task is to create a detailed summary of the conversation so far, paying close attention to the user's explicit requests and your previous actions.
 This summary should be thorough in capturing technical details, code patterns, and architectural decisions that would be essential for continuing with the conversation and supporting any continuing tasks.
@@ -121,13 +118,15 @@ func generateHash(content string) string {
 
 // SummaryProcessor handles conversation summarization
 type SummaryProcessor struct {
-	llmClient *client.LLMClient
+	systemPromptSplitter string
+	llmClient            *client.LLMClient
 }
 
 // NewSummaryProcessor creates a new summary processor
-func NewSummaryProcessor(llmClient *client.LLMClient) *SummaryProcessor {
+func NewSummaryProcessor(systemPromptSplitter string, llmClient *client.LLMClient) *SummaryProcessor {
 	return &SummaryProcessor{
-		llmClient: llmClient,
+		systemPromptSplitter: systemPromptSplitter,
+		llmClient:            llmClient,
 	}
 }
 
@@ -185,16 +184,16 @@ func (p *SummaryProcessor) processSystemMessageWithCache(msg types.Message) type
 		return msg
 	}
 
-	// Check if system prompt contains TOOLGUIDELINEMARKER
-	toolGuidelinesIndex := strings.Index(systemContent, TOOLGUIDELINEMARKER)
+	// Check if system prompt contains SystemPromptSplitter
+	toolGuidelinesIndex := strings.Index(systemContent, p.systemPromptSplitter)
 
-	// If no TOOLGUIDELINEMARKER found, use original message without compression
+	// If no SystemPromptSplitter found, use original message without compression
 	if toolGuidelinesIndex == -1 {
-		log.Printf("==> [processSystemMessageWithCache] No TOOLGUIDELINEMARKER found!\n")
+		log.Printf("[processSystemMessageWithCache] No SystemPromptSplitter found!\n")
 		return msg
 	}
 
-	// Extract content from TOOLGUIDELINEMARKER to the end
+	// Extract content from SystemPromptSplitter to the end
 	contentToCompress := systemContent[toolGuidelinesIndex:]
 	contentBeforeGuidelines := systemContent[:toolGuidelinesIndex]
 
@@ -203,7 +202,7 @@ func (p *SummaryProcessor) processSystemMessageWithCache(msg types.Message) type
 
 	// Check if compressed version exists in cache
 	if compressedContent, exists := cache.Get(systemHash); exists {
-		log.Printf("==> [processSystemMessageWithCache] Using cached compressed system prompt\n")
+		log.Printf("[processSystemMessageWithCache] Using cached compressed system prompt\n")
 		// Use cached compressed version, combining with content before guidelines
 		return types.Message{
 			Role:    "system",
@@ -214,7 +213,7 @@ func (p *SummaryProcessor) processSystemMessageWithCache(msg types.Message) type
 		log.Printf("[processSystemMessageWithCache] uncached, generating compressed system prompt for guidelines section\n")
 		go func(content, hash string) {
 			if compressed, err := p.GenerateSystemPromptSummary(context.Background(), content); err == nil {
-				log.Printf("==> [processSystemMessageWithCache] compressed system prompt")
+				log.Printf("[processSystemMessageWithCache] compressed system prompt")
 				cache.Set(hash, compressed)
 			}
 		}(contentToCompress, systemHash)
@@ -231,7 +230,7 @@ func (p *SummaryProcessor) BuildUserSummaryMessages(ctx context.Context, message
 	// Add system message if exists, with caching logic
 	for _, msg := range messages {
 		if msg.Role == "system" {
-			finalMessages = append(finalMessages, p.processSystemMessageWithCache(msg))
+			finalMessages = append(finalMessages, msg)
 			break
 		}
 	}

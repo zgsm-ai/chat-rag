@@ -6,7 +6,6 @@ import (
 	"github.com/zgsm-ai/chat-rag/internal/client"
 	"github.com/zgsm-ai/chat-rag/internal/config"
 	"github.com/zgsm-ai/chat-rag/internal/service"
-	"github.com/zgsm-ai/chat-rag/internal/strategy"
 	"github.com/zgsm-ai/chat-rag/internal/types"
 	"github.com/zgsm-ai/chat-rag/internal/utils"
 )
@@ -29,9 +28,6 @@ type ServiceContext struct {
 
 	// Utilities
 	TokenCounter *utils.TokenCounter
-
-	// Strategy factory
-	PromptProcessorFactory *strategy.PromptProcessorFactory
 
 	// Request context
 	ReqCtx *RequestContext
@@ -63,24 +59,16 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		summaryModelClient, // TODO: change to classify model client
 	)
 
-	// Initialize strategy factory
-	promptProcessorFactory := strategy.NewPromptProcessorFactory(
-		semanticClient,
-		summaryModelClient,
-		c.TopK,
-	)
-
 	// Start logger service
 	if err := loggerService.Start(); err != nil {
 		panic("Failed to start logger service:" + err.Error())
 	}
 
 	return &ServiceContext{
-		Config:                 c,
-		SemanticClient:         semanticClient,
-		LoggerService:          loggerService,
-		TokenCounter:           tokenCounter,
-		PromptProcessorFactory: promptProcessorFactory,
+		Config:         c,
+		SemanticClient: semanticClient,
+		LoggerService:  loggerService,
+		TokenCounter:   tokenCounter,
 	}
 }
 

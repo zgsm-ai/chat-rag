@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"net/http"
 	"strings"
+	"time"
 
 	"github.com/zgsm-ai/chat-rag/internal/client"
-	"github.com/zgsm-ai/chat-rag/internal/model"
+	"github.com/zgsm-ai/chat-rag/internal/svc"
 	"github.com/zgsm-ai/chat-rag/internal/types"
 	"github.com/zgsm-ai/chat-rag/internal/utils"
 )
@@ -20,34 +20,11 @@ type PromptProcessor interface {
 
 // ProcessedPrompt contains the result of prompt processing
 type ProcessedPrompt struct {
-	Messages         []types.Message  `json:"messages"`
-	IsCompressed     bool             `json:"is_compressed"`
-	OriginalTokens   model.TokenStats `json:"original_tokens"`
-	CompressedTokens model.TokenStats `json:"compressed_tokens"`
-	CompressionRatio float64          `json:"compression_ratio"`
-	SemanticLatency  int64            `json:"semantic_latency_ms"`
-	SummaryLatency   int64            `json:"summary_latency_ms"`
-}
-
-// DirectProcessor processes prompts without compression
-type DirectProcessor struct{}
-
-// NewDirectProcessor creates a new direct processor
-func NewDirectProcessor() *DirectProcessor {
-	return &DirectProcessor{}
-}
-
-// ProcessPrompt processes the prompt directly without compression
-func (p *DirectProcessor) ProcessPrompt(ctx context.Context, req *types.ChatCompletionRequest) (*ProcessedPrompt, error) {
-	return &ProcessedPrompt{
-		Messages:         req.Messages,
-		IsCompressed:     false,
-		OriginalTokens:   model.TokenStats{}, // Will be calculated by caller
-		CompressedTokens: model.TokenStats{},
-		CompressionRatio: 1.0,
-		SemanticLatency:  0,
-		SummaryLatency:   0,
-	}, nil
+	Messages        []types.Message `json:"messages"`
+	IsCompressed    bool            `json:"is_compressed"`
+	SemanticLatency int64           `json:"semantic_latency_ms"`
+	SemanticContext string          `json:"semantic_context"`
+	SummaryLatency  int64           `json:"summary_latency_ms"`
 }
 
 // CompressionProcessor processes prompts with RAG compression
@@ -58,116 +35,125 @@ type CompressionProcessor struct {
 }
 
 // NewCompressionProcessor creates a new compression processor
-func NewCompressionProcessor(semanticClient *client.SemanticClient, llmClient *client.LLMClient, topK int) *CompressionProcessor {
+func NewCompressionProcessor(svcCtx *svc.ServiceContext) (*CompressionProcessor, error) {
+	llmClient, err := client.NewLLMClient(svcCtx.Config.LLMEndpoint, svcCtx.Config.SummaryModel)
+	if err != nil {
+		return nil, err
+	}
+
+	llmClient.SetHeaders(svcCtx.ReqCtx.Headers)
 	return &CompressionProcessor{
-		semanticClient:   semanticClient,
-		summaryProcessor: NewSummaryProcessor(llmClient),
-		topK:             topK,
-	}
-}
-
-// ProcessPrompt processes the prompt with RAG compression
-func (p *CompressionProcessor) ProcessPrompt(ctx context.Context, req *types.ChatCompletionRequest) (*ProcessedPrompt, error) {
-	// Get the latest user message for semantic search
-	var latestUserMessage string
-	for i := len(req.Messages) - 1; i >= 0; i-- {
-		if req.Messages[i].Role == "user" {
-			latestUserMessage = utils.GetContentAsString(req.Messages[i].Content)
-			break
-		}
-	}
-
-	if latestUserMessage == "" {
-		return nil, fmt.Errorf("no user message found for semantic search")
-	}
-
-	// Perform semantic search
-	semanticReq := client.SemanticRequest{
-		ClientId:    req.ClientId,
-		ProjectPath: req.ProjectPath,
-		Query:       latestUserMessage,
-		TopK:        p.topK,
-	}
-
-	semanticResp, err := p.semanticClient.Search(ctx, semanticReq)
-
-	// Build context from semantic results
-	var contextParts []string
-	var semanticContext string
-
-	if err != nil {
-		// If semantic search fails, continue without context
-		log.Printf("Semantic search failed: %v", err)
-		semanticContext = ""
-	} else {
-		for _, result := range semanticResp.Results {
-			contextParts = append(contextParts, fmt.Sprintf("File: %s (Line %d)\n%s",
-				result.FilePath, result.LineNumber, result.Content))
-		}
-		semanticContext = strings.Join(contextParts, "\n\n")
-	}
-
-	// Get messages to summarize (exclude system messages and last user message)
-	var messagesToSummarize []types.Message
-	for i := 0; i < len(req.Messages); i++ {
-		// Skip system messages and the last user message
-		if req.Messages[i].Role == "system" ||
-			(req.Messages[i].Role == "user" && i >= len(req.Messages)-1) {
-			continue
-		}
-		messagesToSummarize = append(messagesToSummarize, req.Messages[i])
-	}
-
-	summary, err := p.summaryProcessor.GenerateUserPromptSummary(ctx, semanticContext, messagesToSummarize)
-	if err != nil {
-		log.Printf("Failed to generate summary: %v", err)
-		// On error, proceed with original messages
-		return &ProcessedPrompt{
-			Messages:         req.Messages,
-			IsCompressed:     false,
-			OriginalTokens:   model.TokenStats{}, // Will be calculated by caller
-			CompressedTokens: model.TokenStats{}, // Will be calculated by caller
-			CompressionRatio: 1.0,
-			SemanticLatency:  0,
-			SummaryLatency:   0,
-		}, nil
-	}
-
-	// Build final messages
-	finalMessages := p.summaryProcessor.BuildUserSummaryMessages(ctx, req.Messages, summary)
-
-	return &ProcessedPrompt{
-		Messages:         finalMessages,
-		IsCompressed:     true,
-		OriginalTokens:   model.TokenStats{}, // Will be calculated by caller
-		CompressedTokens: model.TokenStats{}, // Will be calculated by caller
-		CompressionRatio: 0,                  // Will be calculated by caller
-		SemanticLatency:  0,                  // Will be set by caller
-		SummaryLatency:   0,                  // Will be set by caller
+		semanticClient:   client.NewSemanticClient(svcCtx.Config.SemanticApiEndpoint),
+		summaryProcessor: NewSummaryProcessor(svcCtx.Config.SystemPromptSplitter, llmClient),
+		topK:             svcCtx.Config.TopK,
 	}, nil
 }
 
-// PromptProcessorFactory creates prompt processors based on configuration
-type PromptProcessorFactory struct {
-	semanticClient     *client.SemanticClient
-	summaryModelClient *client.LLMClient
-	topK               int
+// searchSemanticContext performs semantic search and constructs context string
+func (p *CompressionProcessor) searchSemanticContext(
+	ctx context.Context,
+	req *types.ChatCompletionRequest,
+	query string,
+) string {
+	// Prepare semantic request
+	semanticReq := client.SemanticRequest{
+		ClientId:    req.ClientId,
+		ProjectPath: req.ProjectPath,
+		Query:       query,
+		TopK:        p.topK,
+	}
+
+	// Execute search
+	semanticResp, err := p.semanticClient.Search(ctx, semanticReq)
+	if err != nil {
+		log.Printf("[buildSemanticContext] Semantic search failed: %v", err)
+		return ""
+	}
+
+	// Build context string from results
+	var contextParts []string
+	for _, result := range semanticResp.Results {
+		contextParts = append(contextParts, fmt.Sprintf("File: %s (Line %d)\n%s",
+			result.FilePath, result.LineNumber, result.Content))
+	}
+
+	semanticContext := strings.Join(contextParts, "\n\n")
+	log.Printf("[buildSemanticContext] Searched semantic context: %s", semanticContext)
+
+	return semanticContext
 }
 
-// NewPromptProcessorFactory creates a new factory
-func NewPromptProcessorFactory(semanticClient *client.SemanticClient, summaryModelClient *client.LLMClient, topK int) *PromptProcessorFactory {
-	return &PromptProcessorFactory{
-		semanticClient:     semanticClient,
-		summaryModelClient: summaryModelClient,
-		topK:               topK,
+// ReplaceSystemMessages 替换消息列表中的系统消息
+// processedSystemMsg: 处理后的系统消息（nil表示不移除系统消息）
+// messages: 原始消息列表
+func (p *CompressionProcessor) replaceSysMsgWithCompressed(messages []types.Message) []types.Message {
+	var processedMsgs []types.Message
+	var hasSystem bool
+
+	for _, msg := range messages {
+		if msg.Role == "system" {
+			processedMsgs = append(processedMsgs, p.summaryProcessor.processSystemMessageWithCache(msg))
+			hasSystem = true
+		} else {
+			processedMsgs = append(processedMsgs, msg)
+		}
 	}
+
+	// 如果没有找到系统消息，返回原始消息列表
+	if !hasSystem {
+		return messages
+	}
+	return processedMsgs
 }
 
-// CreateProcessor creates a processor based on whether compression is needed
-func (f *PromptProcessorFactory) CreateProcessor(needsCompression bool, headers *http.Header) PromptProcessor {
-	if needsCompression {
-		f.summaryModelClient.SetHeaders(headers)
-		return NewCompressionProcessor(f.semanticClient, f.summaryModelClient, f.topK)
+// ProcessPrompt processes the prompt with RAG compression
+func (p *CompressionProcessor) ProcessPrompt(ctx context.Context, req *types.ChatCompletionRequest, needsCompressUserMsg bool) (*ProcessedPrompt, error) {
+	var semanticLatency, summaryLatency int64
+
+	// Get the latest user message for semantic search
+	latestUserMessage, err := utils.GetLatestUserMsg(req.Messages)
+	if err != nil {
+		return nil, fmt.Errorf("no user message found for semantic search: %w", err)
 	}
-	return NewDirectProcessor()
+
+	// Record start time for semantic search
+	semanticStart := time.Now()
+	semanticContext := p.searchSemanticContext(ctx, req, latestUserMessage)
+	semanticLatency = time.Since(semanticStart).Milliseconds()
+
+	// Replace system messages with compressed messages
+	replacedSystemMsgs := p.replaceSysMsgWithCompressed(req.Messages)
+
+	// Get messages to summarize (exclude system messages and last user message)
+	messagesToSummarize := utils.GetOldUserMsgs(req.Messages)
+
+	if needsCompressUserMsg {
+		// Record start time for summary process
+		summaryStart := time.Now()
+		summary, err := p.summaryProcessor.GenerateUserPromptSummary(ctx, semanticContext, messagesToSummarize)
+		if err != nil {
+			log.Printf("Failed to generate summary: %v", err)
+			// On error, proceed with original messages
+			return &ProcessedPrompt{
+				Messages:        replacedSystemMsgs,
+				IsCompressed:    false,
+				SemanticLatency: semanticLatency,
+				SemanticContext: semanticContext,
+				SummaryLatency:  0,
+			}, nil
+		}
+
+		// Build final messages
+		finalMessages := p.summaryProcessor.BuildUserSummaryMessages(ctx, replacedSystemMsgs, summary)
+		replacedSystemMsgs = finalMessages
+		summaryLatency = time.Since(summaryStart).Milliseconds()
+	}
+
+	return &ProcessedPrompt{
+		Messages:        replacedSystemMsgs,
+		IsCompressed:    true,
+		SemanticLatency: semanticLatency,
+		SemanticContext: semanticContext,
+		SummaryLatency:  summaryLatency,
+	}, nil
 }
