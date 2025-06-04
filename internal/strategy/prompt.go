@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/zgsm-ai/chat-rag/internal/client"
+	"github.com/zgsm-ai/chat-rag/internal/model"
 	"github.com/zgsm-ai/chat-rag/internal/types"
 	"github.com/zgsm-ai/chat-rag/internal/utils"
 )
@@ -19,13 +20,13 @@ type PromptProcessor interface {
 
 // ProcessedPrompt contains the result of prompt processing
 type ProcessedPrompt struct {
-	Messages         []types.Message `json:"messages"`
-	IsCompressed     bool            `json:"is_compressed"`
-	OriginalTokens   int             `json:"original_tokens"`
-	CompressedTokens int             `json:"compressed_tokens"`
-	CompressionRatio float64         `json:"compression_ratio"`
-	SemanticLatency  int64           `json:"semantic_latency_ms"`
-	SummaryLatency   int64           `json:"summary_latency_ms"`
+	Messages         []types.Message  `json:"messages"`
+	IsCompressed     bool             `json:"is_compressed"`
+	OriginalTokens   model.TokenStats `json:"original_tokens"`
+	CompressedTokens model.TokenStats `json:"compressed_tokens"`
+	CompressionRatio float64          `json:"compression_ratio"`
+	SemanticLatency  int64            `json:"semantic_latency_ms"`
+	SummaryLatency   int64            `json:"summary_latency_ms"`
 }
 
 // DirectProcessor processes prompts without compression
@@ -41,8 +42,8 @@ func (p *DirectProcessor) ProcessPrompt(ctx context.Context, req *types.ChatComp
 	return &ProcessedPrompt{
 		Messages:         req.Messages,
 		IsCompressed:     false,
-		OriginalTokens:   0, // Will be calculated by caller
-		CompressedTokens: 0,
+		OriginalTokens:   model.TokenStats{}, // Will be calculated by caller
+		CompressedTokens: model.TokenStats{},
 		CompressionRatio: 1.0,
 		SemanticLatency:  0,
 		SummaryLatency:   0,
@@ -124,8 +125,8 @@ func (p *CompressionProcessor) ProcessPrompt(ctx context.Context, req *types.Cha
 		return &ProcessedPrompt{
 			Messages:         req.Messages,
 			IsCompressed:     false,
-			OriginalTokens:   0, // Will be calculated by caller
-			CompressedTokens: 0, // Will be calculated by caller
+			OriginalTokens:   model.TokenStats{}, // Will be calculated by caller
+			CompressedTokens: model.TokenStats{}, // Will be calculated by caller
 			CompressionRatio: 1.0,
 			SemanticLatency:  0,
 			SummaryLatency:   0,
@@ -138,11 +139,11 @@ func (p *CompressionProcessor) ProcessPrompt(ctx context.Context, req *types.Cha
 	return &ProcessedPrompt{
 		Messages:         finalMessages,
 		IsCompressed:     true,
-		OriginalTokens:   0, // Will be calculated by caller
-		CompressedTokens: 0, // Will be calculated by caller
-		CompressionRatio: 0, // Will be calculated by caller
-		SemanticLatency:  0, // Will be set by caller
-		SummaryLatency:   0, // Will be set by caller
+		OriginalTokens:   model.TokenStats{}, // Will be calculated by caller
+		CompressedTokens: model.TokenStats{}, // Will be calculated by caller
+		CompressionRatio: 0,                  // Will be calculated by caller
+		SemanticLatency:  0,                  // Will be set by caller
+		SummaryLatency:   0,                  // Will be set by caller
 	}, nil
 }
 

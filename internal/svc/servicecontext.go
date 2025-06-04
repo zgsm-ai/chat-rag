@@ -59,7 +59,6 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	loggerService := service.NewLoggerService(
 		c.LogFilePath,
 		c.LokiEndpoint,
-		c.LogBatchSize,
 		c.LogScanIntervalSec,
 		summaryModelClient, // TODO: change to classify model client
 	)

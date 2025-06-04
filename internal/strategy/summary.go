@@ -133,6 +133,7 @@ func NewSummaryProcessor(llmClient *client.LLMClient) *SummaryProcessor {
 
 // GenerateUserPromptSummary generates a user prompt summary of the conversation
 func (p *SummaryProcessor) GenerateUserPromptSummary(ctx context.Context, semanticContext string, messages []types.Message) (string, error) {
+	log.Println("[GenerateUserPromptSummary] Start generating user prompt summary...")
 	// Create a new slice of messages for the summary request
 	var summaryMessages []types.Message
 
@@ -213,8 +214,7 @@ func (p *SummaryProcessor) processSystemMessageWithCache(msg types.Message) type
 		log.Printf("[processSystemMessageWithCache] uncached, generating compressed system prompt for guidelines section\n")
 		go func(content, hash string) {
 			if compressed, err := p.GenerateSystemPromptSummary(context.Background(), content); err == nil {
-				// log.Printf("==> [processSystemMessageWithCache] system prompt hash:\n %v\n\n", hash)
-				// log.Printf("==> [processSystemMessageWithCache] cached compressed system prompt:\n %v\n\n", compressed)
+				log.Printf("==> [processSystemMessageWithCache] compressed system prompt")
 				cache.Set(hash, compressed)
 			}
 		}(contentToCompress, systemHash)

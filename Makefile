@@ -4,6 +4,10 @@
 build:
 	go build -o bin/chat-rag main.go
 
+# Build for Windows (with .exe suffix)
+build-win:
+	go build -o bin/chat-rag.exe main.go
+
 # Run the application
 run:
 	go run main.go -f etc/chat-api.yaml

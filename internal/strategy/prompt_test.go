@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/zgsm-ai/chat-rag/internal/client"
+	"github.com/zgsm-ai/chat-rag/internal/model"
 	"github.com/zgsm-ai/chat-rag/internal/types"
 	"github.com/zgsm-ai/chat-rag/internal/utils"
 )
@@ -33,8 +34,8 @@ func TestDirectProcessor_ProcessPrompt(t *testing.T) {
 					{Role: "user", Content: "Hello, how are you?"},
 				},
 				IsCompressed:     false,
-				OriginalTokens:   0,
-				CompressedTokens: 0,
+				OriginalTokens:   model.TokenStats{},
+				CompressedTokens: model.TokenStats{},
 				CompressionRatio: 1.0,
 				SemanticLatency:  0,
 				SummaryLatency:   0,
@@ -59,8 +60,8 @@ func TestDirectProcessor_ProcessPrompt(t *testing.T) {
 					{Role: "user", Content: "Tell me more about it."},
 				},
 				IsCompressed:     false,
-				OriginalTokens:   0,
-				CompressedTokens: 0,
+				OriginalTokens:   model.TokenStats{},
+				CompressedTokens: model.TokenStats{},
 				CompressionRatio: 1.0,
 				SemanticLatency:  0,
 				SummaryLatency:   0,
@@ -75,8 +76,8 @@ func TestDirectProcessor_ProcessPrompt(t *testing.T) {
 			expected: &ProcessedPrompt{
 				Messages:         []types.Message{},
 				IsCompressed:     false,
-				OriginalTokens:   0,
-				CompressedTokens: 0,
+				OriginalTokens:   model.TokenStats{},
+				CompressedTokens: model.TokenStats{},
 				CompressionRatio: 1.0,
 				SemanticLatency:  0,
 				SummaryLatency:   0,
@@ -287,8 +288,8 @@ func TestProcessedPrompt_Structure(t *testing.T) {
 			{Role: "user", Content: "test"},
 		},
 		IsCompressed:     true,
-		OriginalTokens:   100,
-		CompressedTokens: 50,
+		OriginalTokens:   model.TokenStats{SystemTokens: 20, UserTokens: 80, All: 100},
+		CompressedTokens: model.TokenStats{SystemTokens: 10, UserTokens: 40, All: 50},
 		CompressionRatio: 0.5,
 		SemanticLatency:  100,
 		SummaryLatency:   200,
@@ -302,12 +303,12 @@ func TestProcessedPrompt_Structure(t *testing.T) {
 		t.Error("Expected IsCompressed to be true")
 	}
 
-	if prompt.OriginalTokens != 100 {
-		t.Errorf("Expected OriginalTokens 100, got %d", prompt.OriginalTokens)
+	if prompt.OriginalTokens.All != 100 {
+		t.Errorf("Expected OriginalTokens.All 100, got %d", prompt.OriginalTokens.All)
 	}
 
-	if prompt.CompressedTokens != 50 {
-		t.Errorf("Expected CompressedTokens 50, got %d", prompt.CompressedTokens)
+	if prompt.CompressedTokens.All != 50 {
+		t.Errorf("Expected CompressedTokens.All 50, got %d", prompt.CompressedTokens.All)
 	}
 
 	if prompt.CompressionRatio != 0.5 {

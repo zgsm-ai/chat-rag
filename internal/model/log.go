@@ -7,6 +7,13 @@ import (
 	"github.com/zgsm-ai/chat-rag/internal/types"
 )
 
+// TokenStats represents detailed token statistics
+type TokenStats struct {
+	SystemTokens int `json:"system_tokens"`
+	UserTokens   int `json:"user_tokens"`
+	All          int `json:"all"`
+}
+
 // ChatLog represents a single chat completion log entry
 type ChatLog struct {
 	RequestID   string    `json:"request_id"`
@@ -16,9 +23,9 @@ type ChatLog struct {
 	Model       string    `json:"model"`
 
 	// Token statistics
-	OriginalTokens   int     `json:"original_tokens"`
-	CompressedTokens int     `json:"compressed_tokens"`
-	CompressionRatio float64 `json:"compression_ratio"`
+	OriginalTokens   TokenStats `json:"original_tokens"`
+	CompressedTokens TokenStats `json:"compressed_tokens"`
+	CompressionRatio float64    `json:"compression_ratio"`
 
 	// Processing flags
 	IsCompressed         bool `json:"is_compressed"`
@@ -31,8 +38,8 @@ type ChatLog struct {
 	TotalLatency     int64 `json:"total_latency_ms"`
 
 	// Content samples (truncated for logging)
-	OriginalPromptSample   []types.Message `json:"original_prompt_sample"`
-	CompressedPromptSample []types.Message `json:"compressed_prompt_sample"`
+	OriginalPrompt   []types.Message `json:"original_prompt"`
+	CompressedPrompt []types.Message `json:"compressed_prompt"`
 
 	// Response information
 	ResponseContent string      `json:"response_content,omitempty"`

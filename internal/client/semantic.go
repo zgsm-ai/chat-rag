@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 )
@@ -48,6 +49,7 @@ func NewSemanticClient(endpoint string) *SemanticClient {
 
 // Search performs semantic search and returns relevant context
 func (c *SemanticClient) Search(ctx context.Context, req SemanticRequest) (*SemanticResponse, error) {
+	log.Println("[Search] Start semantic search...")
 	// Prepare request body
 	reqBody, err := json.Marshal(req)
 	if err != nil {

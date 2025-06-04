@@ -22,7 +22,6 @@ type LoggerService struct {
 	logFilePath     string // Permanent storage log directory path
 	tempLogFilePath string // Temporary log file path
 	lokiEndpoint    string
-	batchSize       int
 	scanInterval    time.Duration
 	llmClient       *client.LLMClient
 
@@ -35,7 +34,7 @@ type LoggerService struct {
 }
 
 // NewLoggerService creates a new logger service
-func NewLoggerService(logFilePath, lokiEndpoint string, batchSize int, scanIntervalSec int, llmClient *client.LLMClient) *LoggerService {
+func NewLoggerService(logFilePath, lokiEndpoint string, scanIntervalSec int, llmClient *client.LLMClient) *LoggerService {
 	// Create temp directory under logFilePath for temporary log files
 	tempLogDir := filepath.Join(logFilePath, "temp")
 
@@ -43,7 +42,6 @@ func NewLoggerService(logFilePath, lokiEndpoint string, batchSize int, scanInter
 		logFilePath:     logFilePath, // Permanent storage directory
 		tempLogFilePath: tempLogDir,  // Temporary logs directory
 		lokiEndpoint:    lokiEndpoint,
-		batchSize:       batchSize,
 		scanInterval:    time.Duration(scanIntervalSec) * time.Second,
 		llmClient:       llmClient,
 		logChan:         make(chan *model.ChatLog, 1000),
@@ -268,7 +266,7 @@ Respond ONLY with one of these exact category names:
 - "Documentation"
 
 Do not include any extra text, just the exact matching category name.`,
-		logs.OriginalPromptSample)
+		logs.OriginalPrompt)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

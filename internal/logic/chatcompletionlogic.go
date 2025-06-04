@@ -49,23 +49,13 @@ func (l *ChatCompletionLogic) processRequest(req *types.ChatCompletionRequest) (
 	startTime := time.Now()
 	requestID := uuid.New().String()
 
-	chatLog := &model.ChatLog{
-		RequestID:   requestID,
-		Timestamp:   startTime,
-		ClientID:    req.ClientId,
-		ProjectPath: req.ProjectPath,
-		Model:       req.Model,
-	}
-
-	// Count original tokens (excluding system messages)
-	userMessageTokens := l.countTokensInMessages(utils.GetUserMessages(req.Messages))
-	originalAllMessageTokens := l.countTokensInMessages(req.Messages)
-	chatLog.OriginalTokens = originalAllMessageTokens
-	chatLog.OriginalPromptSample = req.Messages
+	// Initialize chat log
+	chatLog := l.initializeChatLog(requestID, startTime, req)
 
 	// Determine if compression is needed
+	userMessageTokens := chatLog.OriginalTokens.UserTokens
 	needsCompression := l.svcCtx.Config.EnableCompression && userMessageTokens > l.svcCtx.Config.TokenThreshold
-	fmt.Printf("[processRequest] userMessageTokens: %v, needsCompression: %v\n\n", userMessageTokens, needsCompression)
+	log.Printf("[processRequest] userMessageTokens: %v, needsCompression: %v\n\n", userMessageTokens, needsCompression)
 	chatLog.CompressionTriggered = needsCompression
 
 	// Process prompt using strategy pattern
@@ -81,6 +71,36 @@ func (l *ChatCompletionLogic) processRequest(req *types.ChatCompletionRequest) (
 		return nil, nil, fmt.Errorf("failed to process prompt: %w", err)
 	}
 
+	// Update chat log with processed prompt info
+	l.updateChatLogWithProcessedPrompt(chatLog, processedPrompt, semanticStart, needsCompression)
+
+	return chatLog, processedPrompt, nil
+}
+
+// initializeChatLog creates and initializes a new ChatLog with basic information and original token stats
+func (l *ChatCompletionLogic) initializeChatLog(requestID string, startTime time.Time, req *types.ChatCompletionRequest) *model.ChatLog {
+	// Count original tokens
+	userMessageTokens := l.countTokensInMessages(utils.GetUserMessages(req.Messages))
+	originalAllMessageTokens := l.countTokensInMessages(req.Messages)
+	systemMessageTokens := originalAllMessageTokens - userMessageTokens
+
+	return &model.ChatLog{
+		RequestID:   requestID,
+		Timestamp:   startTime,
+		ClientID:    req.ClientId,
+		ProjectPath: req.ProjectPath,
+		Model:       req.Model,
+		OriginalTokens: model.TokenStats{
+			SystemTokens: systemMessageTokens,
+			UserTokens:   userMessageTokens,
+			All:          originalAllMessageTokens,
+		},
+		OriginalPrompt: req.Messages,
+	}
+}
+
+// updateChatLogWithProcessedPrompt updates the chat log with information from the processed prompt
+func (l *ChatCompletionLogic) updateChatLogWithProcessedPrompt(chatLog *model.ChatLog, processedPrompt *strategy.ProcessedPrompt, semanticStart time.Time, needsCompression bool) {
 	// Record timing information from processed prompt
 	if needsCompression && processedPrompt.IsCompressed {
 		chatLog.SemanticLatency = time.Since(semanticStart).Milliseconds()
@@ -89,17 +109,25 @@ func (l *ChatCompletionLogic) processRequest(req *types.ChatCompletionRequest) (
 
 	// Update log with processed prompt info
 	chatLog.IsCompressed = processedPrompt.IsCompressed
-	compressedTokens := l.countTokensInMessages(processedPrompt.Messages)
-	chatLog.CompressedTokens = compressedTokens
+	compressedAllTokens := l.countTokensInMessages(processedPrompt.Messages)
+	compressedUserTokens := l.countTokensInMessages(utils.GetUserMessages(processedPrompt.Messages))
+	compressedSystemTokens := compressedAllTokens - compressedUserTokens
 
-	if originalAllMessageTokens > 0 {
-		ratio := float64(compressedTokens) / float64(originalAllMessageTokens)
+	chatLog.CompressedTokens = model.TokenStats{
+		SystemTokens: compressedSystemTokens,
+		UserTokens:   compressedUserTokens,
+		All:          compressedAllTokens,
+	}
+
+	// Calculate compression ratio
+	if chatLog.OriginalTokens.All > 0 {
+		ratio := float64(compressedAllTokens) / float64(chatLog.OriginalTokens.All)
 		chatLog.CompressionRatio, _ = strconv.ParseFloat(strconv.FormatFloat(ratio, 'f', 2, 64), 64)
 	}
 
-	chatLog.CompressedPromptSample = processedPrompt.Messages
-
-	return chatLog, processedPrompt, nil
+	if processedPrompt.IsCompressed {
+		chatLog.CompressedPrompt = processedPrompt.Messages
+	}
 }
 
 // ChatCompletion handles chat completion requests
@@ -223,7 +251,7 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 		chatLog.Usage = *finalUsage
 	} else {
 		// Calculate usage if not provided in streaming response
-		chatLog.Usage = l.calculateUsage(chatLog.CompressedTokens, responseText)
+		chatLog.Usage = l.calculateUsage(chatLog.CompressedTokens.All, responseText)
 		log.Printf("Calculated usage for streaming response - TotalTokens: %d", chatLog.Usage.TotalTokens)
 	}
 
@@ -313,7 +341,7 @@ func (l *ChatCompletionLogic) extractResponseInfo(chatLog *model.ChatLog, respon
 		chatLog.Usage = response.Usage
 	} else {
 		// Calculate usage if not provided
-		chatLog.Usage = l.calculateUsage(chatLog.CompressedTokens, chatLog.ResponseContent)
+		chatLog.Usage = l.calculateUsage(chatLog.CompressedTokens.All, chatLog.ResponseContent)
 		log.Printf("Calculated usage - TotalTokens: %d", chatLog.Usage.TotalTokens)
 	}
 }

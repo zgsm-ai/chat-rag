@@ -22,7 +22,6 @@ type Config struct {
 	// Logging configuration
 	LogFilePath        string `json:",default=logs/chat-rag.log"`
 	LokiEndpoint       string `json:",default=http://localhost:3100/loki/api/v1/push"`
-	LogBatchSize       int    `json:",default=100"`
 	LogScanIntervalSec int    `json:",default=60"`
 
 	// Model configuration

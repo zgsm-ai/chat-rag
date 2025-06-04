@@ -3,10 +3,11 @@ Host: 0.0.0.0
 Port: 8888
 
 # Model endpoints configuration
-LLMEndpoint: "http://localhost:8080/v1/chat/completions"
+# LLMEndpoint: "http://localhost:8080/v1/chat/completions"
+LLMEndpoint: "https://zgsm.sangfor.com/v1/chat/completions"
 
 # Token processing configuration
-TokenThreshold: 1000
+TokenThreshold: 5000
 
 # Semantic API configuration
 SemanticApiEndpoint: "http://localhost:8002/codebase-indexer/api/v1/semantics"
@@ -19,8 +20,8 @@ EnableCompression: true
 LogFilePath: "logs/"
 LokiEndpoint: "http://localhost:3100/loki/api/v1/push"
 LogBatchSize: 100
-LogScanIntervalSec: 600
+LogScanIntervalSec: 6000
 
 # Model configuration
-SummaryModel: "deepseek-v3-test"
-ClassifyModel: "deepseek-v3-test"
+SummaryModel: "deepseek-v3"
+ClassifyModel: "deepseek-v3"
