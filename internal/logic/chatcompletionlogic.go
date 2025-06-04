@@ -63,18 +63,13 @@ func (l *ChatCompletionLogic) processRequest(req *types.ChatCompletionRequest) (
 		return nil, nil, fmt.Errorf("failed to new processor: %w", err)
 	}
 
-	var semanticStart time.Time
-	if needsCompressUserMsg {
-		semanticStart = time.Now()
-	}
-
 	processedPrompt, err := promptProcessor.ProcessPrompt(l.ctx, req, needsCompressUserMsg)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to process prompt: %w", err)
 	}
 
 	// Update chat log with processed prompt info
-	l.updateChatLogWithProcessedPrompt(chatLog, processedPrompt, semanticStart, needsCompressUserMsg)
+	l.updateChatLogWithProcessedPrompt(chatLog, processedPrompt, needsCompressUserMsg)
 
 	return chatLog, processedPrompt, nil
 }
@@ -102,10 +97,10 @@ func (l *ChatCompletionLogic) initializeChatLog(requestID string, startTime time
 }
 
 // updateChatLogWithProcessedPrompt updates the chat log with information from the processed prompt
-func (l *ChatCompletionLogic) updateChatLogWithProcessedPrompt(chatLog *model.ChatLog, processedPrompt *strategy.ProcessedPrompt, semanticStart time.Time, needsCompression bool) {
+func (l *ChatCompletionLogic) updateChatLogWithProcessedPrompt(chatLog *model.ChatLog, processedPrompt *strategy.ProcessedPrompt, needsCompression bool) {
 	// Record timing information from processed prompt
+	chatLog.SemanticLatency = processedPrompt.SemanticLatency
 	if needsCompression && processedPrompt.IsCompressed {
-		chatLog.SemanticLatency = time.Since(semanticStart).Milliseconds()
 		chatLog.SummaryLatency = processedPrompt.SummaryLatency
 	}
 
@@ -127,9 +122,7 @@ func (l *ChatCompletionLogic) updateChatLogWithProcessedPrompt(chatLog *model.Ch
 		chatLog.CompressionRatio, _ = strconv.ParseFloat(strconv.FormatFloat(ratio, 'f', 2, 64), 64)
 	}
 
-	if processedPrompt.IsCompressed {
-		chatLog.CompressedPrompt = processedPrompt.Messages
-	}
+	chatLog.CompressedPrompt = processedPrompt.Messages
 }
 
 // ChatCompletion handles chat completion requests
