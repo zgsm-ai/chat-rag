@@ -47,6 +47,7 @@ Context: The context to continue the conversation with. If applicable based on t
   4. Relevant Files and Code: If applicable, enumerate specific files and code sections examined, modified, or created for the task continuation. Pay special attention to the most recent messages and changes.
   5. Problem Solving: Document problems solved thus far and any ongoing troubleshooting efforts.
   6. Pending Tasks and Next Steps: Outline all pending tasks that you have explicitly been asked to work on, as well as list the next steps you will take for all outstanding work, if applicable. Include code snippets where they add clarity. For any next steps, include direct quotes from the most recent conversation showing exactly what task you were working on and where you left off. This should be verbatim to ensure there's no information loss in context between tasks.
+  7. Language: Emphasize the language mentioned by system.
 
 Example summary structure:
 1. Previous Conversation:
@@ -71,6 +72,8 @@ Example summary structure:
   - [Task 1 details & next steps]
   - [Task 2 details & next steps]
   - [...]
+7. Langeuage:
+	[Always answer in the language]
 
 Output only the summary of the conversation so far, without any additional commentary or explanation.`
 
@@ -132,7 +135,7 @@ func NewSummaryProcessor(systemPromptSplitter string, llmClient *client.LLMClien
 
 // GenerateUserPromptSummary generates a user prompt summary of the conversation
 func (p *SummaryProcessor) GenerateUserPromptSummary(ctx context.Context, semanticContext string, messages []types.Message) (string, error) {
-	log.Println("[GenerateUserPromptSummary] Start generating user prompt summary...")
+	log.Printf("[GenerateUserPromptSummary] Start generating user prompt summary whit %v\n", p.llmClient.GetModelName())
 	// Create a new slice of messages for the summary request
 	var summaryMessages []types.Message
 
@@ -221,33 +224,4 @@ func (p *SummaryProcessor) processSystemMessageWithCache(msg types.Message) type
 		// Use original system prompt
 		return msg
 	}
-}
-
-// BuildUserSummaryMessages builds the final messages with user prompt summary
-func (p *SummaryProcessor) BuildUserSummaryMessages(ctx context.Context, messages []types.Message, summary string) []types.Message {
-	var finalMessages []types.Message
-
-	// Add system message if exists, with caching logic
-	for _, msg := range messages {
-		if msg.Role == "system" {
-			finalMessages = append(finalMessages, msg)
-			break
-		}
-	}
-
-	// Add summary as context
-	finalMessages = append(finalMessages, types.Message{
-		Role:    "assistant",
-		Content: summary,
-	})
-
-	// Add last user message
-	for i := len(messages) - 1; i >= 0; i-- {
-		if messages[i].Role == "user" {
-			finalMessages = append(finalMessages, messages[i])
-			break
-		}
-	}
-
-	return finalMessages
 }

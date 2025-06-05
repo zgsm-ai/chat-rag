@@ -1,7 +1,9 @@
 package model
 
 import (
+	"bytes"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/zgsm-ai/chat-rag/internal/types"
@@ -28,8 +30,8 @@ type ChatLog struct {
 	CompressionRatio float64    `json:"compression_ratio"`
 
 	// Processing flags
-	IsCompressed         bool `json:"is_compressed"`
-	CompressionTriggered bool `json:"compression_triggered"`
+	IsUserPromptCompressed bool `json:"is_compressed"`
+	CompressionTriggered   bool `json:"compression_triggered"`
 
 	// Latency metrics (in milliseconds)
 	SemanticLatency  int64 `json:"semantic_latency_ms"`
@@ -54,11 +56,15 @@ type ChatLog struct {
 
 // ToJSON converts the log entry to JSON string
 func (cl *ChatLog) ToJSON() (string, error) {
-	data, err := json.Marshal(cl)
+	buf := &bytes.Buffer{}
+	encoder := json.NewEncoder(buf)
+	encoder.SetEscapeHTML(false)
+	err := encoder.Encode(cl)
 	if err != nil {
 		return "", err
 	}
-	return string(data), nil
+	// Remove the newline added by Encode()
+	return strings.TrimSuffix(buf.String(), "\n"), nil
 }
 
 // FromJSON creates a ChatLog from JSON string
@@ -94,7 +100,7 @@ func CreateLokiStream(log *ChatLog) *LogStream {
 	labels := map[string]string{
 		"service":    "chat-rag",
 		"client_id":  log.ClientID,
-		"compressed": boolToString(log.IsCompressed),
+		"compressed": boolToString(log.IsUserPromptCompressed),
 	}
 
 	if log.Category != "" {

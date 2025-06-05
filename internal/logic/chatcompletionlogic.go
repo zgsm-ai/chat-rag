@@ -105,7 +105,7 @@ func (l *ChatCompletionLogic) updateChatLogWithProcessedPrompt(chatLog *model.Ch
 	}
 
 	// Update log with processed prompt info
-	chatLog.IsCompressed = processedPrompt.IsCompressed
+	chatLog.IsUserPromptCompressed = processedPrompt.IsCompressed
 	compressedAllTokens := l.countTokensInMessages(processedPrompt.Messages)
 	compressedUserTokens := l.countTokensInMessages(utils.GetUserMsgs(processedPrompt.Messages))
 	compressedSystemTokens := compressedAllTokens - compressedUserTokens
@@ -261,15 +261,7 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 
 func (l *ChatCompletionLogic) countTokensInMessages(messages []types.Message) int {
 	if l.svcCtx.TokenCounter != nil {
-		// Convert messages to map format for token counting
-		var msgMaps []map[string]interface{}
-		for _, msg := range messages {
-			msgMaps = append(msgMaps, map[string]interface{}{
-				"role":    msg.Role,
-				"content": msg.Content,
-			})
-		}
-		return l.svcCtx.TokenCounter.CountMessagesTokens(msgMaps)
+		return l.svcCtx.TokenCounter.CountMessagesTokens(messages)
 	}
 
 	// Fallback to simple estimation
@@ -351,7 +343,6 @@ func (l *ChatCompletionLogic) extractStreamingData(rawLine string, responseConte
 	// Extract JSON data
 	jsonData := strings.TrimPrefix(rawLine, "data: ")
 	if jsonData == "[DONE]" {
-		log.Printf("Streaming completed, final content length: %d", responseContent.Len())
 		return
 	}
 

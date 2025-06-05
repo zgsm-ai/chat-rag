@@ -42,6 +42,10 @@ func (c *LLMClient) SetHeaders(headers *http.Header) {
 	c.headers = headers
 }
 
+func (c *LLMClient) GetModelName() string {
+	return c.modelName
+}
+
 // GenerateContent generate content using a structured message format
 func (c *LLMClient) GenerateContent(ctx context.Context, systemPrompt string, userMessages []types.Message) (string, error) {
 	// Create a new slice of messages for the summary request

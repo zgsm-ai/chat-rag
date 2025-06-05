@@ -2,9 +2,11 @@ package utils
 
 import (
 	"encoding/json"
+	"log"
 	"strings"
 
 	"github.com/pkoukk/tiktoken-go"
+	"github.com/zgsm-ai/chat-rag/internal/types"
 )
 
 // TokenCounter provides token counting functionality
@@ -28,6 +30,7 @@ func NewTokenCounter() (*TokenCounter, error) {
 // CountTokens counts tokens in a text string
 func (tc *TokenCounter) CountTokens(text string) int {
 	if tc.encoder == nil {
+		log.Printf("[CountTokens][err] Encoder is not initialized")
 		// Fallback to simple estimation if encoder is not available
 		return len(strings.Fields(text)) * 4 / 3 // Rough approximation
 	}
@@ -36,20 +39,15 @@ func (tc *TokenCounter) CountTokens(text string) int {
 	return len(tokens)
 }
 
-// CountMessagesTokens counts tokens in a slice of messages
-func (tc *TokenCounter) CountMessagesTokens(messages []map[string]interface{}) int {
+func (tc *TokenCounter) CountMessagesTokens(messages []types.Message) int {
 	totalTokens := 0
 
 	for _, message := range messages {
 		// Count tokens for role
-		if role, ok := message["role"].(string); ok {
-			totalTokens += tc.CountTokens(role)
-		}
+		totalTokens += tc.CountTokens(message.Role)
 
 		// Count tokens for content
-		if content, ok := message["content"]; ok {
-			totalTokens += tc.CountTokens(GetContentAsString(content))
-		}
+		totalTokens += tc.CountTokens(GetContentAsString(message.Content))
 
 		// Add overhead tokens per message (approximately 3 tokens per message)
 		totalTokens += 3
@@ -57,6 +55,21 @@ func (tc *TokenCounter) CountMessagesTokens(messages []map[string]interface{}) i
 
 	// Add overhead tokens for the conversation (approximately 3 tokens)
 	totalTokens += 3
+	return totalTokens
+}
+
+func (tc *TokenCounter) CountOneMesaageTokens(message types.Message) int {
+	totalTokens := 0
+
+	// Count tokens for role
+	totalTokens += tc.CountTokens(message.Role)
+
+	// Count tokens for content
+	totalTokens += tc.CountTokens(GetContentAsString(message.Content))
+
+	// Add overhead tokens per message (approximately 3 tokens per message)
+	totalTokens += 3
+
 	return totalTokens
 }
 

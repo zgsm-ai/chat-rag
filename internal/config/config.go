@@ -25,9 +25,13 @@ type Config struct {
 	LogScanIntervalSec int
 
 	// Model configuration
-	SummaryModel  string
-	ClassifyModel string
+	SummaryModel               string
+	SummaryModelTokenThreshold int
+	ClassifyModel              string
 
 	// Split system prompt
 	SystemPromptSplitter string
+
+	// used recent user prompt messages nums
+	RecentUserMsgUsedNums int
 }

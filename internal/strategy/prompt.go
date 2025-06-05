@@ -8,15 +8,11 @@ import (
 	"time"
 
 	"github.com/zgsm-ai/chat-rag/internal/client"
+	"github.com/zgsm-ai/chat-rag/internal/config"
 	"github.com/zgsm-ai/chat-rag/internal/svc"
 	"github.com/zgsm-ai/chat-rag/internal/types"
 	"github.com/zgsm-ai/chat-rag/internal/utils"
 )
-
-// PromptProcessor defines the interface for prompt processing strategies
-type PromptProcessor interface {
-	ProcessPrompt(ctx context.Context, req *types.ChatCompletionRequest) (*ProcessedPrompt, error)
-}
 
 // ProcessedPrompt contains the result of prompt processing
 type ProcessedPrompt struct {
@@ -31,7 +27,8 @@ type ProcessedPrompt struct {
 type CompressionProcessor struct {
 	semanticClient   *client.SemanticClient
 	summaryProcessor *SummaryProcessor
-	topK             int
+	tokenCounter     *utils.TokenCounter
+	config           config.Config
 }
 
 // NewCompressionProcessor creates a new compression processor
@@ -45,7 +42,8 @@ func NewCompressionProcessor(svcCtx *svc.ServiceContext) (*CompressionProcessor,
 	return &CompressionProcessor{
 		semanticClient:   client.NewSemanticClient(svcCtx.Config.SemanticApiEndpoint),
 		summaryProcessor: NewSummaryProcessor(svcCtx.Config.SystemPromptSplitter, llmClient),
-		topK:             svcCtx.Config.TopK,
+		config:           svcCtx.Config,
+		tokenCounter:     svcCtx.TokenCounter,
 	}, nil
 }
 
@@ -60,7 +58,7 @@ func (p *CompressionProcessor) searchSemanticContext(
 		ClientId:    req.ClientId,
 		ProjectPath: req.ProjectPath,
 		Query:       query,
-		TopK:        p.topK,
+		TopK:        p.config.TopK,
 	}
 
 	// Execute search
@@ -124,36 +122,92 @@ func (p *CompressionProcessor) ProcessPrompt(ctx context.Context, req *types.Cha
 	// Replace system messages with compressed messages
 	replacedSystemMsgs := p.replaceSysMsgWithCompressed(req.Messages)
 
-	// Get messages to summarize (exclude system messages and last user message)
-	messagesToSummarize := utils.GetOldUserMsgs(req.Messages)
-
-	if needsCompressUserMsg {
-		// Record start time for summary process
-		summaryStart := time.Now()
-		summary, err := p.summaryProcessor.GenerateUserPromptSummary(ctx, semanticContext, messagesToSummarize)
-		if err != nil {
-			log.Printf("Failed to generate summary: %v", err)
-			// On error, proceed with original messages
-			return &ProcessedPrompt{
-				Messages:        replacedSystemMsgs,
-				IsCompressed:    false,
-				SemanticLatency: semanticLatency,
-				SemanticContext: semanticContext,
-				SummaryLatency:  0,
-			}, nil
-		}
-
-		// Build final messages
-		finalMessages := p.summaryProcessor.BuildUserSummaryMessages(ctx, replacedSystemMsgs, summary)
-		replacedSystemMsgs = finalMessages
-		summaryLatency = time.Since(summaryStart).Milliseconds()
+	if !needsCompressUserMsg {
+		log.Printf("[ProcessPrompt] No need to compress user message")
+		return &ProcessedPrompt{
+			Messages:        replacedSystemMsgs,
+			IsCompressed:    false,
+			SemanticLatency: semanticLatency,
+			SemanticContext: semanticContext,
+			SummaryLatency:  0,
+		}, nil
 	}
 
+	log.Printf("[ProcessPrompt] start compress user message")
+	// Record start time for summary process
+	summaryStart := time.Now()
+
+	// Get messages to summarize (exclude system messages and num-th user message)
+	messagesToSummarize := utils.GetOldUserMsgsWithNum(req.Messages, p.config.RecentUserMsgUsedNums)
+	messagesToSummarize = p.trimMessagesToTokenThreshold(semanticContext, messagesToSummarize)
+
+	summary, err := p.summaryProcessor.GenerateUserPromptSummary(ctx, semanticContext, messagesToSummarize)
+	if err != nil {
+		log.Printf("Failed to generate summary: %v", err)
+		// On error, proceed with original messages
+		return &ProcessedPrompt{
+			Messages:        replacedSystemMsgs,
+			IsCompressed:    false,
+			SemanticLatency: semanticLatency,
+			SemanticContext: semanticContext,
+			SummaryLatency:  0,
+		}, nil
+	}
+
+	// Build final messages
+	recentMessages := utils.GetRecentUserMsgsWithNum(req.Messages, p.config.RecentUserMsgUsedNums)
+	finalMessages := p.assmebleSummaryMessages(utils.GetSystemMsg(replacedSystemMsgs), summary, recentMessages)
+	summaryLatency = time.Since(summaryStart).Milliseconds()
+
 	return &ProcessedPrompt{
-		Messages:        replacedSystemMsgs,
+		Messages:        finalMessages,
 		IsCompressed:    true,
 		SemanticLatency: semanticLatency,
 		SemanticContext: semanticContext,
 		SummaryLatency:  summaryLatency,
 	}, nil
+}
+
+// BuildUserSummaryMessages builds the final messages with user prompt summary
+func (p *CompressionProcessor) assmebleSummaryMessages(systemMsg types.Message, summary string, recentMessages []types.Message) []types.Message {
+	log.Printf("[assmebleSummaryMessages] start assmeble summary messages")
+	var finalMessages []types.Message
+
+	// Add system message
+	finalMessages = append(finalMessages, systemMsg)
+
+	// Add summary as context
+	finalMessages = append(finalMessages, types.Message{
+		Role:    "assistant",
+		Content: summary,
+	})
+
+	// Add system message
+	finalMessages = append(finalMessages, recentMessages...)
+
+	return finalMessages
+}
+
+// trimMessagesToTokenThreshold checks and removes messages from the front until token count is below threshold
+func (p *CompressionProcessor) trimMessagesToTokenThreshold(semanticContext string, messagesToSummarize []types.Message) []types.Message {
+	// Calculate total tokens
+	semanticContextTokens := p.tokenCounter.CountTokens(semanticContext)
+	messagesTokens := p.tokenCounter.CountMessagesTokens(messagesToSummarize)
+	totalTokens := semanticContextTokens + messagesTokens + 5000
+
+	// Remove messages from front if exceeding threshold
+	removedCount := 0
+	for totalTokens > p.config.SummaryModelTokenThreshold && len(messagesToSummarize) > 0 {
+		removedTokens := p.tokenCounter.CountOneMesaageTokens(messagesToSummarize[0])
+		totalTokens -= removedTokens
+		messagesToSummarize = messagesToSummarize[1:]
+		removedCount++
+	}
+
+	log.Printf("[trimMessagesToTokenThreshold] totalTokens: %d, removedCount: %d\n", totalTokens, removedCount)
+	if removedCount > 0 {
+		log.Printf("[trimMessagesToTokenThreshold] Removed %d messages to meet token threshold", removedCount)
+	}
+
+	return messagesToSummarize
 }

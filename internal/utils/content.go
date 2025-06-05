@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/zgsm-ai/chat-rag/internal/types"
 )
@@ -41,11 +42,23 @@ func GetContentAsString(content interface{}) string {
 func GetUserMsgs(messages []types.Message) []types.Message {
 	filtered := make([]types.Message, 0, len(messages))
 	for _, msg := range messages {
-		if msg.Role != "system" {
+		if msg.Role != types.RoleSystem {
 			filtered = append(filtered, msg)
 		}
 	}
 	return filtered
+}
+
+// GetSystemMsg returns the first system message from messages
+func GetSystemMsg(messages []types.Message) types.Message {
+	for _, msg := range messages {
+		if msg.Role == types.RoleSystem {
+			return msg
+		}
+	}
+
+	log.Printf("[GetSystemMsg] No system message found")
+	return types.Message{Role: types.RoleSystem, Content: ""}
 }
 
 // TruncateContent truncates content to a specified length for logging
@@ -58,25 +71,87 @@ func TruncateContent(content string, maxLength int) string {
 
 // GetLatestUserMsg gets the newest user message content from message list
 func GetLatestUserMsg(messages []types.Message) (string, error) {
-	// Search backwards from last message to find user message
-	for i := len(messages) - 1; i >= 0; i-- {
-		if messages[i].Role == "user" {
-			return GetContentAsString(messages[i].Content), nil
-		}
+	latestUserMsg := GetRecentUserMsgsWithNum(messages, 1)
+	if len(latestUserMsg) == 0 {
+		return "", fmt.Errorf("no user message found")
 	}
-	return "", fmt.Errorf("no user message found")
+	return GetContentAsString(latestUserMsg[0].Content), nil
 }
 
-// GetOldUserMsgs filters out old user messages
-func GetOldUserMsgs(messages []types.Message) []types.Message {
-	var filtered []types.Message
-	for i := 0; i < len(messages); i++ {
-		// Skip system messages and last user message
-		if messages[i].Role == "system" ||
-			(messages[i].Role == "user" && i >= len(messages)-1) {
-			continue
-		}
-		filtered = append(filtered, messages[i])
+// GetOldUserMsgsWithNum returns messages between the first system message and the num-th last user message
+func GetOldUserMsgsWithNum(messages []types.Message, num int) []types.Message {
+	if num <= 0 {
+		return messages
 	}
-	return filtered
+
+	// Assume system message is at position 0
+	sysPos := 0
+	if len(messages) == 0 || messages[0].Role != types.RoleSystem {
+		// If not at 0, find the first system message
+		for i := 0; i < len(messages); i++ {
+			if messages[i].Role == types.RoleSystem {
+				sysPos = i
+				break
+			}
+		}
+	}
+
+	// Find position of num-th last user message
+	userCount := 0
+	userPos := -1
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role == types.RoleUser {
+			userCount++
+			if userCount == num {
+				userPos = i
+				break
+			}
+		}
+	}
+
+	// If no user message found, return all messages after system
+	if userPos == -1 {
+		log.Printf("[GetOldUserMsgsWithNum] No user message found")
+		if sysPos >= len(messages)-1 {
+			return []types.Message{}
+		}
+		return messages[sysPos+1:]
+	}
+
+	// Return messages between system and user positions
+	if sysPos >= userPos {
+		return []types.Message{}
+	}
+	return messages[sysPos+1 : userPos]
+}
+
+// GetRecentUserMsgsWithNum gets messages starting from the num-th user message from the end
+// Returns messages from the position of the num-th user message from the end
+func GetRecentUserMsgsWithNum(messages []types.Message, num int) []types.Message {
+	if num <= 0 {
+		return messages
+	}
+
+	// Find the position of the num-th user message from the end
+	userCount := 0
+	position := -1
+
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role == types.RoleUser {
+			userCount++
+			if userCount == num {
+				position = i
+				break
+			}
+		}
+	}
+
+	// If we didn't find enough user messages, return empty slice
+	if position == -1 {
+		log.Println("[GetRecentUserMsgsWithNum] No user message found")
+		return []types.Message{}
+	}
+
+	// Return messages from the position onwards
+	return messages[position:]
 }

@@ -5,7 +5,7 @@ go 1.24.2
 require (
 	github.com/gin-gonic/gin v1.9.1
 	github.com/google/uuid v1.6.0
-	github.com/pkoukk/tiktoken-go v0.1.6
+	github.com/pkoukk/tiktoken-go v0.1.7
 	github.com/spf13/viper v1.18.2
 	github.com/stretchr/testify v1.10.0
 )
