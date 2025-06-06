@@ -54,3 +54,11 @@ type Usage struct {
 	CompletionTokens int `json:"completion_tokens"`
 	TotalTokens      int `json:"total_tokens"`
 }
+
+type Identity struct {
+	TaskID      string `json:"task_id"`
+	RequestID   string `json:"request_id"`
+	ClientID    string `json:"client_id"`
+	UserName    string `json:"user_name"`
+	ProjectPath string `json:"project_path"`
+}

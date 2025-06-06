@@ -7,4 +7,5 @@ import (
 
 func RegisterHandlers(router *gin.Engine, serverCtx *svc.ServiceContext) {
 	router.POST("/v1/chat/completions", ChatCompletionHandler(serverCtx))
+	router.GET("/metrics", MetricsHandler(serverCtx))
 }

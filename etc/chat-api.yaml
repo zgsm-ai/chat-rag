@@ -6,7 +6,7 @@ Port: 8888
 LLMEndpoint: "https://zgsm.sangfor.com/v1/chat/completions"
 
 # Token processing configuration
-TokenThreshold: 20_000
+TokenThreshold: 32_000
 
 # Semantic API configuration
 SemanticApiEndpoint: "http://localhost:8002/codebase-indexer/api/v1/semantics"
@@ -18,7 +18,7 @@ EnableCompression: true
 # Logging configuration
 LogFilePath: "logs/"
 LokiEndpoint: "http://localhost:3100/loki/api/v1/push"
-LogScanIntervalSec: 1000
+LogScanIntervalSec: 10
 
 # Model configuration
 SummaryModel: "deepseek-v3"
@@ -29,4 +29,4 @@ ClassifyModel: "deepseek-v3"
 SystemPromptSplitter: "# Tool Use Guidelines"
 
 # used recent user prompt messages nums
-RecentUserMsgUsedNums: 6
+RecentUserMsgUsedNums: 10

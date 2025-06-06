@@ -24,7 +24,8 @@ type ServiceContext struct {
 	SemanticClient *client.SemanticClient
 
 	// Services
-	LoggerService *service.LoggerService
+	LoggerService  *service.LoggerService
+	MetricsService *service.MetricsService
 
 	// Utilities
 	TokenCounter *utils.TokenCounter
@@ -51,6 +52,9 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		tokenCounter = nil
 	}
 
+	// Initialize metrics service
+	metricsService := service.NewMetricsService()
+
 	// Initialize logger service
 	loggerService := service.NewLoggerService(
 		c.LogFilePath,
@@ -58,6 +62,9 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		c.LogScanIntervalSec,
 		summaryModelClient, // TODO: change to classify model client
 	)
+
+	// Set metrics service in logger service
+	loggerService.SetMetricsService(metricsService)
 
 	// Start logger service
 	if err := loggerService.Start(); err != nil {
@@ -68,6 +75,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		Config:         c,
 		SemanticClient: semanticClient,
 		LoggerService:  loggerService,
+		MetricsService: metricsService,
 		TokenCounter:   tokenCounter,
 	}
 }

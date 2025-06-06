@@ -29,10 +29,11 @@ type CompressionProcessor struct {
 	summaryProcessor *SummaryProcessor
 	tokenCounter     *utils.TokenCounter
 	config           config.Config
+	identity         *types.Identity
 }
 
 // NewCompressionProcessor creates a new compression processor
-func NewCompressionProcessor(svcCtx *svc.ServiceContext) (*CompressionProcessor, error) {
+func NewCompressionProcessor(svcCtx *svc.ServiceContext, identity *types.Identity) (*CompressionProcessor, error) {
 	llmClient, err := client.NewLLMClient(svcCtx.Config.LLMEndpoint, svcCtx.Config.SummaryModel)
 	if err != nil {
 		return nil, err
@@ -44,19 +45,16 @@ func NewCompressionProcessor(svcCtx *svc.ServiceContext) (*CompressionProcessor,
 		summaryProcessor: NewSummaryProcessor(svcCtx.Config.SystemPromptSplitter, llmClient),
 		config:           svcCtx.Config,
 		tokenCounter:     svcCtx.TokenCounter,
+		identity:         identity,
 	}, nil
 }
 
 // searchSemanticContext performs semantic search and constructs context string
-func (p *CompressionProcessor) searchSemanticContext(
-	ctx context.Context,
-	req *types.ChatCompletionRequest,
-	query string,
-) string {
+func (p *CompressionProcessor) searchSemanticContext(ctx context.Context, query string) string {
 	// Prepare semantic request
 	semanticReq := client.SemanticRequest{
-		ClientId:    req.ClientId,
-		ProjectPath: req.ProjectPath,
+		ClientId:    p.identity.ClientID,
+		ProjectPath: p.identity.ProjectPath,
 		Query:       query,
 		TopK:        p.config.TopK,
 	}
@@ -116,7 +114,7 @@ func (p *CompressionProcessor) ProcessPrompt(ctx context.Context, req *types.Cha
 
 	// Record start time for semantic search
 	semanticStart := time.Now()
-	semanticContext := p.searchSemanticContext(ctx, req, latestUserMessage)
+	semanticContext := p.searchSemanticContext(ctx, latestUserMessage)
 	semanticLatency = time.Since(semanticStart).Milliseconds()
 
 	// Replace system messages with compressed messages
@@ -204,7 +202,10 @@ func (p *CompressionProcessor) trimMessagesToTokenThreshold(semanticContext stri
 		removedCount++
 	}
 
-	log.Printf("[trimMessagesToTokenThreshold] totalTokens: %d, removedCount: %d\n", totalTokens, removedCount)
+	log.Printf(
+		"[trimMessagesToTokenThreshold] totalTokens: %d, removedCount: %d, usedCount: %d\n",
+		totalTokens, removedCount, len(messagesToSummarize),
+	)
 	if removedCount > 0 {
 		log.Printf("[trimMessagesToTokenThreshold] Removed %d messages to meet token threshold", removedCount)
 	}

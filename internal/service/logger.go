@@ -14,8 +14,24 @@ import (
 
 	"github.com/zgsm-ai/chat-rag/internal/client"
 	"github.com/zgsm-ai/chat-rag/internal/model"
-	"github.com/zgsm-ai/chat-rag/internal/types"
+	"github.com/zgsm-ai/chat-rag/internal/utils"
 )
+
+const classificationPrompt = `Classify the following chat interaction into one of these exact categories (respond ONLY with one of these exact names):
+- CodeGeneration: Creating new code or projects
+- BugFixing: Debugging or fixing issues
+- CodeExplanation: Asking questions about code or concepts
+- Documentation: Querying documentation or explanations or wirtring documentation
+- OtherQuestions: Asking questions about anything else
+
+Respond ONLY with one of these exact category names:
+- "CodeGeneration"
+- "BugFixing"
+- "CodeExplanation"
+- "Documentation"
+- "OtherQuestions"
+
+Do not include any extra text, just the exact matching category name.`
 
 // LoggerService handles logging operations
 type LoggerService struct {
@@ -24,6 +40,7 @@ type LoggerService struct {
 	lokiEndpoint    string
 	scanInterval    time.Duration
 	llmClient       *client.LLMClient
+	metricsService  *MetricsService
 
 	logChan  chan *model.ChatLog
 	stopChan chan struct{}
@@ -47,6 +64,11 @@ func NewLoggerService(logFilePath, lokiEndpoint string, scanIntervalSec int, llm
 		logChan:         make(chan *model.ChatLog, 1000),
 		stopChan:        make(chan struct{}),
 	}
+}
+
+// SetMetricsService sets the metrics service for the logger
+func (ls *LoggerService) SetMetricsService(metricsService *MetricsService) {
+	ls.metricsService = metricsService
 }
 
 // Start starts the logger service
@@ -245,6 +267,11 @@ func (ls *LoggerService) processLogs() {
 
 		log.Printf("[processLogs] %s uploaded to loki \n", file.Name())
 
+		// Record metrics if metrics service is available
+		if ls.metricsService != nil {
+			ls.metricsService.RecordChatLog(chatLog)
+		}
+
 		// Save to permanent storage
 		ls.saveLogToPermanentStorage(chatLog)
 
@@ -255,44 +282,17 @@ func (ls *LoggerService) processLogs() {
 
 // classifyLog classifies a single log entry
 func (ls *LoggerService) classifyLog(logs *model.ChatLog) string {
-	prompt := fmt.Sprintf(`Classify the following chat interaction into one of these exact categories (respond ONLY with one of these exact names):
-- Code Generation: Creating new code or projects
-- Bug Fixing: Debugging or fixing issues
-- Code Explanation: Asking questions about code or concepts
-- Documentation: Querying documentation or explanations
-
-Context:
-- Original Prompt Sample: %s
-
-Respond ONLY with one of these exact category names:
-- "Code Generation"
-- "Bug Fixing"
-- "Code Explanation"
-- "Documentation"
-
-Do not include any extra text, just the exact matching category name.`,
-		logs.OriginalPrompt)
-
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	var classifyMessages []types.Message
-	classifyMessages = append(classifyMessages, types.Message{
-		Role:    "system",
-		Content: prompt,
-	})
-
-	category, err := ls.llmClient.GenerateContent(ctx, "", classifyMessages)
+	category, err := ls.llmClient.GenerateContent(ctx, classificationPrompt, utils.GetUserMsgs(logs.CompressedPrompt))
 	if err != nil {
 		fmt.Printf("Failed to classify log: %v\n", err)
 		return "unknown"
 	}
 
-	log.Printf("==> [classifyLog] category: %s \n", category)
-	// Clean up the response
-	// category = cleanCategory(category)
+	log.Printf("[classifyLog] category: %s \n", category)
 
-	// log.Printf("==> [classifyLog] cleanCategory: %s \n", category)
 	return category
 }
 
@@ -305,8 +305,6 @@ func (ls *LoggerService) uploadToLoki(chatLog *model.ChatLog) bool {
 		fmt.Printf("Failed to marshal Loki data: %v\n", err)
 		return false
 	}
-
-	log.Printf("==> [uploadToLoki] lokiStream: %v \n", string(jsonData))
 
 	req, err := http.NewRequest("POST", ls.lokiEndpoint, bytes.NewBuffer(jsonData))
 	if err != nil {
@@ -359,20 +357,4 @@ func (ls *LoggerService) deleteTempLogFile(filePath string) {
 	if err := os.Remove(filePath); err != nil {
 		fmt.Printf("Failed to remove temp log file %s: %v\n", filepath.Base(filePath), err)
 	}
-}
-
-// Helper function to clean category response
-func cleanCategory(category string) string {
-	validCategories := map[string]bool{
-		"Code Generation":  true,
-		"Bug Fixing":       true,
-		"Code Explanation": true,
-		"Documentation":    true,
-	}
-
-	if validCategories[category] {
-		return category
-	}
-
-	return ""
 }

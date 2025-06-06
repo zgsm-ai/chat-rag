@@ -8,6 +8,7 @@ import (
 	"github.com/zgsm-ai/chat-rag/internal/logic"
 	"github.com/zgsm-ai/chat-rag/internal/svc"
 	"github.com/zgsm-ai/chat-rag/internal/types"
+	"github.com/zgsm-ai/chat-rag/internal/utils"
 )
 
 // ChatCompletionHandler handles chat completion requests
@@ -19,6 +20,15 @@ func ChatCompletionHandler(svcCtx *svc.ServiceContext) gin.HandlerFunc {
 			return
 		}
 
+		// Get headers info
+		identity := &types.Identity{
+			RequestID:   c.GetHeader("x-request-id"),
+			TaskID:      c.GetHeader("zgsm-task-id"),
+			ClientID:    c.GetHeader("zgsm-client-id"),
+			ProjectPath: c.GetHeader("zgsm-project-path"),
+			UserName:    utils.ExtractUserNameFromToken(c.GetHeader("authorization")),
+		}
+
 		// Create RequestContext
 		reqCtx := &svc.RequestContext{
 			Request: &req,
@@ -27,7 +37,7 @@ func ChatCompletionHandler(svcCtx *svc.ServiceContext) gin.HandlerFunc {
 		}
 
 		svcCtx.SetRequestContext(reqCtx)
-		l := logic.NewChatCompletionLogic(c.Request.Context(), svcCtx)
+		l := logic.NewChatCompletionLogic(c.Request.Context(), svcCtx, identity)
 
 		if req.Stream {
 			// Set SSE response headers
@@ -39,7 +49,7 @@ func ChatCompletionHandler(svcCtx *svc.ServiceContext) gin.HandlerFunc {
 			c.Header("Access-Control-Allow-Headers", "Cache-Control")
 			c.Header("X-Accel-Buffering", "no")
 
-			// 立即发送响应头
+			// Send response headers immediately
 			c.Status(http.StatusOK)
 			flusher, ok := c.Writer.(http.Flusher)
 			if ok {
@@ -48,7 +58,7 @@ func ChatCompletionHandler(svcCtx *svc.ServiceContext) gin.HandlerFunc {
 
 			err := l.ChatCompletionStream()
 			if err != nil {
-				// 对于流式响应，不能使用AbortWithStatusJSON，因为响应头已经发送
+				// For streaming responses, cannot use AbortWithStatusJSON because headers are already sent
 				c.Writer.Write([]byte(fmt.Sprintf("data: {\"error\":{\"message\":\"%s\"}}\n\n", err.Error())))
 				c.Writer.Write([]byte("data: [DONE]\n\n"))
 				if flusher != nil {

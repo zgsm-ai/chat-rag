@@ -16,19 +16,23 @@ import (
 	"github.com/zgsm-ai/chat-rag/internal/svc"
 	"github.com/zgsm-ai/chat-rag/internal/types"
 	"github.com/zgsm-ai/chat-rag/internal/utils"
-
-	"github.com/google/uuid"
 )
 
 type ChatCompletionLogic struct {
-	ctx    context.Context
-	svcCtx *svc.ServiceContext
+	ctx      context.Context
+	svcCtx   *svc.ServiceContext
+	identity *types.Identity
 }
 
-func NewChatCompletionLogic(ctx context.Context, svcCtx *svc.ServiceContext) *ChatCompletionLogic {
+func NewChatCompletionLogic(
+	ctx context.Context,
+	svcCtx *svc.ServiceContext,
+	identity *types.Identity,
+) *ChatCompletionLogic {
 	return &ChatCompletionLogic{
-		ctx:    ctx,
-		svcCtx: svcCtx,
+		ctx:      ctx,
+		svcCtx:   svcCtx,
+		identity: identity,
 	}
 }
 
@@ -47,10 +51,9 @@ func (l *ChatCompletionLogic) getWriter() http.ResponseWriter {
 // processRequest handles common request processing logic
 func (l *ChatCompletionLogic) processRequest(req *types.ChatCompletionRequest) (*model.ChatLog, *strategy.ProcessedPrompt, error) {
 	startTime := time.Now()
-	requestID := uuid.New().String()
 
 	// Initialize chat log
-	chatLog := l.initializeChatLog(requestID, startTime, req)
+	chatLog := l.initializeChatLog(startTime, req)
 
 	// Determine if compression is needed
 	userMessageTokens := chatLog.OriginalTokens.UserTokens
@@ -58,7 +61,7 @@ func (l *ChatCompletionLogic) processRequest(req *types.ChatCompletionRequest) (
 	log.Printf("[processRequest] userMessageTokens: %v, needsCompression: %v\n\n", userMessageTokens, needsCompressUserMsg)
 	chatLog.CompressionTriggered = needsCompressUserMsg
 
-	promptProcessor, err := strategy.NewCompressionProcessor(l.svcCtx)
+	promptProcessor, err := strategy.NewCompressionProcessor(l.svcCtx, l.identity)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to new processor: %w", err)
 	}
@@ -75,18 +78,16 @@ func (l *ChatCompletionLogic) processRequest(req *types.ChatCompletionRequest) (
 }
 
 // initializeChatLog creates and initializes a new ChatLog with basic information and original token stats
-func (l *ChatCompletionLogic) initializeChatLog(requestID string, startTime time.Time, req *types.ChatCompletionRequest) *model.ChatLog {
+func (l *ChatCompletionLogic) initializeChatLog(startTime time.Time, req *types.ChatCompletionRequest) *model.ChatLog {
 	// Count original tokens
 	userMessageTokens := l.countTokensInMessages(utils.GetUserMsgs(req.Messages))
 	originalAllMessageTokens := l.countTokensInMessages(req.Messages)
 	systemMessageTokens := originalAllMessageTokens - userMessageTokens
 
 	return &model.ChatLog{
-		RequestID:   requestID,
-		Timestamp:   startTime,
-		ClientID:    req.ClientId,
-		ProjectPath: req.ProjectPath,
-		Model:       req.Model,
+		Identity:  *l.identity,
+		Timestamp: startTime,
+		Model:     req.Model,
 		OriginalTokens: model.TokenStats{
 			SystemTokens: systemMessageTokens,
 			UserTokens:   userMessageTokens,

@@ -121,9 +121,6 @@ func (c *LLMClient) ChatLLMWithMessagesStreamRaw(ctx context.Context, messages [
 	if resp.StatusCode != 200 {
 		body, _ := io.ReadAll(resp.Body)
 		bodyStr := string(body)
-		if len(bodyStr) > 200 {
-			bodyStr = bodyStr[:200] + "...(truncated)"
-		}
 		return fmt.Errorf("API request failed with status %d, response body: %s", resp.StatusCode, bodyStr)
 	}
 
@@ -198,9 +195,6 @@ func (c *LLMClient) ChatLLMWithMessagesRaw(ctx context.Context, messages []types
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		bodyStr := string(body)
-		if len(bodyStr) > 200 {
-			bodyStr = bodyStr[:200] + "...(truncated)"
-		}
 		return nil_resp, fmt.Errorf("API request failed with status %d, response body: %s", resp.StatusCode, bodyStr)
 	}
 
@@ -213,9 +207,6 @@ func (c *LLMClient) ChatLLMWithMessagesRaw(ctx context.Context, messages []types
 	var result types.ChatCompletionResponse
 	if err := json.Unmarshal(body, &result); err != nil {
 		bodyStr := string(body)
-		if len(bodyStr) > 200 {
-			bodyStr = bodyStr[:200] + "...(truncated)"
-		}
 		return nil_resp, fmt.Errorf("failed to parse response (invalid JSON? body: %s): %w", bodyStr, err)
 	}
 

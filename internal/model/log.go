@@ -19,11 +19,9 @@ type TokenStats struct {
 
 // ChatLog represents a single chat completion log entry
 type ChatLog struct {
-	RequestID   string    `json:"request_id"`
-	Timestamp   time.Time `json:"timestamp"`
-	ClientID    string    `json:"client_id"`
-	ProjectPath string    `json:"project_path"`
-	Model       string    `json:"model"`
+	Identity  types.Identity
+	Timestamp time.Time `json:"timestamp"`
+	Model     string    `json:"model"`
 
 	// Token statistics
 	OriginalTokens   TokenStats `json:"original_tokens"`
@@ -100,7 +98,7 @@ func CreateLokiStream(log *ChatLog) *LogStream {
 	// Create labels for this log entry
 	labels := map[string]string{
 		"service":    "chat-rag",
-		"client_id":  log.ClientID,
+		"client_id":  log.Identity.ClientID,
 		"compressed": boolToString(log.IsUserPromptCompressed),
 	}
 
