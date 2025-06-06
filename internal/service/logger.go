@@ -191,7 +191,6 @@ func (ls *LoggerService) logProcessor() {
 
 // processLogs reads logs from files one by one, processes each, and uploads to Loki
 func (ls *LoggerService) processLogs() {
-	fmt.Println("==> processLogs")
 	// Get list of log files
 	files, err := os.ReadDir(ls.tempLogFilePath)
 	if err != nil {
@@ -215,19 +214,19 @@ func (ls *LoggerService) processLogs() {
 			continue
 		}
 
-		log, err := model.FromJSON(string(fileContent))
+		chatLog, err := model.FromJSON(string(fileContent))
 		if err != nil {
 			fmt.Printf("Failed to parse log file %s: %v\n", file.Name(), err)
 			continue
 		}
 
 		// Classify log
-		if log.Category == "" {
+		if chatLog.Category == "" {
 			// Ensure headers are set before classification
-			log.Category = ls.classifyLog(log)
+			chatLog.Category = ls.classifyLog(chatLog)
 
 			// Update temp log file with category info
-			logJSON, err := log.ToJSON()
+			logJSON, err := chatLog.ToJSON()
 			if err != nil {
 				fmt.Printf("Failed to marshal updated log: %v\n", err)
 				continue
@@ -239,13 +238,15 @@ func (ls *LoggerService) processLogs() {
 		}
 
 		// Upload single log to Loki
-		if success := ls.uploadToLoki(log); !success {
+		if success := ls.uploadToLoki(chatLog); !success {
 			fmt.Printf("Loki upload failed for file %s, keeping log file\n", file.Name())
 			continue
 		}
 
+		log.Printf("[processLogs] %s uploaded to loki \n", file.Name())
+
 		// Save to permanent storage
-		ls.saveLogToPermanentStorage(log)
+		ls.saveLogToPermanentStorage(chatLog)
 
 		// Delete processed temp file
 		ls.deleteTempLogFile(filepath.Join(ls.tempLogFilePath, file.Name()))
@@ -296,13 +297,16 @@ Do not include any extra text, just the exact matching category name.`,
 }
 
 // uploadSingleLog uploads a single log to Loki
-func (ls *LoggerService) uploadToLoki(log *model.ChatLog) bool {
-	lokiStream := model.CreateLokiStream(log)
-	jsonData, err := json.Marshal(lokiStream)
+func (ls *LoggerService) uploadToLoki(chatLog *model.ChatLog) bool {
+	lokiStream := model.CreateLokiStream(chatLog)
+	lokiBatch := model.LogBatch{Streams: []model.LogStream{*lokiStream}}
+	jsonData, err := json.Marshal(lokiBatch)
 	if err != nil {
 		fmt.Printf("Failed to marshal Loki data: %v\n", err)
 		return false
 	}
+
+	log.Printf("==> [uploadToLoki] lokiStream: %v \n", string(jsonData))
 
 	req, err := http.NewRequest("POST", ls.lokiEndpoint, bytes.NewBuffer(jsonData))
 	if err != nil {

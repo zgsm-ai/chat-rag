@@ -3,6 +3,7 @@ package model
 import (
 	"bytes"
 	"encoding/json"
+	"strconv"
 	"strings"
 	"time"
 
@@ -108,7 +109,10 @@ func CreateLokiStream(log *ChatLog) *LogStream {
 	}
 
 	// Add log entry to stream
-	logJSON, _ := log.ToJSON()
+	logCopy := *log
+	logCopy.OriginalPrompt = nil
+	logCopy.CompressedPrompt = nil
+	logJSON, _ := logCopy.ToJSON()
 
 	return &LogStream{
 		Stream: labels,
@@ -130,5 +134,5 @@ func boolToString(b bool) string {
 }
 
 func timestampToNano(t time.Time) string {
-	return string(rune(t.UnixNano()))
+	return strconv.FormatInt(t.UnixNano(), 10)
 }

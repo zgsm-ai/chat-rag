@@ -18,8 +18,7 @@ EnableCompression: true
 # Logging configuration
 LogFilePath: "logs/"
 LokiEndpoint: "http://localhost:3100/loki/api/v1/push"
-LogBatchSize: 100
-LogScanIntervalSec: 6000
+LogScanIntervalSec: 1000
 
 # Model configuration
 SummaryModel: "deepseek-v3"
