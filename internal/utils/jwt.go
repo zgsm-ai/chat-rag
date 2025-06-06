@@ -10,7 +10,6 @@ import (
 // ExtractUserNameFromToken parses JWT token to extract name and email claims.
 // If parsing fails, returns "unknown". Missing fields are replaced with "unknown".
 func ExtractUserNameFromToken(tokenString string) string {
-	log.Printf("[ExtractUserNameFromToken] Extracting user info from token: %s", tokenString)
 	var name, email string
 
 	// Remove Bearer prefix if present
@@ -40,8 +39,6 @@ func ExtractUserNameFromToken(tokenString string) string {
 	} else if p, ok := claims["phone_number"].(string); ok && p != "" {
 		email = p
 	}
-
-	log.Printf("[ExtractUserNameFromToken] Extracted - name: %v, email: %v", name, email)
 
 	switch {
 	case name != "" && email != "":
