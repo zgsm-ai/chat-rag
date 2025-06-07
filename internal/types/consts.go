@@ -1,12 +1,12 @@
 package types
 
 const (
-	// 系统角色消息
+	// System role message
 	RoleSystem = "system"
 
-	// 用户角色消息
+	// User role message
 	RoleUser = "user"
 
-	// AI助手角色消息
+	// AI assistant role message
 	RoleAssistant = "assistant"
 )

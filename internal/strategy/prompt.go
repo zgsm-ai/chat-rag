@@ -68,7 +68,12 @@ func (p *CompressionProcessor) searchSemanticContext(ctx context.Context, query 
 
 	// Build context string from results
 	var contextParts []string
+	log.Printf("[buildSemanticContext] Semantic search results nums: %v", len(semanticResp.Results))
 	for _, result := range semanticResp.Results {
+		if result.Score < p.config.SemanticSocreThreshold {
+			continue
+		}
+
 		contextParts = append(contextParts, fmt.Sprintf("File: %s (Line %d)\n%s",
 			result.FilePath, result.LineNumber, result.Content))
 	}

@@ -42,7 +42,7 @@ func NewSemanticClient(endpoint string) *SemanticClient {
 	return &SemanticClient{
 		endpoint: endpoint,
 		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout: 3 * time.Second,
 		},
 	}
 }

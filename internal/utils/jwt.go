@@ -10,7 +10,8 @@ import (
 // ExtractUserNameFromToken parses JWT token to extract name and email claims.
 // If parsing fails, returns "unknown". Missing fields are replaced with "unknown".
 func ExtractUserNameFromToken(tokenString string) string {
-	var name, email string
+	var name, contactDetals string
+	unknown := "unknown"
 
 	// Remove Bearer prefix if present
 	if len(tokenString) > 7 && tokenString[:7] == "Bearer " {
@@ -21,13 +22,13 @@ func ExtractUserNameFromToken(tokenString string) string {
 	token, _, err := new(jwt.Parser).ParseUnverified(tokenString, jwt.MapClaims{})
 	if err != nil {
 		log.Printf("[ExtractUserNameFromToken] Failed to parse JWT token: %v", err)
-		return "unknown"
+		return unknown
 	}
 
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
 		log.Println("[ExtractUserNameFromToken] Invalid JWT claims structure")
-		return "unknown"
+		return unknown
 	}
 
 	if n, ok := claims["name"].(string); ok && n != "" {
@@ -35,19 +36,19 @@ func ExtractUserNameFromToken(tokenString string) string {
 	}
 
 	if e, ok := claims["email"].(string); ok && e != "" {
-		email = e
+		contactDetals = e
 	} else if p, ok := claims["phone_number"].(string); ok && p != "" {
-		email = p
+		contactDetals = p
 	}
 
 	switch {
-	case name != "" && email != "":
-		return fmt.Sprintf("%s<%s>", name, email)
+	case name != "" && contactDetals != "":
+		return fmt.Sprintf("%s<%s>", name, contactDetals)
 	case name != "":
 		return name
-	case email != "":
-		return email
+	case contactDetals != "":
+		return contactDetals
 	default:
-		return "unknown"
+		return unknown
 	}
 }

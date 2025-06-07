@@ -158,13 +158,8 @@ func NewMetricsService() *MetricsService {
 
 // RecordChatLog records metrics from a ChatLog entry
 func (ms *MetricsService) RecordChatLog(log *model.ChatLog) {
-	labels := prometheus.Labels{
-		"client_id":  log.Identity.ClientID,
-		"model":      log.Model,
-		"user":       log.Identity.UserName,
-		"task_id":    log.Identity.TaskID,
-		"request_id": log.Identity.RequestID,
-	}
+	// Get base labels
+	labels := ms.getBaseLabels(log)
 
 	// Add category if available
 	category := log.Category
@@ -173,70 +168,17 @@ func (ms *MetricsService) RecordChatLog(log *model.ChatLog) {
 	}
 
 	// Record request
-	ms.requestsTotal.With(prometheus.Labels{
-		"client_id":  log.Identity.ClientID,
-		"model":      log.Model,
-		"category":   category,
-		"user":       log.Identity.UserName,
-		"task_id":    log.Identity.TaskID,
-		"request_id": log.Identity.RequestID,
-	}).Inc()
+	ms.requestsTotal.With(ms.addLabels(labels, "category", category)).Inc()
 
 	// Record original tokens
-	ms.originalTokensTotal.With(prometheus.Labels{
-		"client_id":  log.Identity.ClientID,
-		"model":      log.Model,
-		"token_type": "system",
-		"user":       log.Identity.UserName,
-		"task_id":    log.Identity.TaskID,
-		"request_id": log.Identity.RequestID,
-	}).Add(float64(log.OriginalTokens.SystemTokens))
-
-	ms.originalTokensTotal.With(prometheus.Labels{
-		"client_id":  log.Identity.ClientID,
-		"model":      log.Model,
-		"token_type": "user",
-		"user":       log.Identity.UserName,
-		"task_id":    log.Identity.TaskID,
-		"request_id": log.Identity.RequestID,
-	}).Add(float64(log.OriginalTokens.UserTokens))
-
-	ms.originalTokensTotal.With(prometheus.Labels{
-		"client_id":  log.Identity.ClientID,
-		"model":      log.Model,
-		"token_type": "all",
-		"user":       log.Identity.UserName,
-		"task_id":    log.Identity.TaskID,
-		"request_id": log.Identity.RequestID,
-	}).Add(float64(log.OriginalTokens.All))
+	ms.originalTokensTotal.With(ms.addLabels(labels, "token_type", "system")).Add(float64(log.OriginalTokens.SystemTokens))
+	ms.originalTokensTotal.With(ms.addLabels(labels, "token_type", "user")).Add(float64(log.OriginalTokens.UserTokens))
+	ms.originalTokensTotal.With(ms.addLabels(labels, "token_type", "all")).Add(float64(log.OriginalTokens.All))
 
 	// Record compressed tokens
-	ms.compressedTokensTotal.With(prometheus.Labels{
-		"client_id":  log.Identity.ClientID,
-		"model":      log.Model,
-		"token_type": "system",
-		"user":       log.Identity.UserName,
-		"task_id":    log.Identity.TaskID,
-		"request_id": log.Identity.RequestID,
-	}).Add(float64(log.CompressedTokens.SystemTokens))
-
-	ms.compressedTokensTotal.With(prometheus.Labels{
-		"client_id":  log.Identity.ClientID,
-		"model":      log.Model,
-		"token_type": "user",
-		"user":       log.Identity.UserName,
-		"task_id":    log.Identity.TaskID,
-		"request_id": log.Identity.RequestID,
-	}).Add(float64(log.CompressedTokens.UserTokens))
-
-	ms.compressedTokensTotal.With(prometheus.Labels{
-		"client_id":  log.Identity.ClientID,
-		"model":      log.Model,
-		"token_type": "all",
-		"user":       log.Identity.UserName,
-		"task_id":    log.Identity.TaskID,
-		"request_id": log.Identity.RequestID,
-	}).Add(float64(log.CompressedTokens.All))
+	ms.compressedTokensTotal.With(ms.addLabels(labels, "token_type", "system")).Add(float64(log.CompressedTokens.SystemTokens))
+	ms.compressedTokensTotal.With(ms.addLabels(labels, "token_type", "user")).Add(float64(log.CompressedTokens.UserTokens))
+	ms.compressedTokensTotal.With(ms.addLabels(labels, "token_type", "all")).Add(float64(log.CompressedTokens.All))
 
 	// Record compression ratio
 	if log.CompressionRatio > 0 {
@@ -276,15 +218,29 @@ func (ms *MetricsService) RecordChatLog(log *model.ChatLog) {
 
 	// Record errors
 	if log.Error != "" {
-		ms.errorsTotal.With(prometheus.Labels{
-			"client_id":  log.Identity.ClientID,
-			"model":      log.Model,
-			"error_type": "processing_error",
-			"user":       log.Identity.UserName,
-			"task_id":    log.Identity.TaskID,
-			"request_id": log.Identity.RequestID,
-		}).Inc()
+		ms.errorsTotal.With(ms.addLabels(labels, "error_type", "processing_error")).Inc()
 	}
+}
+
+// getBaseLabels creates the base labels map with common fields
+func (ms *MetricsService) getBaseLabels(log *model.ChatLog) prometheus.Labels {
+	return prometheus.Labels{
+		"client_id":  log.Identity.ClientID,
+		"model":      log.Model,
+		"user":       log.Identity.UserName,
+		"task_id":    log.Identity.TaskID,
+		"request_id": log.Identity.RequestID,
+	}
+}
+
+// addLabels adds additional key-value pairs to existing labels
+func (ms *MetricsService) addLabels(baseLabels prometheus.Labels, key, value string) prometheus.Labels {
+	newLabels := make(prometheus.Labels)
+	for k, v := range baseLabels {
+		newLabels[k] = v
+	}
+	newLabels[key] = value
+	return newLabels
 }
 
 // GetRegistry returns the Prometheus registry

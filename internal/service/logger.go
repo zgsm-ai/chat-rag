@@ -5,25 +5,29 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/zgsm-ai/chat-rag/internal/client"
 	"github.com/zgsm-ai/chat-rag/internal/model"
+	"github.com/zgsm-ai/chat-rag/internal/types"
 	"github.com/zgsm-ai/chat-rag/internal/utils"
 )
 
-const classificationPrompt = `Classify the following chat interaction into one of these exact categories (respond ONLY with one of these exact names):
+const systemClassificationPrompt = `Classify the LAST USER QUESTION in this conversation into one of these exact categories (respond ONLY with one of these exact names):
 - CodeGeneration: Creating new code or projects
 - BugFixing: Debugging or fixing issues
 - CodeExplanation: Asking questions about code or concepts
-- Documentation: Querying documentation or explanations or wirtring documentation
-- OtherQuestions: Asking questions about anything else
+- Documentation: Querying documentation or explanations or writing documentation
+- OtherQuestions: Asking questions about anything else`
 
+const userClassificationPrompt = `
 Respond ONLY with one of these exact category names:
 - "CodeGeneration"
 - "BugFixing"
@@ -32,6 +36,9 @@ Respond ONLY with one of these exact category names:
 - "OtherQuestions"
 
 Do not include any extra text, just the exact matching category name.`
+
+// validCategories is a documentation string listing all accepted log categories
+const validCategoriesStr = "CodeGeneration,BugFixing,CodeExplanation,Documentation,OtherQuestions"
 
 // LoggerService handles logging operations
 type LoggerService struct {
@@ -285,15 +292,35 @@ func (ls *LoggerService) classifyLog(logs *model.ChatLog) string {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	category, err := ls.llmClient.GenerateContent(ctx, classificationPrompt, utils.GetUserMsgs(logs.CompressedPrompt))
+	userMessages := utils.GetUserMsgs(logs.CompressedPrompt)
+	userMessages = append(userMessages, types.Message{
+		Role:    types.RoleUser,
+		Content: userClassificationPrompt,
+	})
+
+	category, err := ls.llmClient.GenerateContent(ctx, systemClassificationPrompt, userMessages)
 	if err != nil {
 		fmt.Printf("Failed to classify log: %v\n", err)
 		return "unknown"
 	}
 
-	log.Printf("[classifyLog] category: %s \n", category)
+	validatedCategory := ls.validateCategory(category)
+	log.Printf("[classifyLog] category: %s \n", validatedCategory)
 
-	return category
+	return validatedCategory
+}
+
+// validateCategory checks if the LLM generated category is valid, returns "extra" if not
+func (ls *LoggerService) validateCategory(category string) string {
+	valid := strings.Split(validCategoriesStr, ",")
+	for _, v := range valid {
+		if category == v {
+			return category
+		}
+	}
+
+	log.Printf("[validateCategory] invalid category: %s \n", category)
+	return "extra"
 }
 
 // uploadSingleLog uploads a single log to Loki
@@ -302,13 +329,13 @@ func (ls *LoggerService) uploadToLoki(chatLog *model.ChatLog) bool {
 	lokiBatch := model.LogBatch{Streams: []model.LogStream{*lokiStream}}
 	jsonData, err := json.Marshal(lokiBatch)
 	if err != nil {
-		fmt.Printf("Failed to marshal Loki data: %v\n", err)
+		log.Printf("[uploadToLoki] Failed to marshal Loki data: %v\n", err)
 		return false
 	}
 
-	req, err := http.NewRequest("POST", ls.lokiEndpoint, bytes.NewBuffer(jsonData))
+	req, err := http.NewRequest(http.MethodPost, ls.lokiEndpoint, bytes.NewBuffer(jsonData))
 	if err != nil {
-		fmt.Printf("Failed to create Loki request: %v\n", err)
+		log.Printf("[uploadToLoki] Failed to create Loki request: %v\n", err)
 		return false
 	}
 
@@ -317,13 +344,18 @@ func (ls *LoggerService) uploadToLoki(chatLog *model.ChatLog) bool {
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		fmt.Printf("Failed to upload to Loki: %v\n", err)
+		log.Printf("[uploadToLoki] Failed to upload to Loki: %v\n", err)
 		return false
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusNoContent {
-		fmt.Printf("Loki upload failed with status: %d\n", resp.StatusCode)
+		body, err := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		if err != nil {
+			log.Printf("[uploadToLoki] Loki upload failed with status: %d, failed to read response body: %v\n", resp.StatusCode, err)
+		} else {
+			log.Printf("[uploadToLoki] Loki upload failed with status: %d, response: %q\n", resp.StatusCode, string(body))
+		}
 		return false
 	}
 
@@ -331,21 +363,43 @@ func (ls *LoggerService) uploadToLoki(chatLog *model.ChatLog) bool {
 }
 
 // saveLogToPermanentStorage saves a single log to permanent storage
-func (ls *LoggerService) saveLogToPermanentStorage(log *model.ChatLog) {
-	dateStr := log.Timestamp.Format("2006-01-02")
-	yearMonth := log.Timestamp.Format("2006-01")
-
-	// Create daily log file path
-	dailyLogFile := filepath.Join(ls.logFilePath, yearMonth, fmt.Sprintf("%s.log", dateStr))
-
-	logJSON, err := log.ToJSON()
-	if err != nil {
-		fmt.Printf("Failed to marshal log for permanent storage: %v\n", err)
+func (ls *LoggerService) saveLogToPermanentStorage(chatLog *model.ChatLog) {
+	if chatLog == nil {
+		log.Printf("Invalid log or missing required identity fields\n")
 		return
 	}
 
-	if err := ls.writeLogToFile(dailyLogFile, logJSON, os.O_APPEND|os.O_CREATE|os.O_WRONLY); err != nil {
-		fmt.Printf("Failed to write log to permanent storage: %v\n", err)
+	// Directory structure: year-month/day/username
+	yearMonth := chatLog.Timestamp.Format("2006-01")
+	day := chatLog.Timestamp.Format("02")
+	username := chatLog.Identity.UserName
+	if username == "" {
+		username = "unknown"
+	}
+
+	// Create hierarchical directory path
+	dateDir := filepath.Join(ls.logFilePath, yearMonth, day, username)
+
+	// Timestamp for filename: yyyymmdd-HHMMSS_requestID.log
+	timestamp := chatLog.Timestamp.Format("20060102-150405")
+	requestId := chatLog.Identity.RequestID
+	if requestId == "" {
+		requestId = "null"
+	}
+	filename := fmt.Sprintf("%s_%s.log", timestamp, requestId)
+
+	// Full file path
+	logFile := filepath.Join(dateDir, filename)
+
+	logJSON, err := chatLog.ToJSON()
+	if err != nil {
+		log.Printf("Failed to marshal log for permanent storage: %v\n", err)
+		return
+	}
+
+	// Create new file instead of appending
+	if err := ls.writeLogToFile(logFile, logJSON, os.O_CREATE|os.O_WRONLY); err != nil {
+		log.Printf("Failed to write log to permanent storage: %v\n", err)
 	}
 }
 

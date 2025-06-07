@@ -13,8 +13,9 @@ type Config struct {
 	TokenThreshold int
 
 	// Semantic API configuration
-	SemanticApiEndpoint string
-	TopK                int
+	SemanticApiEndpoint    string
+	TopK                   int
+	SemanticSocreThreshold float64
 
 	// Feature flags
 	EnableCompression bool
