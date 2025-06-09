@@ -57,6 +57,30 @@ type LoggerService struct {
 	processorStarted bool
 }
 
+// sanitizeFilename cleans a string to make it safe for use in file/folder names
+func (ls *LoggerService) sanitizeFilename(name string, defaultName string) string {
+	if name == "" {
+		return defaultName
+	}
+
+	// Remove invalid characters for both Windows and Linux
+	invalidChars := []string{"\\", "/", ":", "*", "?", "\"", "<", ">", "|", "\x00", "\n", "\r", "\t"}
+	// Also replace any non-printable ASCII characters
+	for i := 0; i < 32; i++ {
+		invalidChars = append(invalidChars, string(rune(i)))
+	}
+	for _, c := range invalidChars {
+		name = strings.ReplaceAll(name, c, "_")
+	}
+
+	// Limit length to 255 bytes for Linux compatibility
+	if len(name) > 255 {
+		name = name[:255]
+	}
+
+	return name
+}
+
 // NewLoggerService creates a new logger service
 func NewLoggerService(logFilePath, lokiEndpoint string, scanIntervalSec int, llmClient *client.LLMClient) *LoggerService {
 	// Create temp directory under logFilePath for temporary log files
@@ -372,10 +396,8 @@ func (ls *LoggerService) saveLogToPermanentStorage(chatLog *model.ChatLog) {
 	// Directory structure: year-month/day/username
 	yearMonth := chatLog.Timestamp.Format("2006-01")
 	day := chatLog.Timestamp.Format("02")
-	username := chatLog.Identity.UserName
-	if username == "" {
-		username = "unknown"
-	}
+	// Get and sanitize username for filesystem usage
+	username := ls.sanitizeFilename(chatLog.Identity.UserName, "unknown")
 
 	// Create hierarchical directory path
 	dateDir := filepath.Join(ls.logFilePath, yearMonth, day, username)
