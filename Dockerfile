@@ -1,0 +1,43 @@
+# Define build arguments
+ARG IMAGE_NAME=chat-rag
+ARG IMAGE_VERSION=latest
+
+# Build stage
+FROM golang:1.24.2-alpine AS builder
+
+# Set working directory
+WORKDIR /app
+
+# Copy go module files
+COPY go.mod go.sum ./
+
+# Download dependencies
+RUN go mod download
+
+# Copy source code
+COPY . .
+
+# Build application
+RUN CGO_ENABLED=0 GOOS=linux go build -o chat-rag .
+
+# Runtime stage
+FROM alpine:latest
+
+# Set working directory
+WORKDIR /app
+
+# Copy compiled binary from build stage
+COPY --from=builder /app/chat-rag .
+
+# Copy configuration files
+COPY etc/chat-api.yaml ./etc/
+
+# Expose application port
+EXPOSE 8080
+
+# Set entrypoint
+ENTRYPOINT ["./chat-rag"]
+
+# 设置镜像标签
+LABEL name=${IMAGE_NAME}
+LABEL version=${IMAGE_VERSION}
