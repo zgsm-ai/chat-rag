@@ -22,7 +22,6 @@ type MetricsService struct {
 	totalLatency     *prometheus.HistogramVec
 
 	// Compression metrics
-	compressionTriggered *prometheus.CounterVec
 	userPromptCompressed *prometheus.CounterVec
 
 	// Response metrics
@@ -40,7 +39,7 @@ func NewMetricsService() *MetricsService {
 				Name: "chat_rag_requests_total",
 				Help: "Total number of chat completion requests",
 			},
-			[]string{"client_id", "model", "category", "user", "task_id", "request_id"},
+			[]string{"client_id", "model", "category", "user"},
 		),
 
 		originalTokensTotal: prometheus.NewCounterVec(
@@ -48,7 +47,7 @@ func NewMetricsService() *MetricsService {
 				Name: "chat_rag_original_tokens_total",
 				Help: "Total number of original tokens processed",
 			},
-			[]string{"client_id", "model", "token_type", "user", "task_id", "request_id"},
+			[]string{"client_id", "model", "token_scope", "user"},
 		),
 
 		compressedTokensTotal: prometheus.NewCounterVec(
@@ -56,7 +55,7 @@ func NewMetricsService() *MetricsService {
 				Name: "chat_rag_compressed_tokens_total",
 				Help: "Total number of compressed tokens processed",
 			},
-			[]string{"client_id", "model", "token_type", "user", "task_id", "request_id"},
+			[]string{"client_id", "model", "token_scope", "user"},
 		),
 
 		compressionRatio: prometheus.NewHistogramVec(
@@ -65,7 +64,7 @@ func NewMetricsService() *MetricsService {
 				Help:    "Distribution of compression ratios",
 				Buckets: []float64{0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0},
 			},
-			[]string{"client_id", "model", "user", "task_id", "request_id"},
+			[]string{"client_id", "model", "user"},
 		),
 
 		semanticLatency: prometheus.NewHistogramVec(
@@ -74,7 +73,7 @@ func NewMetricsService() *MetricsService {
 				Help:    "Semantic processing latency in milliseconds",
 				Buckets: []float64{10, 50, 100, 200, 500, 1000, 2000, 5000},
 			},
-			[]string{"client_id", "model", "user", "task_id", "request_id"},
+			[]string{"client_id", "model", "user"},
 		),
 
 		summaryLatency: prometheus.NewHistogramVec(
@@ -83,7 +82,7 @@ func NewMetricsService() *MetricsService {
 				Help:    "Summary processing latency in milliseconds",
 				Buckets: []float64{10, 50, 100, 200, 500, 1000, 2000, 5000},
 			},
-			[]string{"client_id", "model", "user", "task_id", "request_id"},
+			[]string{"client_id", "model", "user"},
 		),
 
 		mainModelLatency: prometheus.NewHistogramVec(
@@ -92,7 +91,7 @@ func NewMetricsService() *MetricsService {
 				Help:    "Main model processing latency in milliseconds",
 				Buckets: []float64{100, 500, 1000, 2000, 5000, 10000, 20000},
 			},
-			[]string{"client_id", "model", "user", "task_id", "request_id"},
+			[]string{"client_id", "model", "user"},
 		),
 
 		totalLatency: prometheus.NewHistogramVec(
@@ -101,15 +100,7 @@ func NewMetricsService() *MetricsService {
 				Help:    "Total processing latency in milliseconds",
 				Buckets: []float64{100, 500, 1000, 2000, 5000, 10000, 20000, 30000},
 			},
-			[]string{"client_id", "model", "user", "task_id", "request_id"},
-		),
-
-		compressionTriggered: prometheus.NewCounterVec(
-			prometheus.CounterOpts{
-				Name: "chat_rag_compression_triggered_total",
-				Help: "Total number of requests where compression was triggered",
-			},
-			[]string{"client_id", "model", "user", "task_id", "request_id"},
+			[]string{"client_id", "model", "user"},
 		),
 
 		userPromptCompressed: prometheus.NewCounterVec(
@@ -117,7 +108,7 @@ func NewMetricsService() *MetricsService {
 				Name: "chat_rag_user_prompt_compressed_total",
 				Help: "Total number of requests where user prompt was compressed",
 			},
-			[]string{"client_id", "model", "user", "task_id", "request_id"},
+			[]string{"client_id", "model", "user"},
 		),
 
 		responseTokens: prometheus.NewCounterVec(
@@ -125,7 +116,7 @@ func NewMetricsService() *MetricsService {
 				Name: "chat_rag_response_tokens_total",
 				Help: "Total number of response tokens generated",
 			},
-			[]string{"client_id", "model", "user", "task_id", "request_id"},
+			[]string{"client_id", "model", "user"},
 		),
 
 		errorsTotal: prometheus.NewCounterVec(
@@ -133,7 +124,7 @@ func NewMetricsService() *MetricsService {
 				Name: "chat_rag_errors_total",
 				Help: "Total number of errors encountered",
 			},
-			[]string{"client_id", "model", "error_type", "user", "task_id", "request_id"},
+			[]string{"client_id", "model", "error_type", "user"},
 		),
 	}
 
@@ -147,7 +138,6 @@ func NewMetricsService() *MetricsService {
 		ms.summaryLatency,
 		ms.mainModelLatency,
 		ms.totalLatency,
-		ms.compressionTriggered,
 		ms.userPromptCompressed,
 		ms.responseTokens,
 		ms.errorsTotal,
@@ -171,14 +161,14 @@ func (ms *MetricsService) RecordChatLog(log *model.ChatLog) {
 	ms.requestsTotal.With(ms.addLabels(labels, "category", category)).Inc()
 
 	// Record original tokens
-	ms.originalTokensTotal.With(ms.addLabels(labels, "token_type", "system")).Add(float64(log.OriginalTokens.SystemTokens))
-	ms.originalTokensTotal.With(ms.addLabels(labels, "token_type", "user")).Add(float64(log.OriginalTokens.UserTokens))
-	ms.originalTokensTotal.With(ms.addLabels(labels, "token_type", "all")).Add(float64(log.OriginalTokens.All))
+	ms.originalTokensTotal.With(ms.addLabels(labels, "token_scope", "system")).Add(float64(log.OriginalTokens.SystemTokens))
+	ms.originalTokensTotal.With(ms.addLabels(labels, "token_scope", "user")).Add(float64(log.OriginalTokens.UserTokens))
+	ms.originalTokensTotal.With(ms.addLabels(labels, "token_scope", "all")).Add(float64(log.OriginalTokens.All))
 
 	// Record compressed tokens
-	ms.compressedTokensTotal.With(ms.addLabels(labels, "token_type", "system")).Add(float64(log.CompressedTokens.SystemTokens))
-	ms.compressedTokensTotal.With(ms.addLabels(labels, "token_type", "user")).Add(float64(log.CompressedTokens.UserTokens))
-	ms.compressedTokensTotal.With(ms.addLabels(labels, "token_type", "all")).Add(float64(log.CompressedTokens.All))
+	ms.compressedTokensTotal.With(ms.addLabels(labels, "token_scope", "system")).Add(float64(log.CompressedTokens.SystemTokens))
+	ms.compressedTokensTotal.With(ms.addLabels(labels, "token_scope", "user")).Add(float64(log.CompressedTokens.UserTokens))
+	ms.compressedTokensTotal.With(ms.addLabels(labels, "token_scope", "all")).Add(float64(log.CompressedTokens.All))
 
 	// Record compression ratio
 	if log.CompressionRatio > 0 {
@@ -202,11 +192,6 @@ func (ms *MetricsService) RecordChatLog(log *model.ChatLog) {
 		ms.totalLatency.With(labels).Observe(float64(log.TotalLatency))
 	}
 
-	// Record compression flags
-	if log.CompressionTriggered {
-		ms.compressionTriggered.With(labels).Inc()
-	}
-
 	if log.IsUserPromptCompressed {
 		ms.userPromptCompressed.With(labels).Inc()
 	}
@@ -225,11 +210,9 @@ func (ms *MetricsService) RecordChatLog(log *model.ChatLog) {
 // getBaseLabels creates the base labels map with common fields
 func (ms *MetricsService) getBaseLabels(log *model.ChatLog) prometheus.Labels {
 	return prometheus.Labels{
-		"client_id":  log.Identity.ClientID,
-		"model":      log.Model,
-		"user":       log.Identity.UserName,
-		"task_id":    log.Identity.TaskID,
-		"request_id": log.Identity.RequestID,
+		"client_id": log.Identity.ClientID,
+		"model":     log.Model,
+		"user":      log.Identity.UserName,
 	}
 }
 

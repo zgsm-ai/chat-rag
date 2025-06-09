@@ -19,9 +19,9 @@ type TokenStats struct {
 
 // ChatLog represents a single chat completion log entry
 type ChatLog struct {
-	Identity  types.Identity
-	Timestamp time.Time `json:"timestamp"`
-	Model     string    `json:"model"`
+	Identity  types.Identity `json:"identity"`
+	Timestamp time.Time      `json:"timestamp"`
+	Model     string         `json:"model"`
 
 	// Token statistics
 	OriginalTokens   TokenStats `json:"original_tokens"`
@@ -29,8 +29,7 @@ type ChatLog struct {
 	CompressionRatio float64    `json:"compression_ratio"`
 
 	// Processing flags
-	IsUserPromptCompressed bool `json:"is_compressed"`
-	CompressionTriggered   bool `json:"compression_triggered"`
+	IsUserPromptCompressed bool `json:"is_user_prompt_compressed"`
 
 	// Latency metrics (in milliseconds)
 	SemanticLatency  int64 `json:"semantic_latency_ms"`

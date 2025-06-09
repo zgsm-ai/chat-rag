@@ -59,7 +59,6 @@ func (l *ChatCompletionLogic) processRequest(req *types.ChatCompletionRequest) (
 	userMessageTokens := chatLog.OriginalTokens.UserTokens
 	needsCompressUserMsg := l.svcCtx.Config.EnableCompression && userMessageTokens > l.svcCtx.Config.TokenThreshold
 	log.Printf("[processRequest] userMessageTokens: %v, needsCompression: %v\n\n", userMessageTokens, needsCompressUserMsg)
-	chatLog.CompressionTriggered = needsCompressUserMsg
 
 	promptProcessor, err := strategy.NewCompressionProcessor(l.svcCtx, l.identity)
 	if err != nil {
