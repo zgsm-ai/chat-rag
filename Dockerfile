@@ -33,11 +33,11 @@ COPY --from=builder /app/chat-rag .
 COPY etc/chat-api.yaml ./etc/
 
 # Expose application port
-EXPOSE 8080
+EXPOSE 8888
 
 # Set entrypoint
 ENTRYPOINT ["./chat-rag"]
 
-# 设置镜像标签
-LABEL name=${IMAGE_NAME}
-LABEL version=${IMAGE_VERSION}
+# Set image labels
+LABEL name="${IMAGE_NAME}"
+LABEL version="${IMAGE_VERSION}"
