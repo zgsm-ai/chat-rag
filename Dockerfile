@@ -23,6 +23,10 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o chat-rag .
 # Runtime stage
 FROM alpine:latest
 
+# Redeclare build arguments for runtime stage
+ARG IMAGE_NAME=chat-rag
+ARG IMAGE_VERSION=latest
+
 # Set working directory
 WORKDIR /app
 
