@@ -27,7 +27,7 @@ SummaryModelTokenThreshold: 64_000
 ClassifyModel: "deepseek-v3"
 
 # Split system prompt, used to compress system prompt
-SystemPromptSplitter: "# Tool Use Guidelines"
+SystemPromptSplitter: "====\n\nRULES"
 
 # used recent user prompt messages nums
 RecentUserMsgUsedNums: 10

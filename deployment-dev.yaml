@@ -1,0 +1,110 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: chat-rag-config
+  namespace: shenma
+data:
+  chat-api.yaml: |
+    Name: chat-rag
+    Host: 0.0.0.0
+    Port: 8888
+
+    # Model endpoints configuration
+    LLMEndpoint: "http://shenma.sangfor.com:9080/v1/chat/completions"
+
+    # Token processing configuration
+    TokenThreshold: 32_000
+
+    # Semantic API configuration
+    SemanticApiEndpoint: "http://localhost:8002/codebase-indexer/api/v1/semantics"
+    TopK: 5
+    SemanticSocreThreshold: 0.5
+
+    # Feature flags
+    EnableCompression: true
+
+    # Logging configuration
+    LogFilePath: "/data/logs/"
+    LokiEndpoint: "http://loki.loki.svc.cluster.local:3100/loki/api/v1/push"
+    LogScanIntervalSec: 10
+
+    # Model configuration
+    SummaryModel: "deepseek-v3"
+    SummaryModelTokenThreshold: 64_000
+    ClassifyModel: "deepseek-v3"
+
+    # Split system prompt, used to compress system prompt
+    SystemPromptSplitter: "====\n\nRULES"
+
+    # used recent user prompt messages nums
+    RecentUserMsgUsedNums: 10
+    # used recent system prompt messages nums
+    RecentSystemMsgUsedNums: 10
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: chat-rag-storage
+  namespace: shenma
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: "sf-eds-501"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chat-rag
+  namespace: shenma
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: chat-rag
+  template:
+    metadata:
+      labels:
+        app: chat-rag
+    spec:
+      containers:
+        - name: chat-rag
+          image: zgsm/chat-rag:v1.0.0
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8888
+          volumeMounts:
+            - name: config
+              mountPath: /app/etc/chat-api.yaml
+              subPath: chat-api.yaml
+            - name: pvc-storage
+              mountPath: /data/logs
+          args: ["-f", "/app/etc/chat-api.yaml"]
+      volumes:
+        - name: config
+          configMap:
+            name: chat-rag-config
+            items:
+              - key: chat-api.yaml
+                path: chat-api.yaml
+        - name: pvc-storage
+          persistentVolumeClaim:
+            claimName: chat-rag-storage
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: chat-rag-svc
+  namespace: shenma
+spec:
+  selector:
+    app: chat-rag
+  ports:
+    - name: http
+      protocol: TCP
+      port: 8888
+      nodePort: 39001
+      targetPort: 8888
+  type: NodePort
