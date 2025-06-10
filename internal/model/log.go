@@ -29,6 +29,7 @@ type ChatLog struct {
 	CompressionRatio float64    `json:"compression_ratio"`
 
 	// Processing flags
+	IsPromptProceed        bool `json:"is_prompt_proceed"`
 	IsUserPromptCompressed bool `json:"is_user_prompt_compressed"`
 
 	// Latency metrics (in milliseconds)
@@ -49,7 +50,7 @@ type ChatLog struct {
 	Category string `json:"category,omitempty"`
 
 	// Error information
-	Error string `json:"error,omitempty"`
+	Error []map[types.ErrorType]string `json:"error,omitempty"`
 }
 
 // ToJSON converts the log entry to JSON string
@@ -132,4 +133,14 @@ func boolToString(b bool) string {
 
 func timestampToNano(t time.Time) string {
 	return strconv.FormatInt(t.UnixNano(), 10)
+}
+
+// AddError adds an error entry with type and message to the ChatLog
+func (cl *ChatLog) AddError(errorType types.ErrorType, err error) {
+	if cl.Error == nil {
+		cl.Error = make([]map[types.ErrorType]string, 0)
+	}
+	cl.Error = append(cl.Error, map[types.ErrorType]string{
+		errorType: err.Error(),
+	})
 }

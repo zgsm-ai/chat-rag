@@ -21,6 +21,8 @@ type ProcessedPrompt struct {
 	SemanticLatency int64           `json:"semantic_latency_ms"`
 	SemanticContext string          `json:"semantic_context"`
 	SummaryLatency  int64           `json:"summary_latency_ms"`
+	SemanticErr     error           `json:"semantic_err"`
+	SummaryErr      error           `json:"summary_err"`
 }
 
 // CompressionProcessor processes prompts with RAG compression
@@ -50,7 +52,7 @@ func NewCompressionProcessor(svcCtx *svc.ServiceContext, identity *types.Identit
 }
 
 // searchSemanticContext performs semantic search and constructs context string
-func (p *CompressionProcessor) searchSemanticContext(ctx context.Context, query string) string {
+func (p *CompressionProcessor) searchSemanticContext(ctx context.Context, query string) (string, error) {
 	// Prepare semantic request
 	semanticReq := client.SemanticRequest{
 		ClientId:    p.identity.ClientID,
@@ -62,8 +64,9 @@ func (p *CompressionProcessor) searchSemanticContext(ctx context.Context, query 
 	// Execute search
 	semanticResp, err := p.semanticClient.Search(ctx, semanticReq)
 	if err != nil {
-		log.Printf("[buildSemanticContext] Semantic search failed: %v", err)
-		return ""
+		err := fmt.Errorf("failed to search semantic:\n%w", err)
+		log.Printf("[buildSemanticContext] error: %v", err)
+		return "", err
 	}
 
 	// Build context string from results
@@ -81,12 +84,12 @@ func (p *CompressionProcessor) searchSemanticContext(ctx context.Context, query 
 	semanticContext := strings.Join(contextParts, "\n\n")
 	log.Printf("[buildSemanticContext] Searched semantic context: %s", semanticContext)
 
-	return semanticContext
+	return semanticContext, nil
 }
 
-// ReplaceSystemMessages 替换消息列表中的系统消息
-// processedSystemMsg: 处理后的系统消息（nil表示不移除系统消息）
-// messages: 原始消息列表
+// ReplaceSystemMessages replaces system messages in the message list
+// processedSystemMsg: processed system message (nil means not removing system messages)
+// messages: original message list
 func (p *CompressionProcessor) replaceSysMsgWithCompressed(messages []types.Message) []types.Message {
 	var processedMsgs []types.Message
 	var hasSystem bool
@@ -100,7 +103,7 @@ func (p *CompressionProcessor) replaceSysMsgWithCompressed(messages []types.Mess
 		}
 	}
 
-	// 如果没有找到系统消息，返回原始消息列表
+	// If no system message is found, return the original message list
 	if !hasSystem {
 		return messages
 	}
@@ -110,65 +113,62 @@ func (p *CompressionProcessor) replaceSysMsgWithCompressed(messages []types.Mess
 // ProcessPrompt processes the prompt with RAG compression
 func (p *CompressionProcessor) ProcessPrompt(ctx context.Context, req *types.ChatCompletionRequest, needsCompressUserMsg bool) (*ProcessedPrompt, error) {
 	var semanticLatency, summaryLatency int64
+	prcceedPrompt := &ProcessedPrompt{
+		Messages: req.Messages,
+	}
 
-	// Get the latest user message for semantic search
+	// Get the latest user message
 	latestUserMessage, err := utils.GetLatestUserMsg(req.Messages)
 	if err != nil {
-		return nil, fmt.Errorf("no user message found for semantic search: %w", err)
+		return prcceedPrompt, fmt.Errorf("no user message found: %w", err)
 	}
 
 	// Record start time for semantic search
 	semanticStart := time.Now()
-	semanticContext := p.searchSemanticContext(ctx, latestUserMessage)
+	semanticContext, err := p.searchSemanticContext(ctx, latestUserMessage)
+	if err != nil {
+		log.Printf("Failed to search semantic: %v\n", err)
+		prcceedPrompt.SemanticErr = err
+	}
+
 	semanticLatency = time.Since(semanticStart).Milliseconds()
+	prcceedPrompt.SemanticLatency = semanticLatency
+	prcceedPrompt.SemanticContext = semanticContext
 
 	// Replace system messages with compressed messages
 	replacedSystemMsgs := p.replaceSysMsgWithCompressed(req.Messages)
 
 	if !needsCompressUserMsg {
-		log.Printf("[ProcessPrompt] No need to compress user message")
-		return &ProcessedPrompt{
-			Messages:        replacedSystemMsgs,
-			IsCompressed:    false,
-			SemanticLatency: semanticLatency,
-			SemanticContext: semanticContext,
-			SummaryLatency:  0,
-		}, nil
+		log.Printf("[ProcessPrompt] No need to compress user message\n")
+		prcceedPrompt.Messages = replacedSystemMsgs
+		return prcceedPrompt, nil
 	}
 
-	log.Printf("[ProcessPrompt] start compress user message")
+	log.Printf("[ProcessPrompt] start compress user prompt message\n")
 	// Record start time for summary process
 	summaryStart := time.Now()
-
 	// Get messages to summarize (exclude system messages and num-th user message)
 	messagesToSummarize := utils.GetOldUserMsgsWithNum(req.Messages, p.config.RecentUserMsgUsedNums)
 	messagesToSummarize = p.trimMessagesToTokenThreshold(semanticContext, messagesToSummarize)
 
 	summary, err := p.summaryProcessor.GenerateUserPromptSummary(ctx, semanticContext, messagesToSummarize)
 	if err != nil {
-		log.Printf("Failed to generate summary: %v", err)
+		log.Printf("[ProcessPrompt] Failed to generate summary: %v\n", err)
 		// On error, proceed with original messages
-		return &ProcessedPrompt{
-			Messages:        replacedSystemMsgs,
-			IsCompressed:    false,
-			SemanticLatency: semanticLatency,
-			SemanticContext: semanticContext,
-			SummaryLatency:  0,
-		}, nil
+		prcceedPrompt.SummaryErr = err
+		prcceedPrompt.Messages = replacedSystemMsgs
+		return prcceedPrompt, nil
 	}
 
-	// Build final messages
+	// Sumary successfuly, build final messages
 	recentMessages := utils.GetRecentUserMsgsWithNum(req.Messages, p.config.RecentUserMsgUsedNums)
 	finalMessages := p.assmebleSummaryMessages(utils.GetSystemMsg(replacedSystemMsgs), summary, recentMessages)
 	summaryLatency = time.Since(summaryStart).Milliseconds()
 
-	return &ProcessedPrompt{
-		Messages:        finalMessages,
-		IsCompressed:    true,
-		SemanticLatency: semanticLatency,
-		SemanticContext: semanticContext,
-		SummaryLatency:  summaryLatency,
-	}, nil
+	prcceedPrompt.SummaryLatency = summaryLatency
+	prcceedPrompt.Messages = finalMessages
+	prcceedPrompt.IsCompressed = true
+	return prcceedPrompt, nil
 }
 
 // BuildUserSummaryMessages builds the final messages with user prompt summary

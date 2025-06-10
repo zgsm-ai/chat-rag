@@ -62,12 +62,18 @@ func (l *ChatCompletionLogic) processRequest(req *types.ChatCompletionRequest) (
 
 	promptProcessor, err := strategy.NewCompressionProcessor(l.svcCtx, l.identity)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to new processor: %w", err)
+		err = fmt.Errorf("failed to new processor:\n %w", err)
+		chatLog.AddError(types.ErrExtra, err)
+		log.Printf("[processRequest] error: %v", err)
+		return nil, nil, err
 	}
 
 	processedPrompt, err := promptProcessor.ProcessPrompt(l.ctx, req, needsCompressUserMsg)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to process prompt: %w", err)
+		err := fmt.Errorf("failed to process prompt:\n %w", err)
+		chatLog.AddError(types.ErrExtra, err)
+		log.Printf("[processRequest] error: %v", err)
+		return nil, nil, err
 	}
 
 	// Update chat log with processed prompt info
@@ -123,13 +129,28 @@ func (l *ChatCompletionLogic) updateChatLogWithProcessedPrompt(chatLog *model.Ch
 	}
 
 	chatLog.CompressedPrompt = processedPrompt.Messages
+
+	if processedPrompt.SemanticErr != nil {
+		chatLog.AddError(types.ErrSemantic, processedPrompt.SemanticErr)
+	}
+
+	if processedPrompt.SummaryErr != nil {
+		chatLog.AddError(types.ErrSummary, processedPrompt.SummaryErr)
+	}
 }
 
 // ChatCompletion handles chat completion requests
 func (l *ChatCompletionLogic) ChatCompletion() (resp *types.ChatCompletionResponse, err error) {
 	chatLog, processedPrompt, err := l.processRequest(l.getRequest())
+	processedMsgs := l.getRequest().Messages
 	if err != nil {
-		return nil, err
+		err := fmt.Errorf("ChatCompletion failed to process request: %w", err)
+		log.Printf("[ChatCompletion] error: %v", err)
+		chatLog.AddError(types.ErrExtra, err)
+		chatLog.IsPromptProceed = false
+	} else {
+		chatLog.IsPromptProceed = true
+		processedMsgs = processedPrompt.Messages
 	}
 
 	// Defer logging for non-streaming requests
@@ -149,7 +170,7 @@ func (l *ChatCompletionLogic) ChatCompletion() (resp *types.ChatCompletionRespon
 	}
 
 	// Generate completion using structured messages
-	response, err := llmClient.ChatLLMWithMessagesRaw(l.ctx, processedPrompt.Messages)
+	response, err := llmClient.ChatLLMWithMessagesRaw(l.ctx, processedMsgs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate completion: %w", err)
 	}
@@ -165,9 +186,15 @@ func (l *ChatCompletionLogic) ChatCompletion() (resp *types.ChatCompletionRespon
 // ChatCompletionStream handles streaming chat completion with SSE
 func (l *ChatCompletionLogic) ChatCompletionStream() error {
 	chatLog, processedPrompt, err := l.processRequest(l.getRequest())
+	processedMsgs := l.getRequest().Messages
 	if err != nil {
-		l.sendSSEError(l.getWriter(), "Failed to process request", err)
-		return err
+		err := fmt.Errorf("ChatCompletionStream failed to process request: %w", err)
+		log.Printf("[ChatCompletionStream] error: %v", err)
+		chatLog.AddError(types.ErrExtra, err)
+		chatLog.IsPromptProceed = false
+	} else {
+		chatLog.IsPromptProceed = true
+		processedMsgs = processedPrompt.Messages
 	}
 
 	// Defer logging for streaming requests - will be called after streaming completes
@@ -199,10 +226,8 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 	var responseContent strings.Builder
 	var finalUsage *types.Usage
 
-	// fmt.Printf("==> [ChatCompletionStream] processedPrompt: \n%v\n", processedPrompt.Messages)
-
 	// Stream completion using structured messages with raw response
-	err = llmClient.ChatLLMWithMessagesStreamRaw(l.ctx, processedPrompt.Messages, func(rawLine string) error {
+	err = llmClient.ChatLLMWithMessagesStreamRaw(l.ctx, processedMsgs, func(rawLine string) error {
 		// Handle raw line data, ensure correct SSE format
 		if rawLine != "" {
 			// Extract content and usage from streaming data

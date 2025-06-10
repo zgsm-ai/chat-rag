@@ -202,8 +202,12 @@ func (ms *MetricsService) RecordChatLog(log *model.ChatLog) {
 	}
 
 	// Record errors
-	if log.Error != "" {
-		ms.errorsTotal.With(ms.addLabels(labels, "error_type", "processing_error")).Inc()
+	for _, errorMap := range log.Error {
+		for errorType, errorMessage := range errorMap {
+			if errorMessage != "" {
+				ms.errorsTotal.With(ms.addLabels(labels, "error_type", string(errorType))).Inc()
+			}
+		}
 	}
 }
 

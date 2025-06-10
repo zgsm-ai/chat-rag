@@ -6,7 +6,7 @@ Port: 8888
 LLMEndpoint: "https://zgsm.sangfor.com/v1/chat/completions"
 
 # Token processing configuration
-TokenThreshold: 32_000
+TokenThreshold: 10_000
 
 # Semantic API configuration
 SemanticApiEndpoint: "http://localhost:8002/codebase-indexer/api/v1/semantics"
