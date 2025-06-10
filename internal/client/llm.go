@@ -22,10 +22,10 @@ type LLMClient struct {
 }
 
 // NewLLMClient creates a new LLM client instance
-func NewLLMClient(endpoint string, modelName string) (*LLMClient, error) {
+func NewLLMClient(endpoint string, modelName string, headers *http.Header) (*LLMClient, error) {
 	// Check for empty endpoint
-	if endpoint == "" {
-		return nil, fmt.Errorf("NewLLMClient endpoint cannot be empty")
+	if endpoint == "" || headers == nil {
+		return nil, fmt.Errorf("NewLLMClient llmEndpoint cannot be empty")
 	}
 
 	// Create HTTP client
@@ -35,11 +35,8 @@ func NewLLMClient(endpoint string, modelName string) (*LLMClient, error) {
 		modelName:  modelName,
 		endpoint:   endpoint,
 		httpClient: httpClient,
+		headers:    headers,
 	}, nil
-}
-
-func (c *LLMClient) SetHeaders(headers *http.Header) {
-	c.headers = headers
 }
 
 func (c *LLMClient) GetModelName() string {

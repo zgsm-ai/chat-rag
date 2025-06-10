@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/zgsm-ai/chat-rag/internal/client"
+	"github.com/zgsm-ai/chat-rag/internal/config"
 	"github.com/zgsm-ai/chat-rag/internal/model"
 	"github.com/zgsm-ai/chat-rag/internal/types"
 	"github.com/zgsm-ai/chat-rag/internal/utils"
@@ -46,8 +47,10 @@ type LoggerService struct {
 	tempLogFilePath string // Temporary log file path
 	lokiEndpoint    string
 	scanInterval    time.Duration
-	llmClient       *client.LLMClient
 	metricsService  *MetricsService
+	llmEndpoint     string
+	classifyModel   string
+	llmClient       *client.LLMClient
 
 	logChan  chan *model.ChatLog
 	stopChan chan struct{}
@@ -82,16 +85,17 @@ func (ls *LoggerService) sanitizeFilename(name string, defaultName string) strin
 }
 
 // NewLoggerService creates a new logger service
-func NewLoggerService(logFilePath, lokiEndpoint string, scanIntervalSec int, llmClient *client.LLMClient) *LoggerService {
+func NewLoggerService(config config.Config) *LoggerService {
 	// Create temp directory under logFilePath for temporary log files
-	tempLogDir := filepath.Join(logFilePath, "temp")
+	tempLogDir := filepath.Join(config.LogFilePath, "temp")
 
 	return &LoggerService{
-		logFilePath:     logFilePath, // Permanent storage directory
-		tempLogFilePath: tempLogDir,  // Temporary logs directory
-		lokiEndpoint:    lokiEndpoint,
-		scanInterval:    time.Duration(scanIntervalSec) * time.Second,
-		llmClient:       llmClient,
+		logFilePath:     config.LogFilePath, // Permanent storage directory
+		tempLogFilePath: tempLogDir,         // Temporary logs directory
+		lokiEndpoint:    config.LokiEndpoint,
+		scanInterval:    time.Duration(config.LogScanIntervalSec) * time.Second,
+		llmEndpoint:     config.LLMEndpoint,
+		classifyModel:   config.ClassifyModel,
 		logChan:         make(chan *model.ChatLog, 1000),
 		stopChan:        make(chan struct{}),
 	}
@@ -131,7 +135,13 @@ func (ls *LoggerService) Stop() {
 
 // LogAsync logs a chat completion asynchronously
 func (ls *LoggerService) LogAsync(logs *model.ChatLog, headers *http.Header) {
-	ls.llmClient.SetHeaders(headers)
+	llmClient, err := client.NewLLMClient(ls.llmEndpoint, ls.classifyModel, headers)
+	if err != nil {
+		log.Printf("[LogAsync] Failed to create LLM client: %v\n", err)
+		return
+	}
+
+	ls.llmClient = llmClient
 	select {
 	case ls.logChan <- logs:
 	default:

@@ -65,7 +65,7 @@ func (l *ChatCompletionLogic) processRequest(req *types.ChatCompletionRequest) (
 		err = fmt.Errorf("failed to new processor:\n %w", err)
 		chatLog.AddError(types.ErrExtra, err)
 		log.Printf("[processRequest] error: %v", err)
-		return nil, nil, err
+		return chatLog, nil, err
 	}
 
 	processedPrompt, err := promptProcessor.ProcessPrompt(l.ctx, req, needsCompressUserMsg)
@@ -73,7 +73,7 @@ func (l *ChatCompletionLogic) processRequest(req *types.ChatCompletionRequest) (
 		err := fmt.Errorf("failed to process prompt:\n %w", err)
 		chatLog.AddError(types.ErrExtra, err)
 		log.Printf("[processRequest] error: %v", err)
-		return nil, nil, err
+		return chatLog, nil, err
 	}
 
 	// Update chat log with processed prompt info
@@ -144,7 +144,7 @@ func (l *ChatCompletionLogic) ChatCompletion() (resp *types.ChatCompletionRespon
 	chatLog, processedPrompt, err := l.processRequest(l.getRequest())
 	processedMsgs := l.getRequest().Messages
 	if err != nil {
-		err := fmt.Errorf("ChatCompletion failed to process request: %w", err)
+		err := fmt.Errorf("ChatCompletion failed to process request:\n%w", err)
 		log.Printf("[ChatCompletion] error: %v", err)
 		chatLog.AddError(types.ErrExtra, err)
 		chatLog.IsPromptProceed = false
@@ -163,8 +163,7 @@ func (l *ChatCompletionLogic) ChatCompletion() (resp *types.ChatCompletionRespon
 
 	modelStart := time.Now()
 	// Create LLM client for main model
-	llmClient, err := client.NewLLMClient(l.svcCtx.Config.LLMEndpoint, l.getRequest().Model)
-	llmClient.SetHeaders(l.getHeaders())
+	llmClient, err := client.NewLLMClient(l.svcCtx.Config.LLMEndpoint, l.getRequest().Model, l.getHeaders())
 	if err != nil {
 		return nil, fmt.Errorf("failed to create LLM client: %w", err)
 	}
@@ -206,8 +205,7 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 	}()
 
 	// Create LLM client for main model
-	llmClient, err := client.NewLLMClient(l.svcCtx.Config.LLMEndpoint, l.getRequest().Model)
-	llmClient.SetHeaders(l.getHeaders())
+	llmClient, err := client.NewLLMClient(l.svcCtx.Config.LLMEndpoint, l.getRequest().Model, l.getHeaders())
 	if err != nil {
 		l.sendSSEError(l.getWriter(), "Failed to create LLM client", err)
 		return fmt.Errorf("failed to create LLM client: %w", err)

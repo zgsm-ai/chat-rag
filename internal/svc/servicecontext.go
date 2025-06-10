@@ -39,12 +39,6 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	// Initialize semantic client
 	semanticClient := client.NewSemanticClient(c.SemanticApiEndpoint)
 
-	// Initialize LLM client
-	summaryModelClient, err := client.NewLLMClient(c.LLMEndpoint, c.SummaryModel)
-	if err != nil {
-		panic("Failed to initialize LLM client: " + err.Error())
-	}
-
 	// Initialize token counter
 	tokenCounter, err := utils.NewTokenCounter()
 	if err != nil {
@@ -56,12 +50,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	metricsService := service.NewMetricsService()
 
 	// Initialize logger service
-	loggerService := service.NewLoggerService(
-		c.LogFilePath,
-		c.LokiEndpoint,
-		c.LogScanIntervalSec,
-		summaryModelClient, // TODO: change to classify model client
-	)
+	loggerService := service.NewLoggerService(c)
 
 	// Set metrics service in logger service
 	loggerService.SetMetricsService(metricsService)

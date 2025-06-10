@@ -36,12 +36,11 @@ type CompressionProcessor struct {
 
 // NewCompressionProcessor creates a new compression processor
 func NewCompressionProcessor(svcCtx *svc.ServiceContext, identity *types.Identity) (*CompressionProcessor, error) {
-	llmClient, err := client.NewLLMClient(svcCtx.Config.LLMEndpoint, svcCtx.Config.SummaryModel)
+	llmClient, err := client.NewLLMClient(svcCtx.Config.LLMEndpoint, svcCtx.Config.SummaryModel, svcCtx.ReqCtx.Headers)
 	if err != nil {
 		return nil, err
 	}
 
-	llmClient.SetHeaders(svcCtx.ReqCtx.Headers)
 	return &CompressionProcessor{
 		semanticClient:   client.NewSemanticClient(svcCtx.Config.SemanticApiEndpoint),
 		summaryProcessor: NewSummaryProcessor(svcCtx.Config.SystemPromptSplitter, llmClient),
