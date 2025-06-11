@@ -57,6 +57,12 @@ docker-build:
 docker-run:
 	docker run -p 8080:8080 chat-rag:latest
 
+# Build, tag and push Docker image with version
+docker-release:
+	docker build -t chat-rag:$(VERSION) --build-arg IMAGE_VERSION=$(VERSION) .
+	docker tag chat-rag:$(VERSION) zgsm/chat-rag:$(VERSION)
+	docker push zgsm/chat-rag:$(VERSION)
+
 # Create necessary directories
 init-dirs:
 	mkdir -p logs
@@ -81,5 +87,6 @@ help:
 	@echo "  api-gen     - Generate API code from .api file"
 	@echo "  setup       - Install tools and generate code"
 	@echo "  dev         - Run development server with auto-reload"
+	@echo "  docker-release - Build, tag and push Docker image (VERSION=v1.0.0)"
 	@echo "  bootstrap   - Full setup for new environment"
 	@echo "  help        - Show this help message"
