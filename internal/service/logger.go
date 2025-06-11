@@ -108,7 +108,7 @@ func (ls *LoggerService) SetMetricsService(metricsService *MetricsService) {
 
 // Start starts the logger service
 func (ls *LoggerService) Start() error {
-	fmt.Println("==> Starting logger")
+	fmt.Println("==> Start logger")
 	// Ensure permanent log directory exists
 	if err := os.MkdirAll(ls.logFilePath, 0755); err != nil {
 		return fmt.Errorf("failed to create permanent log directory: %w", err)
@@ -162,7 +162,6 @@ func (ls *LoggerService) LogAsync(logs *model.ChatLog, headers *http.Header) {
 
 // logWriter writes logs to file
 func (ls *LoggerService) logWriter() {
-	fmt.Println("==> start logWriter")
 	defer ls.wg.Done()
 
 	for {

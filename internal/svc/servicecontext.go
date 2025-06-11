@@ -1,6 +1,7 @@
 package svc
 
 import (
+	"log"
 	"net/http"
 
 	"github.com/zgsm-ai/chat-rag/internal/client"
@@ -42,8 +43,9 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	// Initialize token counter
 	tokenCounter, err := utils.NewTokenCounter()
 	if err != nil {
-		// Fallback to simple estimation if tiktoken fails
-		tokenCounter = nil
+		// Create default token counter that uses simple estimation
+		log.Printf("Failed to initialize token encoder, using fallback estimation: %v", err)
+		panic("Failed to start NewTokenCounter:" + err.Error())
 	}
 
 	// Initialize metrics service
