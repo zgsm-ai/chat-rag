@@ -10,7 +10,7 @@ data:
     Port: 8888
 
     # Model endpoints configuration
-    LLMEndpoint: "http://shenma.sangfor.com:9080/v1/chat/completions"
+    LLMEndpoint: "http://zgsm-backend-shenma-oneapi.shenma.svc.cluster.local:3000/v1/chat/completions"
 
     # Token processing configuration
     TokenThreshold: 32_000

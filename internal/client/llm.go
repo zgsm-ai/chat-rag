@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 
@@ -74,9 +75,9 @@ func (c *LLMClient) GenerateContent(ctx context.Context, systemPrompt string, us
 	return content, nil
 }
 
-// ChatLLMWithMessagesStreamRaw 使用HTTP客户端直接调用接口获取流式响应的原始数据
+// ChatLLMWithMessagesStreamRaw directly calls the API using HTTP client to get raw streaming response
 func (c *LLMClient) ChatLLMWithMessagesStreamRaw(ctx context.Context, messages []types.Message, callback func(string) error) error {
-	// 准备请求数据结构体
+	// Prepare request data structure
 	requestPayload := types.ChatLLMRequestStream{
 		Model:    c.modelName,
 		Messages: messages,
@@ -86,7 +87,7 @@ func (c *LLMClient) ChatLLMWithMessagesStreamRaw(ctx context.Context, messages [
 		},
 	}
 
-	// 创建请求
+	// Create request
 	jsonData, err := json.Marshal(requestPayload)
 	if err != nil {
 		return fmt.Errorf("failed to marshal request payload: %w", err)
@@ -98,17 +99,17 @@ func (c *LLMClient) ChatLLMWithMessagesStreamRaw(ctx context.Context, messages [
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// 设置请求头
+	// Set request headers
 	for key, values := range *c.headers {
 		for _, value := range values {
 			req.Header.Add(key, value)
 		}
 	}
 
-	// 确保Content-Length正确设置
+	// Ensure Content-Length is set correctly
 	req.ContentLength = int64(reader.Len())
 
-	// 发送请求
+	// Send request
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to make request: %w", err)
@@ -121,18 +122,15 @@ func (c *LLMClient) ChatLLMWithMessagesStreamRaw(ctx context.Context, messages [
 		return fmt.Errorf("API request failed with status %d, response body: %s", resp.StatusCode, bodyStr)
 	}
 
-	// 逐行读取流式响应
+	// Read streaming response line by line
 	scanner := bufio.NewScanner(resp.Body)
-	// 增加缓冲区大小以处理较长的响应行
+	// Increase buffer size to handle long response lines
 	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
 
 	for scanner.Scan() {
 		line := scanner.Text()
 
-		// 调试输出
-		// fmt.Printf("Received line: %s\n", line)
-
-		// 处理非空行，包括空的data行
+		// Process non-empty lines, including empty data lines
 		if line != "" || strings.HasPrefix(line, "data:") {
 			if err := callback(line); err != nil {
 				return fmt.Errorf("callback error: %w", err)
@@ -147,9 +145,9 @@ func (c *LLMClient) ChatLLMWithMessagesStreamRaw(ctx context.Context, messages [
 	return nil
 }
 
-// ChatLLMWithMessagesRaw 使用HTTP客户端直接调用接口获取非流式响应的原始数据
+// ChatLLMWithMessagesRaw directly calls the API using HTTP client to get raw non-streaming response
 func (c *LLMClient) ChatLLMWithMessagesRaw(ctx context.Context, messages []types.Message) (types.ChatCompletionResponse, error) {
-	// 准备请求数据结构体
+	// Prepare request data structure
 	requestPayload := types.ChatLLMRequest{
 		Model:    c.modelName,
 		Messages: messages,
@@ -157,45 +155,46 @@ func (c *LLMClient) ChatLLMWithMessagesRaw(ctx context.Context, messages []types
 
 	nil_resp := types.ChatCompletionResponse{}
 
-	// 记录请求数据用于调试
+	// Log request data for debugging
 	jsonData, err := json.Marshal(requestPayload)
 	if err != nil {
 		return nil_resp, fmt.Errorf("failed to marshal request payload: %w", err)
 	}
 
-	// 创建请求
+	// Create request
 	reader := strings.NewReader(string(jsonData))
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint, reader)
 	if err != nil {
 		return nil_resp, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// 设置请求头
+	// Set request headers
 	req.Header.Set("Content-Type", "application/json; charset=utf-8")
 	for key, values := range *c.headers {
 		for _, value := range values {
+			log.Printf("==> [ChatLLMWithMessagesRaw] header: %s: %s\n", key, value)
 			req.Header.Add(key, value)
 		}
 	}
 
-	// 确保Content-Length正确设置
+	// Ensure Content-Length is set correctly
 	req.ContentLength = int64(reader.Len())
 
-	// 发送请求
+	// Send request
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil_resp, fmt.Errorf("failed to make request: %w", err)
 	}
 	defer resp.Body.Close()
 
-	// 检查响应状态码
+	// Check response status code
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		bodyStr := string(body)
 		return nil_resp, fmt.Errorf("API request failed with status %d, response body: %s", resp.StatusCode, bodyStr)
 	}
 
-	// 读取响应体
+	// Read response body
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil_resp, fmt.Errorf("failed to read response body: %w", err)
@@ -204,7 +203,7 @@ func (c *LLMClient) ChatLLMWithMessagesRaw(ctx context.Context, messages []types
 	var result types.ChatCompletionResponse
 	if err := json.Unmarshal(body, &result); err != nil {
 		bodyStr := string(body)
-		return nil_resp, fmt.Errorf("failed to parse response (invalid JSON? body: %s): %w", bodyStr, err)
+		return nil_resp, fmt.Errorf("failed to parse response (invalid JSON? body: %s)\nerror: %w", bodyStr, err)
 	}
 
 	return result, nil
