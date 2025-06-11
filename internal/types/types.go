@@ -5,9 +5,12 @@ type ChatCompletionRequest struct {
 	Messages      []Message     `json:"messages"`
 	Stream        bool          `json:"stream,optional"`
 	Temperature   float64       `json:"temperature,optional"`
-	ClientId      string        `json:"client_id,optional"`
-	ProjectPath   string        `json:"project_path,optional"`
 	StreamOptions StreamOptions `json:"stream_options,optional"`
+	Extra         Extra         `json:"extra,optional"`
+}
+
+type Extra struct {
+	ChatMode ChatMode `json:"chat_mode,optional"`
 }
 
 type ChatCompletionResponse struct {

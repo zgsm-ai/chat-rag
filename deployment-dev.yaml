@@ -40,6 +40,9 @@ data:
     RecentUserMsgUsedNums: 10
     # used recent system prompt messages nums
     RecentSystemMsgUsedNums: 10
+
+    # oneapi Authorization
+    OneApiAuthorization: Bearer 92fb7a5bd85b49e5bf433bb42ede38c0
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim

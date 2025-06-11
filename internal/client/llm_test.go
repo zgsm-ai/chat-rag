@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"testing"
 
 	"github.com/zgsm-ai/chat-rag/internal/types"
@@ -33,8 +34,8 @@ func TestLLMClient_ChatLLMWithMessages_FormatCheck(t *testing.T) {
 func TestLLMClient_ChatLLMWithMessages(t *testing.T) {
 	// Create client for actual API testing
 	c := utils.MustLoadConfig("../../etc/chat-api.yaml")
-
-	client, err := NewLLMClient(c.LLMEndpoint, c.SummaryModel)
+	headers := make(http.Header)
+	client, err := NewLLMClient(c.LLMEndpoint, c.SummaryModel, &headers)
 	if err != nil {
 		t.Fatalf("Failed to create client: %v", err)
 	}

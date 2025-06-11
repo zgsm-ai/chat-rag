@@ -17,9 +17,6 @@ type Config struct {
 	TopK                   int
 	SemanticSocreThreshold float64
 
-	// Feature flags
-	EnableCompression bool
-
 	// Logging configuration
 	LogFilePath        string
 	LokiEndpoint       string
@@ -35,4 +32,7 @@ type Config struct {
 
 	// used recent user prompt messages nums
 	RecentUserMsgUsedNums int
+
+	// oneapi Authorization
+	OneApiAuthorization string
 }

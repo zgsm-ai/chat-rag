@@ -55,20 +55,8 @@ func (l *ChatCompletionLogic) processRequest(req *types.ChatCompletionRequest) (
 	// Initialize chat log
 	chatLog := l.initializeChatLog(startTime, req)
 
-	// Determine if compression is needed
-	userMessageTokens := chatLog.OriginalTokens.UserTokens
-	needsCompressUserMsg := l.svcCtx.Config.EnableCompression && userMessageTokens > l.svcCtx.Config.TokenThreshold
-	log.Printf("[processRequest] userMessageTokens: %v, needsCompression: %v\n\n", userMessageTokens, needsCompressUserMsg)
-
-	promptProcessor, err := strategy.NewCompressionProcessor(l.svcCtx, l.identity)
-	if err != nil {
-		err = fmt.Errorf("failed to new processor:\n %w", err)
-		chatLog.AddError(types.ErrExtra, err)
-		log.Printf("[processRequest] error: %v", err)
-		return chatLog, nil, err
-	}
-
-	processedPrompt, err := promptProcessor.ProcessPrompt(l.ctx, req, needsCompressUserMsg)
+	promptProcessor := strategy.NewPromptProcessor(l.ctx, l.svcCtx, l.getRequest().Extra.ChatMode, l.identity)
+	processedPrompt, err := promptProcessor.Process(req.Messages)
 	if err != nil {
 		err := fmt.Errorf("failed to process prompt:\n %w", err)
 		chatLog.AddError(types.ErrExtra, err)
@@ -77,7 +65,7 @@ func (l *ChatCompletionLogic) processRequest(req *types.ChatCompletionRequest) (
 	}
 
 	// Update chat log with processed prompt info
-	l.updateChatLogWithProcessedPrompt(chatLog, processedPrompt, needsCompressUserMsg)
+	l.updateChatLogWithProcessedPrompt(chatLog, processedPrompt)
 
 	return chatLog, processedPrompt, nil
 }
@@ -103,12 +91,10 @@ func (l *ChatCompletionLogic) initializeChatLog(startTime time.Time, req *types.
 }
 
 // updateChatLogWithProcessedPrompt updates the chat log with information from the processed prompt
-func (l *ChatCompletionLogic) updateChatLogWithProcessedPrompt(chatLog *model.ChatLog, processedPrompt *strategy.ProcessedPrompt, needsCompression bool) {
+func (l *ChatCompletionLogic) updateChatLogWithProcessedPrompt(chatLog *model.ChatLog, processedPrompt *strategy.ProcessedPrompt) {
 	// Record timing information from processed prompt
 	chatLog.SemanticLatency = processedPrompt.SemanticLatency
-	if needsCompression && processedPrompt.IsCompressed {
-		chatLog.SummaryLatency = processedPrompt.SummaryLatency
-	}
+	chatLog.SummaryLatency = processedPrompt.SummaryLatency
 
 	// Update log with processed prompt info
 	chatLog.IsUserPromptCompressed = processedPrompt.IsCompressed

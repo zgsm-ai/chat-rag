@@ -130,7 +130,7 @@ func TestDirectProcessor_ProcessPrompt(t *testing.T) {
 func TestCompressionProcessor_ProcessPrompt_NoUserMessage(t *testing.T) {
 	// This test focuses on the error case where no user message is found
 	// We'll use nil clients since we expect an early return with error
-	processor := NewCompressionProcessor(nil, nil, 5)
+	processor := NewRagProcessor(nil, nil, 5)
 
 	ctx := context.Background()
 	req := &types.ChatCompletionRequest{
@@ -161,7 +161,7 @@ func TestCompressionProcessor_ProcessPrompt_NoUserMessage(t *testing.T) {
 func TestCompressionProcessor_ProcessPrompt_FindsLatestUserMessage(t *testing.T) {
 	// This test verifies that the processor finds the latest user message
 	// We'll test the logic by checking that it doesn't return the "no user message" error
-	processor := NewCompressionProcessor(nil, nil, 5)
+	processor := NewRagProcessor(nil, nil, 5)
 
 	ctx := context.Background()
 	req := &types.ChatCompletionRequest{
@@ -268,7 +268,7 @@ func TestNewDirectProcessor(t *testing.T) {
 }
 
 func TestNewCompressionProcessor(t *testing.T) {
-	processor := NewCompressionProcessor(nil, nil, 5)
+	processor := NewRagProcessor(nil, nil, 5)
 	if processor == nil {
 		t.Error("NewCompressionProcessor returned nil")
 	}
@@ -390,7 +390,7 @@ func TestCompressionProcessor_ProcessPrompt_WithRealLLMClient(t *testing.T) {
 
 	// create semantic client (need real client to avoid nil pointer)
 	semanticClient := client.NewSemanticClient(c.SemanticApiEndpoint)
-	processor := NewCompressionProcessor(semanticClient, llmClient, 5)
+	processor := NewRagProcessor(semanticClient, llmClient, 5)
 
 	// Verify processor was created successfully with real LLM client
 	if processor == nil {
@@ -448,7 +448,7 @@ func TestCompressionProcessor_ProcessPrompt_WithRealClients(t *testing.T) {
 	semanticClient := client.NewSemanticClient(c.SemanticApiEndpoint)
 
 	// create compression processor with real clients
-	processor := NewCompressionProcessor(semanticClient, llmClient, c.TopK)
+	processor := NewRagProcessor(semanticClient, llmClient, c.TopK)
 
 	ctx := context.Background()
 	req := &types.ChatCompletionRequest{

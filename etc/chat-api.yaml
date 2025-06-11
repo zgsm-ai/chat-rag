@@ -13,9 +13,6 @@ SemanticApiEndpoint: "http://localhost:8002/codebase-indexer/api/v1/semantics"
 TopK: 5
 SemanticSocreThreshold: 0.5
 
-# Feature flags
-EnableCompression: true
-
 # Logging configuration
 LogFilePath: "logs/"
 LokiEndpoint: "http://localhost:3100/loki/api/v1/push"
@@ -31,3 +28,6 @@ SystemPromptSplitter: "====\n\nRULES"
 
 # used recent user prompt messages nums
 RecentUserMsgUsedNums: 10
+
+# oneapi Authorization
+OneApiAuthorization: Bearer 92fb7a5bd85b49e5bf433bb42ede38c0

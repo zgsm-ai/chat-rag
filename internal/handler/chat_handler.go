@@ -26,7 +26,7 @@ func ChatCompletionHandler(svcCtx *svc.ServiceContext) gin.HandlerFunc {
 			TaskID:      c.GetHeader("zgsm-task-id"),
 			ClientID:    c.GetHeader("zgsm-client-id"),
 			ProjectPath: c.GetHeader("zgsm-project-path"),
-			UserName:    utils.ExtractUserNameFromToken(c.GetHeader("authorization")),
+			UserName:    utils.ExtractUserNameFromToken(c.GetHeader("x-access-token")),
 		}
 
 		// Create RequestContext
@@ -38,6 +38,9 @@ func ChatCompletionHandler(svcCtx *svc.ServiceContext) gin.HandlerFunc {
 
 		svcCtx.SetRequestContext(reqCtx)
 		l := logic.NewChatCompletionLogic(c.Request.Context(), svcCtx, identity)
+
+		// TODO Set Authorization header for oneapi, it will be deleted if oneapi not used
+		c.Header("Authorization", svcCtx.Config.OneApiAuthorization)
 
 		if req.Stream {
 			// Set SSE response headers
