@@ -199,9 +199,12 @@ func (ls *LoggerService) writeLogToFile(filePath string, content string, mode in
 
 	// Convert to raw bytes to avoid any string escaping
 	contentBytes := []byte(content)
-	contentBytes = append(contentBytes, '\n') // Add newline as raw byte
+	// Ensure content ends with newline if not empty
+	if len(contentBytes) > 0 && contentBytes[len(contentBytes)-1] != '\n' {
+		contentBytes = append(contentBytes, '\n')
+	}
 
-	// Write content as raw bytes
+	// Write content as raw bytes (preserving any existing newlines)
 	if _, err := file.Write(contentBytes); err != nil {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
