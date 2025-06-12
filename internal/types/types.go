@@ -64,4 +64,5 @@ type Identity struct {
 	ClientID    string `json:"client_id"`
 	UserName    string `json:"user_name"`
 	ProjectPath string `json:"project_path"`
+	AuthToken   string `json:"auth_token"`
 }

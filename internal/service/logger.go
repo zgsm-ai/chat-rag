@@ -215,9 +215,10 @@ func (ls *LoggerService) logSync(logs *model.ChatLog) {
 	defer ls.mu.Unlock()
 
 	// Create timestamped filename
-	datePart := logs.Timestamp.Format("200601")
+	datePart := logs.Timestamp.Format("20060102")
 	timePart := logs.Timestamp.Format("150405")
-	filename := fmt.Sprintf("%s-%s.log", datePart, timePart)
+	username := ls.sanitizeFilename(logs.Identity.UserName, "unknown")
+	filename := fmt.Sprintf("%s-%s-%s.log", datePart, timePart, username)
 	filePath := filepath.Join(ls.tempLogFilePath, filename)
 
 	logJSON, err := logs.ToJSON()

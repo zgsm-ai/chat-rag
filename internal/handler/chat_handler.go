@@ -19,10 +19,11 @@ func ChatCompletionHandler(svcCtx *svc.ServiceContext) gin.HandlerFunc {
 			return
 		}
 
-		// TODO oneapi's key, it will be removed if not use oneapi
-		c.Request.Header.Set("Authorization", svcCtx.Config.OneApiAuthorization)
 		// Process headers with header_handler
 		identity := getIndentityFromHeaders(c)
+
+		// TODO oneapi's key, it will be removed if not use oneapi
+		c.Request.Header.Set("Authorization", svcCtx.Config.OneApiAuthorization)
 
 		// Create RequestContext
 		reqCtx := &svc.RequestContext{

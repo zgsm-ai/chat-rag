@@ -50,6 +50,7 @@ func (l *ChatCompletionLogic) getWriter() http.ResponseWriter {
 
 // processRequest handles common request processing logic
 func (l *ChatCompletionLogic) processRequest(req *types.ChatCompletionRequest) (*model.ChatLog, *strategy.ProcessedPrompt, error) {
+	log.Printf("[processRequest] start to process request, user: %s", l.identity.UserName)
 	startTime := time.Now()
 
 	// Initialize chat log
