@@ -1,12 +1,16 @@
 package utils
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"log"
+	"path"
+	"strconv"
 	"strings"
 
 	"github.com/pkoukk/tiktoken-go"
 	"github.com/zgsm-ai/chat-rag/internal/types"
+	"github.com/zgsm-ai/chat-rag/internal/utils/assets"
 )
 
 // TokenCounter provides token counting functionality
@@ -14,12 +18,49 @@ type TokenCounter struct {
 	encoder *tiktoken.Tiktoken
 }
 
-// NewTokenCounter creates a new token counter instance
-func NewTokenCounter() (*TokenCounter, error) {
-	// Use cl100k_base encoding (used by GPT-3.5 and GPT-4)
-	encoder, err := tiktoken.GetEncoding("cl100k_base")
+type OfflineLoader struct{}
+
+func (l *OfflineLoader) LoadTiktokenBpe(tiktokenBpeFile string) (map[string]int, error) {
+	baseFileName := path.Base(tiktokenBpeFile)
+	contents, err := assets.Assets.ReadFile(baseFileName)
 	if err != nil {
 		return nil, err
+	}
+
+	bpeRanks := make(map[string]int)
+	for _, line := range strings.Split(string(contents), "\n") {
+		if line == "" {
+			continue
+		}
+		parts := strings.Split(line, " ")
+		token, err := base64.StdEncoding.DecodeString(parts[0])
+		if err != nil {
+			return nil, err
+		}
+		rank, err := strconv.Atoi(parts[1])
+		if err != nil {
+			return nil, err
+		}
+		bpeRanks[string(token)] = rank
+	}
+	return bpeRanks, nil
+}
+
+func NewOfflineLoader() *OfflineLoader {
+	return &OfflineLoader{}
+}
+
+// NewTokenCounter creates a new token counter instance
+func NewTokenCounter() (*TokenCounter, error) {
+	// Set offline loader to use local encoding files
+	loader := NewOfflineLoader()
+	tiktoken.SetBpeLoader(loader)
+
+	encoder, err := tiktoken.GetEncoding("cl100k_base")
+	if err != nil {
+		log.Printf("Failed to initialize tiktoken encoder: %v", err)
+		// Return instance with nil encoder which will use fallback estimation
+		return &TokenCounter{encoder: nil}, nil
 	}
 
 	return &TokenCounter{
