@@ -8,7 +8,6 @@ import (
 	"github.com/zgsm-ai/chat-rag/internal/logic"
 	"github.com/zgsm-ai/chat-rag/internal/svc"
 	"github.com/zgsm-ai/chat-rag/internal/types"
-	"github.com/zgsm-ai/chat-rag/internal/utils"
 )
 
 // ChatCompletionHandler handles chat completion requests
@@ -20,14 +19,10 @@ func ChatCompletionHandler(svcCtx *svc.ServiceContext) gin.HandlerFunc {
 			return
 		}
 
-		// Get headers info
-		identity := &types.Identity{
-			RequestID:   c.GetHeader("x-request-id"),
-			TaskID:      c.GetHeader("zgsm-task-id"),
-			ClientID:    c.GetHeader("zgsm-client-id"),
-			ProjectPath: c.GetHeader("zgsm-project-path"),
-			UserName:    utils.ExtractUserNameFromToken(c.GetHeader("x-access-token")),
-		}
+		// TODO oneapi's key, it will be removed if not use oneapi
+		c.Request.Header.Set("Authorization", svcCtx.Config.OneApiAuthorization)
+		// Process headers with header_handler
+		identity := getIndentityFromHeaders(c)
 
 		// Create RequestContext
 		reqCtx := &svc.RequestContext{
@@ -39,18 +34,8 @@ func ChatCompletionHandler(svcCtx *svc.ServiceContext) gin.HandlerFunc {
 		svcCtx.SetRequestContext(reqCtx)
 		l := logic.NewChatCompletionLogic(c.Request.Context(), svcCtx, identity)
 
-		// TODO Set Authorization header for oneapi, it will be deleted if oneapi not used
-		c.Header("Authorization", svcCtx.Config.OneApiAuthorization)
-
 		if req.Stream {
-			// Set SSE response headers
-			c.Header("Content-Type", "text/event-stream; charset=utf-8")
-			c.Header("Cache-Control", "no-cache")
-			c.Header("Connection", "keep-alive")
-			c.Header("Transfer-Encoding", "chunked")
-			c.Header("Access-Control-Allow-Origin", "*")
-			c.Header("Access-Control-Allow-Headers", "Cache-Control")
-			c.Header("X-Accel-Buffering", "no")
+			setSSEResponseHeaders(c)
 
 			// Send response headers immediately
 			c.Status(http.StatusOK)
