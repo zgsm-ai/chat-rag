@@ -269,7 +269,12 @@ func (ls *LoggerService) processLogs() {
 
 	// Process each file one by one
 	for _, file := range files {
-		filePath := filepath.Join(ls.tempLogFilePath, file.Name())
+		// Skip files that don't end with .log or .json
+		name := file.Name()
+		if !strings.HasSuffix(name, ".log") && !strings.HasSuffix(name, ".json") {
+			continue
+		}
+		filePath := filepath.Join(ls.tempLogFilePath, name)
 		fileContent, err := os.ReadFile(filePath)
 		if err != nil {
 			fmt.Printf("Failed to read log file %s: %v\n", file.Name(), err)

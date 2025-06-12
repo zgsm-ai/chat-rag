@@ -6,11 +6,11 @@ type ChatCompletionRequest struct {
 	Stream        bool          `json:"stream,optional"`
 	Temperature   float64       `json:"temperature,optional"`
 	StreamOptions StreamOptions `json:"stream_options,optional"`
-	Extra         Extra         `json:"extra,optional"`
+	ExtraBody     ExtraBody     `json:"extra_body,optional"`
 }
 
-type Extra struct {
-	ChatMode ChatMode `json:"chat_mode,optional"`
+type ExtraBody struct {
+	PromptMode PromptMode `json:"prompt_mode,optional"`
 }
 
 type ChatCompletionResponse struct {

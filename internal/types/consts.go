@@ -25,13 +25,23 @@ const (
 	ErrExtra ErrorType = "ExtraError"
 )
 
-// ChatMode defines different types of chat
-type ChatMode string
+// PromptMode defines different types of chat
+type PromptMode string
 
 const (
-	// Direct chat without any extra operations
-	Direct ChatMode = "direct"
+	// Raw mode: No deep processing of user prompt, only necessary operations like compression
+	Raw PromptMode = "raw"
 
-	// Rag processing, including rag and prompt compression
-	Rag ChatMode = "rag"
+	// Balanced mode: Considering both cost and performance, choosing a compromise approach
+	// including rag and prompt compression
+	Balanced PromptMode = "balanced"
+
+	// Cost-first mode: Minimizing LLM calls and context size to save cost
+	Cost PromptMode = "cost"
+
+	// Performance-first mode: Maximizing output quality without considering cost
+	Performance PromptMode = "performance"
+
+	// Auto select mode: Default is balanced mode
+	Auto PromptMode = "auto"
 )

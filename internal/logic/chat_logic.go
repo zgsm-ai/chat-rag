@@ -55,7 +55,7 @@ func (l *ChatCompletionLogic) processRequest(req *types.ChatCompletionRequest) (
 	// Initialize chat log
 	chatLog := l.initializeChatLog(startTime, req)
 
-	promptProcessor := strategy.NewPromptProcessor(l.ctx, l.svcCtx, l.getRequest().Extra.ChatMode, l.identity)
+	promptProcessor := strategy.NewPromptProcessor(l.ctx, l.svcCtx, l.getRequest().ExtraBody.PromptMode, l.identity)
 	processedPrompt, err := promptProcessor.Process(req.Messages)
 	if err != nil {
 		err := fmt.Errorf("failed to process prompt:\n %w", err)

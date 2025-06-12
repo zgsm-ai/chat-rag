@@ -37,17 +37,24 @@ func (d *DirectProcessor) Process(messages []types.Message) (*ProcessedPrompt, e
 }
 
 // NewPromptProcessor creates a new processor based on chat type
-func NewPromptProcessor(ctx context.Context, svcCtx *svc.ServiceContext, chatMode types.ChatMode, identity *types.Identity) PromptProcessor {
-	switch chatMode {
-	case types.Direct:
+func NewPromptProcessor(
+	ctx context.Context,
+	svcCtx *svc.ServiceContext,
+	promptMode types.PromptMode,
+	identity *types.Identity,
+) PromptProcessor {
+	switch promptMode {
+	case types.Raw:
 		log.Printf("[NewPromptProcessor] Direct chat mode detected, using DirectProcessor")
 		return &DirectProcessor{}
 
+	case types.Cost, types.Performance, types.Balanced, types.Auto:
+		fallthrough
 	default:
-		log.Printf("[NewPromptProcessor] RAG processing mode activated for type: %s", chatMode)
+		log.Printf("[NewPromptProcessor] RAG processing mode activated for type: <%s>", promptMode)
 		ragProcessor, err := NewRagProcessor(ctx, svcCtx, identity)
 		if err != nil {
-			log.Printf("[NewPromptProcessor] Failed to initialize RAG processor, falling back to DirectProcessor. Error: %v", err)
+			log.Printf("[NewPromptProcessor] Failed new RAG processor, falling back to DirectProcessor. Error: %v", err)
 			return &DirectProcessor{}
 		}
 		return ragProcessor
