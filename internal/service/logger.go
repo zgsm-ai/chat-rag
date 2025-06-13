@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -199,17 +200,19 @@ func (ls *LoggerService) writeLogToFile(filePath string, content string, mode in
 
 	// Convert to raw bytes to avoid any string escaping
 	contentBytes := []byte(content)
-	// Ensure content ends with newline if not empty
-	if len(contentBytes) > 0 && contentBytes[len(contentBytes)-1] != '\n' {
-		contentBytes = append(contentBytes, '\n')
-	}
+	contentBytes = append(contentBytes, '\n') // Add newline as raw byte
 
-	// Write content as raw bytes (preserving any existing newlines)
+	// Write content as raw bytes
 	if _, err := file.Write(contentBytes); err != nil {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
 
 	return nil
+}
+
+// generateRandomNumber creates a 6-digit random number from 100000 to 999999
+func (ls *LoggerService) generateRandomNumber() int {
+	return rand.Intn(900000) + 100000
 }
 
 // logSync writes a log entry to temp file synchronously
@@ -221,7 +224,8 @@ func (ls *LoggerService) logSync(logs *model.ChatLog) {
 	datePart := logs.Timestamp.Format("20060102")
 	timePart := logs.Timestamp.Format("150405")
 	username := ls.sanitizeFilename(logs.Identity.UserName, "unknown")
-	filename := fmt.Sprintf("%s-%s-%s.log", datePart, timePart, username)
+	randNum := ls.generateRandomNumber()
+	filename := fmt.Sprintf("%s-%s-%s-%d.log", datePart, timePart, username, randNum)
 	filePath := filepath.Join(ls.tempLogFilePath, filename)
 
 	logJSON, err := logs.ToJSON()
@@ -426,7 +430,7 @@ func (ls *LoggerService) saveLogToPermanentStorage(chatLog *model.ChatLog) {
 	if requestId == "" {
 		requestId = "null"
 	}
-	filename := fmt.Sprintf("%s_%s.log", timestamp, requestId)
+	filename := fmt.Sprintf("%s_%s_%d.log", timestamp, requestId, ls.generateRandomNumber())
 
 	// Full file path
 	logFile := filepath.Join(dateDir, filename)
