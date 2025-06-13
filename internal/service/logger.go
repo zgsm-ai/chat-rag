@@ -74,7 +74,7 @@ func (ls *LoggerService) sanitizeFilename(name string, defaultName string) strin
 		invalidChars = append(invalidChars, string(rune(i)))
 	}
 	for _, c := range invalidChars {
-		name = strings.ReplaceAll(name, c, "_")
+		name = strings.ReplaceAll(name, c, "")
 	}
 
 	// Limit length to 255 bytes for Linux compatibility

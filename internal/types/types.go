@@ -65,4 +65,5 @@ type Identity struct {
 	UserName    string `json:"user_name"`
 	ProjectPath string `json:"project_path"`
 	AuthToken   string `json:"auth_token"`
+	LoginFrom   string `json:"login_from"`
 }

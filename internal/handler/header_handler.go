@@ -15,6 +15,7 @@ func getIndentityFromHeaders(c *gin.Context) *types.Identity {
 		ProjectPath: c.GetHeader("zgsm-project-path"),
 		AuthToken:   c.GetHeader("authorization"),
 		UserName:    utils.ExtractUserNameFromToken(c.GetHeader("authorization")),
+		LoginFrom:   utils.ExtractLoginFromToken(c.GetHeader("authorization")),
 	}
 }
 

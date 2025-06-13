@@ -39,7 +39,7 @@ func NewMetricsService() *MetricsService {
 				Name: "chat_rag_requests_total",
 				Help: "Total number of chat completion requests",
 			},
-			[]string{"client_id", "model", "category", "user"},
+			[]string{"client_id", "model", "category", "user", "login_from"},
 		),
 
 		originalTokensTotal: prometheus.NewCounterVec(
@@ -47,7 +47,7 @@ func NewMetricsService() *MetricsService {
 				Name: "chat_rag_original_tokens_total",
 				Help: "Total number of original tokens processed",
 			},
-			[]string{"client_id", "model", "token_scope", "user"},
+			[]string{"client_id", "model", "token_scope", "user", "login_from"},
 		),
 
 		compressedTokensTotal: prometheus.NewCounterVec(
@@ -55,7 +55,7 @@ func NewMetricsService() *MetricsService {
 				Name: "chat_rag_compressed_tokens_total",
 				Help: "Total number of compressed tokens processed",
 			},
-			[]string{"client_id", "model", "token_scope", "user"},
+			[]string{"client_id", "model", "token_scope", "user", "login_from"},
 		),
 
 		compressionRatio: prometheus.NewHistogramVec(
@@ -64,7 +64,7 @@ func NewMetricsService() *MetricsService {
 				Help:    "Distribution of compression ratios",
 				Buckets: []float64{0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0},
 			},
-			[]string{"client_id", "model", "user"},
+			[]string{"client_id", "model", "user", "login_from"},
 		),
 
 		semanticLatency: prometheus.NewHistogramVec(
@@ -73,7 +73,7 @@ func NewMetricsService() *MetricsService {
 				Help:    "Semantic processing latency in milliseconds",
 				Buckets: []float64{10, 50, 100, 200, 500, 1000, 2000, 5000},
 			},
-			[]string{"client_id", "model", "user"},
+			[]string{"client_id", "model", "user", "login_from"},
 		),
 
 		summaryLatency: prometheus.NewHistogramVec(
@@ -82,7 +82,7 @@ func NewMetricsService() *MetricsService {
 				Help:    "Summary processing latency in milliseconds",
 				Buckets: []float64{10, 50, 100, 200, 500, 1000, 2000, 5000},
 			},
-			[]string{"client_id", "model", "user"},
+			[]string{"client_id", "model", "user", "login_from"},
 		),
 
 		mainModelLatency: prometheus.NewHistogramVec(
@@ -91,7 +91,7 @@ func NewMetricsService() *MetricsService {
 				Help:    "Main model processing latency in milliseconds",
 				Buckets: []float64{100, 500, 1000, 2000, 5000, 10000, 20000},
 			},
-			[]string{"client_id", "model", "user"},
+			[]string{"client_id", "model", "user", "login_from"},
 		),
 
 		totalLatency: prometheus.NewHistogramVec(
@@ -100,7 +100,7 @@ func NewMetricsService() *MetricsService {
 				Help:    "Total processing latency in milliseconds",
 				Buckets: []float64{100, 500, 1000, 2000, 5000, 10000, 20000, 30000},
 			},
-			[]string{"client_id", "model", "user"},
+			[]string{"client_id", "model", "user", "login_from"},
 		),
 
 		userPromptCompressed: prometheus.NewCounterVec(
@@ -108,7 +108,7 @@ func NewMetricsService() *MetricsService {
 				Name: "chat_rag_user_prompt_compressed_total",
 				Help: "Total number of requests where user prompt was compressed",
 			},
-			[]string{"client_id", "model", "user"},
+			[]string{"client_id", "model", "user", "login_from"},
 		),
 
 		responseTokens: prometheus.NewCounterVec(
@@ -116,7 +116,7 @@ func NewMetricsService() *MetricsService {
 				Name: "chat_rag_response_tokens_total",
 				Help: "Total number of response tokens generated",
 			},
-			[]string{"client_id", "model", "user"},
+			[]string{"client_id", "model", "user", "login_from"},
 		),
 
 		errorsTotal: prometheus.NewCounterVec(
@@ -124,7 +124,7 @@ func NewMetricsService() *MetricsService {
 				Name: "chat_rag_errors_total",
 				Help: "Total number of errors encountered",
 			},
-			[]string{"client_id", "model", "error_type", "user"},
+			[]string{"client_id", "model", "error_type", "user", "login_from"},
 		),
 	}
 
@@ -214,9 +214,10 @@ func (ms *MetricsService) RecordChatLog(log *model.ChatLog) {
 // getBaseLabels creates the base labels map with common fields
 func (ms *MetricsService) getBaseLabels(log *model.ChatLog) prometheus.Labels {
 	return prometheus.Labels{
-		"client_id": log.Identity.ClientID,
-		"model":     log.Model,
-		"user":      log.Identity.UserName,
+		"client_id":  log.Identity.ClientID,
+		"model":      log.Model,
+		"user":       log.Identity.UserName,
+		"login_from": log.Identity.LoginFrom,
 	}
 }
 
