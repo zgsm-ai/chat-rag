@@ -42,7 +42,7 @@ data:
     RecentSystemMsgUsedNums: 10
 
     # oneapi Authorization
-    OneApiAuthorization: Bearer 92fb7a5bd85b49e5bf433bb42ede38c0
+    OneApiAuthorization: sk-tQ5599ZxVKePZtN69a3d1eC9748944DbA4CcBc5a60C2F085
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim

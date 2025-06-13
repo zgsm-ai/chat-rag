@@ -13,8 +13,8 @@ func getIndentityFromHeaders(c *gin.Context) *types.Identity {
 		TaskID:      c.GetHeader("zgsm-task-id"),
 		ClientID:    c.GetHeader("zgsm-client-id"),
 		ProjectPath: c.GetHeader("zgsm-project-path"),
-		AuthToken:   c.GetHeader("x-access-token"),
-		UserName:    utils.ExtractUserNameFromToken(c.GetHeader("x-access-token")),
+		AuthToken:   c.GetHeader("authorization"),
+		UserName:    utils.ExtractUserNameFromToken(c.GetHeader("authorization")),
 	}
 }
 

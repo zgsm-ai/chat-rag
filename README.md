@@ -211,8 +211,7 @@ make deps           # Update dependencies
 
 | Option               | Description                        | Default       |
 | -------------------- | ---------------------------------- | ------------- |
-| `TokenThreshold`     | Token count to trigger compression | 5000          |
-| `EnableCompression`  | Enable/disable compression feature | true          |
+| `TokenThreshold`     | Token count to trigger compression | 32000         |
 | `TopK`               | Number of semantic search results  | 5             |
 | `LogBatchSize`       | Batch size for Loki uploads        | 100           |
 | `LogScanIntervalSec` | Log processing interval            | 60            |
