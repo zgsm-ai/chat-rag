@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"strings"
 
@@ -57,7 +56,6 @@ func (c *LLMClient) GenerateContent(ctx context.Context, systemPrompt string, us
 
 	messages = append(messages, userMessages...)
 
-	// fmt.Printf("==> [GenerateContent] messages:\n %v\n\n", messages)
 	// Call ChatLLMWithMessagesRaw to get the raw response
 	result, err := c.ChatLLMWithMessagesRaw(ctx, messages)
 	if err != nil {
@@ -71,7 +69,6 @@ func (c *LLMClient) GenerateContent(ctx context.Context, systemPrompt string, us
 
 	// Extract content from the first choice's message
 	content := utils.GetContentAsString(result.Choices[0].Message.Content)
-	// fmt.Printf("==> [GenerateContent] content:\n %v \n\n", content)
 	return content, nil
 }
 
@@ -172,7 +169,6 @@ func (c *LLMClient) ChatLLMWithMessagesRaw(ctx context.Context, messages []types
 	req.Header.Set("Content-Type", "application/json; charset=utf-8")
 	for key, values := range *c.headers {
 		for _, value := range values {
-			log.Printf("==> [ChatLLMWithMessagesRaw] header: %s: %s\n", key, value)
 			req.Header.Add(key, value)
 		}
 	}

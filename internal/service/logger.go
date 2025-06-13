@@ -230,12 +230,12 @@ func (ls *LoggerService) logSync(logs *model.ChatLog) {
 
 	logJSON, err := logs.ToJSON()
 	if err != nil {
-		fmt.Printf("Failed to marshal log: %v\n", err)
+		log.Printf("Failed to marshal log: %v\n", err)
 		return
 	}
 
 	if err := ls.writeLogToFile(filePath, logJSON, os.O_CREATE|os.O_WRONLY); err != nil {
-		fmt.Printf("Failed to write temp log: %v\n", err)
+		log.Printf("Failed to write temp log: %v\n", err)
 	}
 }
 
@@ -267,7 +267,7 @@ func (ls *LoggerService) processLogs() {
 		if os.IsNotExist(err) {
 			return
 		}
-		fmt.Printf("Failed to list log files: %v\n", err)
+		log.Printf("Failed to list log files: %v\n", err)
 		return
 	}
 
@@ -285,13 +285,13 @@ func (ls *LoggerService) processLogs() {
 		filePath := filepath.Join(ls.tempLogFilePath, name)
 		fileContent, err := os.ReadFile(filePath)
 		if err != nil {
-			fmt.Printf("Failed to read log file %s: %v\n", file.Name(), err)
+			log.Printf("Failed to read log file %s: %v\n", file.Name(), err)
 			continue
 		}
 
 		chatLog, err := model.FromJSON(string(fileContent))
 		if err != nil {
-			fmt.Printf("Failed to parse log file %s: %v\n", file.Name(), err)
+			log.Printf("Failed to parse log file %s: %v\n", file.Name(), err)
 			continue
 		}
 
@@ -303,18 +303,18 @@ func (ls *LoggerService) processLogs() {
 			// Update temp log file with category info
 			logJSON, err := chatLog.ToJSON()
 			if err != nil {
-				fmt.Printf("Failed to marshal updated log: %v\n", err)
+				log.Printf("Failed to marshal updated log: %v\n", err)
 				continue
 			}
 			if err := ls.writeLogToFile(filePath, logJSON, os.O_WRONLY|os.O_TRUNC); err != nil {
-				fmt.Printf("Failed to update temp log file: %v\n", err)
+				log.Printf("Failed to update temp log file: %v\n", err)
 				continue
 			}
 		}
 
 		// Upload single log to Loki
 		if success := ls.uploadToLoki(chatLog); !success {
-			fmt.Printf("Loki upload failed for file %s, keeping log file\n", file.Name())
+			log.Printf("Loki upload failed for file %s, keeping log file\n", file.Name())
 			continue
 		}
 
@@ -346,7 +346,7 @@ func (ls *LoggerService) classifyLog(logs *model.ChatLog) string {
 
 	category, err := ls.llmClient.GenerateContent(ctx, systemClassificationPrompt, userMessages)
 	if err != nil {
-		fmt.Printf("Failed to classify log: %v\n", err)
+		log.Printf("Failed to classify log: %v\n", err)
 		return "unknown"
 	}
 
@@ -453,6 +453,6 @@ func (ls *LoggerService) deleteTempLogFile(filePath string) {
 	defer ls.mu.Unlock()
 
 	if err := os.Remove(filePath); err != nil {
-		fmt.Printf("Failed to remove temp log file %s: %v\n", filepath.Base(filePath), err)
+		log.Printf("Failed to remove temp log file %s: %v\n", filepath.Base(filePath), err)
 	}
 }
