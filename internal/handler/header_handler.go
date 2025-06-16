@@ -8,10 +8,16 @@ import (
 
 // getIndentityFromHeaders extracts request headers and creates Identity struct
 func getIndentityFromHeaders(c *gin.Context) *types.Identity {
+	clientIDE := c.GetHeader("zgsm-client-ide")
+	if clientIDE == "" {
+		clientIDE = "vscode"
+	}
+
 	return &types.Identity{
 		RequestID:   c.GetHeader("x-request-id"),
 		TaskID:      c.GetHeader("zgsm-task-id"),
 		ClientID:    c.GetHeader("zgsm-client-id"),
+		ClientIDE:   clientIDE,
 		ProjectPath: c.GetHeader("zgsm-project-path"),
 		AuthToken:   c.GetHeader("authorization"),
 		UserName:    utils.ExtractUserNameFromToken(c.GetHeader("authorization")),
