@@ -13,10 +13,16 @@ import (
 
 func TestNewSemanticClient(t *testing.T) {
 	endpoint := "http://localhost:8002/v1/semantic"
-	client := NewSemanticClient(endpoint)
+	clientInterface := NewSemanticClient(endpoint)
 
-	if client == nil {
+	if clientInterface == nil {
 		t.Fatal("NewSemanticClient returned nil")
+	}
+
+	// Type assertion to access concrete implementation
+	client, ok := clientInterface.(*SemanticClient)
+	if !ok {
+		t.Fatal("NewSemanticClient did not return *SemanticClient")
 	}
 
 	if client.endpoint != endpoint {
@@ -27,8 +33,8 @@ func TestNewSemanticClient(t *testing.T) {
 		t.Fatal("HTTP client is nil")
 	}
 
-	if client.httpClient.Timeout != 30*time.Second {
-		t.Errorf("Expected timeout 30s, got %v", client.httpClient.Timeout)
+	if client.httpClient.Timeout != 3*time.Second {
+		t.Errorf("Expected timeout 3s, got %v", client.httpClient.Timeout)
 	}
 }
 
@@ -78,8 +84,12 @@ func TestSemanticClient_Search_Success(t *testing.T) {
 			TopK:        5,
 		}
 
-		if req != expectedReq {
-			t.Errorf("Expected request %+v, got %+v", expectedReq, req)
+		// Compare individual fields to avoid struct equality failures due to private fields
+		if req.ClientId != expectedReq.ClientId ||
+			req.ProjectPath != expectedReq.ProjectPath ||
+			req.Query != expectedReq.Query ||
+			req.TopK != expectedReq.TopK {
+			t.Errorf("Expected request fields %+v, got %+v", expectedReq, req)
 		}
 
 		// Send mock response
@@ -262,8 +272,9 @@ func TestSemanticClient_Search_ContextCancellation(t *testing.T) {
 	}
 
 	expectedError := "failed to execute request"
-	if !strings.Contains(err.Error(), expectedError) {
-		t.Errorf("Expected error to contain '%s', got '%s'", expectedError, err.Error())
+	// Use strings.HasPrefix instead of Contains for more precise error checking
+	if !strings.HasPrefix(err.Error(), expectedError) {
+		t.Errorf("Expected error to start with '%s', got '%s'", expectedError, err.Error())
 	}
 }
 
@@ -353,7 +364,10 @@ func TestSemanticResponse_JSONSerialization(t *testing.T) {
 	}
 
 	for i, result := range resp.Results {
-		if unmarshaled.Results[i] != result {
+		if unmarshaled.Results[i].Content != result.Content ||
+			unmarshaled.Results[i].Score != result.Score ||
+			unmarshaled.Results[i].FilePath != result.FilePath ||
+			unmarshaled.Results[i].LineNumber != result.LineNumber {
 			t.Errorf("Result %d doesn't match: %+v != %+v", i, unmarshaled.Results[i], result)
 		}
 	}

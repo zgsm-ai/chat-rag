@@ -84,6 +84,10 @@ func GetOldUserMsgsWithNum(messages []types.Message, num int) []types.Message {
 		return messages
 	}
 
+	if num >= len(messages) {
+		return []types.Message{}
+	}
+
 	// Assume system message is at position 0
 	sysPos := 0
 	if len(messages) == 0 || messages[0].Role != types.RoleSystem {

@@ -17,7 +17,7 @@ import (
 // RagProcessor processes prompts with RAG compression
 type RagProcessor struct {
 	ctx              context.Context
-	semanticClient   *client.SemanticClient
+	semanticClient   client.SemanticInterface
 	summaryProcessor *SummaryProcessor
 	tokenCounter     *utils.TokenCounter
 	config           config.Config
@@ -63,7 +63,7 @@ func (p *RagProcessor) searchSemanticContext(ctx context.Context, query string) 
 	var contextParts []string
 	log.Printf("[buildSemanticContext] Semantic search results nums: %v", len(semanticResp.Results))
 	for _, result := range semanticResp.Results {
-		if result.Score < p.config.SemanticSocreThreshold {
+		if result.Score < p.config.SemanticScoreThreshold {
 			continue
 		}
 
@@ -102,14 +102,14 @@ func (p *RagProcessor) replaceSysMsgWithCompressed(messages []types.Message) []t
 // Process process the prompt with RAG compression
 func (p *RagProcessor) Process(messages []types.Message) (*ProcessedPrompt, error) {
 	var semanticLatency, summaryLatency int64
-	prcceedPrompt := &ProcessedPrompt{
+	proceedPrompt := &ProcessedPrompt{
 		Messages: messages,
 	}
 
 	// Get the latest user message
 	latestUserMessage, err := utils.GetLatestUserMsg(messages)
 	if err != nil {
-		return prcceedPrompt, fmt.Errorf("no user message found: %w", err)
+		return proceedPrompt, fmt.Errorf("no user message found: %w", err)
 	}
 
 	// Record start time for semantic search
@@ -117,12 +117,12 @@ func (p *RagProcessor) Process(messages []types.Message) (*ProcessedPrompt, erro
 	semanticContext, err := p.searchSemanticContext(p.ctx, latestUserMessage)
 	if err != nil {
 		log.Printf("Failed to search semantic: %v\n", err)
-		prcceedPrompt.SemanticErr = err
+		proceedPrompt.SemanticErr = err
 	}
 
 	semanticLatency = time.Since(semanticStart).Milliseconds()
-	prcceedPrompt.SemanticLatency = semanticLatency
-	prcceedPrompt.SemanticContext = semanticContext
+	proceedPrompt.SemanticLatency = semanticLatency
+	proceedPrompt.SemanticContext = semanticContext
 
 	// Replace system messages with compressed messages
 	replacedSystemMsgs := p.replaceSysMsgWithCompressed(messages)
@@ -133,8 +133,8 @@ func (p *RagProcessor) Process(messages []types.Message) (*ProcessedPrompt, erro
 
 	if !needsCompressUserMsg {
 		log.Printf("[process] No need to compress user message\n")
-		prcceedPrompt.Messages = replacedSystemMsgs
-		return prcceedPrompt, nil
+		proceedPrompt.Messages = replacedSystemMsgs
+		return proceedPrompt, nil
 	}
 
 	log.Printf("[process] start compress user prompt message\n")
@@ -148,9 +148,9 @@ func (p *RagProcessor) Process(messages []types.Message) (*ProcessedPrompt, erro
 	if err != nil {
 		log.Printf("[process] Failed to generate summary: %v\n", err)
 		// On error, proceed with original messages
-		prcceedPrompt.SummaryErr = err
-		prcceedPrompt.Messages = replacedSystemMsgs
-		return prcceedPrompt, nil
+		proceedPrompt.SummaryErr = err
+		proceedPrompt.Messages = replacedSystemMsgs
+		return proceedPrompt, nil
 	}
 
 	// Sumary successfuly, build final messages
@@ -158,10 +158,10 @@ func (p *RagProcessor) Process(messages []types.Message) (*ProcessedPrompt, erro
 	finalMessages := p.assmebleSummaryMessages(utils.GetSystemMsg(replacedSystemMsgs), summary, recentMessages)
 	summaryLatency = time.Since(summaryStart).Milliseconds()
 
-	prcceedPrompt.SummaryLatency = summaryLatency
-	prcceedPrompt.Messages = finalMessages
-	prcceedPrompt.IsCompressed = true
-	return prcceedPrompt, nil
+	proceedPrompt.SummaryLatency = summaryLatency
+	proceedPrompt.Messages = finalMessages
+	proceedPrompt.IsCompressed = true
+	return proceedPrompt, nil
 }
 
 // BuildUserSummaryMessages builds the final messages with user prompt summary

@@ -13,6 +13,18 @@ import (
 	"github.com/zgsm-ai/chat-rag/internal/utils"
 )
 
+// LLMInterface defines the interface for LLM clients
+type LLMInterface interface {
+	// GetModelName returns the name of the model
+	GetModelName() string
+	// GenerateContent directly generates non-streaming content with system prompts and user prompts
+	GenerateContent(ctx context.Context, systemPrompt string, userMessages []types.Message) (string, error)
+	// ChatLLMWithMessagesStreamRaw directly calls the API using HTTP client to get raw streaming response
+	ChatLLMWithMessagesStreamRaw(ctx context.Context, messages []types.Message, callback func(string) error) error
+	//ChatLLMWithMessagesRaw directly calls the API using HTTP client to get raw non-streaming response
+	ChatLLMWithMessagesRaw(ctx context.Context, messages []types.Message) (types.ChatCompletionResponse, error)
+}
+
 // LLMClient handles communication with language models
 type LLMClient struct {
 	modelName  string
@@ -22,7 +34,7 @@ type LLMClient struct {
 }
 
 // NewLLMClient creates a new LLM client instance
-func NewLLMClient(endpoint string, modelName string, headers *http.Header) (*LLMClient, error) {
+func NewLLMClient(endpoint string, modelName string, headers *http.Header) (LLMInterface, error) {
 	// Check for empty endpoint
 	if endpoint == "" || headers == nil {
 		return nil, fmt.Errorf("NewLLMClient llmEndpoint cannot be empty")

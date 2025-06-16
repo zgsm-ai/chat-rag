@@ -22,7 +22,7 @@ type ServiceContext struct {
 	Config config.Config
 
 	// Clients
-	SemanticClient *client.SemanticClient
+	SemanticClient client.SemanticInterface
 
 	// Services
 	LoggerService  *service.LoggerService

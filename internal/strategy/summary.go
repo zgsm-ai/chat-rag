@@ -122,11 +122,11 @@ func generateHash(content string) string {
 // SummaryProcessor handles conversation summarization
 type SummaryProcessor struct {
 	systemPromptSplitter string
-	llmClient            *client.LLMClient
+	llmClient            client.LLMInterface
 }
 
 // NewSummaryProcessor creates a new summary processor
-func NewSummaryProcessor(systemPromptSplitter string, llmClient *client.LLMClient) *SummaryProcessor {
+func NewSummaryProcessor(systemPromptSplitter string, llmClient client.LLMInterface) *SummaryProcessor {
 	return &SummaryProcessor{
 		systemPromptSplitter: systemPromptSplitter,
 		llmClient:            llmClient,

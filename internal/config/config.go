@@ -15,7 +15,7 @@ type Config struct {
 	// Semantic API configuration
 	SemanticApiEndpoint    string
 	TopK                   int
-	SemanticSocreThreshold float64
+	SemanticScoreThreshold float64
 
 	// Logging configuration
 	LogFilePath        string

@@ -51,7 +51,7 @@ type LoggerService struct {
 	metricsService  *MetricsService
 	llmEndpoint     string
 	classifyModel   string
-	llmClient       *client.LLMClient
+	llmClient       client.LLMInterface
 
 	logChan  chan *model.ChatLog
 	stopChan chan struct{}

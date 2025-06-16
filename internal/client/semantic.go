@@ -10,6 +10,12 @@ import (
 	"time"
 )
 
+// SemanticInterface defines the interface for semantic search client
+type SemanticInterface interface {
+	// Search performs semantic search and returns relevant context
+	Search(ctx context.Context, req SemanticRequest) (*SemanticResponse, error)
+}
+
 // SemanticRequest represents the request structure for semantic search
 type SemanticRequest struct {
 	ClientId    string `json:"clientId"`
@@ -38,7 +44,7 @@ type SemanticClient struct {
 }
 
 // NewSemanticClient creates a new semantic client instance
-func NewSemanticClient(endpoint string) *SemanticClient {
+func NewSemanticClient(endpoint string) SemanticInterface {
 	return &SemanticClient{
 		endpoint: endpoint,
 		httpClient: &http.Client{
