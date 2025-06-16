@@ -25,8 +25,8 @@ type ServiceContext struct {
 	SemanticClient client.SemanticInterface
 
 	// Services
-	LoggerService  *service.LoggerService
-	MetricsService *service.MetricsService
+	LoggerService  service.LoggerInterface
+	MetricsService service.MetricsInterface
 
 	// Utilities
 	TokenCounter *utils.TokenCounter

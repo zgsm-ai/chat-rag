@@ -5,6 +5,14 @@ import (
 	"github.com/zgsm-ai/chat-rag/internal/model"
 )
 
+// MetricsInterface defines the interface for metrics service
+type MetricsInterface interface {
+	// RecordChatLog records metrics from a ChatLog entry
+	RecordChatLog(log *model.ChatLog)
+	// GetRegistry returns the Prometheus registry
+	GetRegistry() *prometheus.Registry
+}
+
 // MetricsService handles Prometheus metrics collection
 type MetricsService struct {
 	// Request metrics
@@ -32,7 +40,7 @@ type MetricsService struct {
 }
 
 // NewMetricsService creates a new metrics service
-func NewMetricsService() *MetricsService {
+func NewMetricsService() MetricsInterface {
 	ms := &MetricsService{
 		requestsTotal: prometheus.NewCounterVec(
 			prometheus.CounterOpts{

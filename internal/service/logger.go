@@ -42,13 +42,25 @@ Do not include any extra text, just the exact matching category name.`
 // validCategories is a documentation string listing all accepted log categories
 const validCategoriesStr = "CodeGeneration,BugFixing,CodeExplanation,Documentation,OtherQuestions"
 
+// LoggerInterface defines the interface for the logger service
+type LoggerInterface interface {
+	// Start starts the logger service
+	Start() error
+	// Stop stops the logger service
+	Stop()
+	// LogAsync logs a chat completion asynchronously
+	LogAsync(logs *model.ChatLog, headers *http.Header)
+	// LogSync logs a chat completion synchronously
+	SetMetricsService(metricsService MetricsInterface)
+}
+
 // LoggerService handles logging operations
 type LoggerService struct {
 	logFilePath     string // Permanent storage log directory path
 	tempLogFilePath string // Temporary log file path
 	lokiEndpoint    string
 	scanInterval    time.Duration
-	metricsService  *MetricsService
+	metricsService  MetricsInterface
 	llmEndpoint     string
 	classifyModel   string
 	llmClient       client.LLMInterface
@@ -86,7 +98,7 @@ func (ls *LoggerService) sanitizeFilename(name string, defaultName string) strin
 }
 
 // NewLoggerService creates a new logger service
-func NewLoggerService(config config.Config) *LoggerService {
+func NewLoggerService(config config.Config) LoggerInterface {
 	// Create temp directory under logFilePath for temporary log files
 	tempLogDir := filepath.Join(config.LogFilePath, "temp")
 
@@ -103,7 +115,7 @@ func NewLoggerService(config config.Config) *LoggerService {
 }
 
 // SetMetricsService sets the metrics service for the logger
-func (ls *LoggerService) SetMetricsService(metricsService *MetricsService) {
+func (ls *LoggerService) SetMetricsService(metricsService MetricsInterface) {
 	ls.metricsService = metricsService
 }
 

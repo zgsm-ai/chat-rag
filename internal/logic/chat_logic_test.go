@@ -5,30 +5,51 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/golang/mock/gomock"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/zgsm-ai/chat-rag/internal/client"
 	"github.com/zgsm-ai/chat-rag/internal/config"
-	"github.com/zgsm-ai/chat-rag/internal/service"
+	"github.com/zgsm-ai/chat-rag/internal/service/mocks"
 	"github.com/zgsm-ai/chat-rag/internal/svc"
 	"github.com/zgsm-ai/chat-rag/internal/types"
 	"github.com/zgsm-ai/chat-rag/internal/utils"
 )
 
-// createTestContext 创建测试用的context
+// createTestContext creates a test context
 func createTestContext() context.Context {
 	return context.Background()
 }
 
-// createTestServiceContext 创建测试用的ServiceContext
-// tokenCounter参数可以是nil或*utils.TokenCounter类型
-func createTestServiceContext(cfg *config.Config, tokenCounter interface{}) *svc.ServiceContext {
+// createTestServiceContext creates a test ServiceContext
+// tokenCounter parameter can be nil or *utils.TokenCounter type
+func createTestServiceMock(t *testing.T) (*gomock.Controller, *mocks.MockLoggerInterface, *mocks.MockMetricsInterface) {
+	ctrl := gomock.NewController(t)
+	loggerMock := mocks.NewMockLoggerInterface(ctrl)
+	metricsMock := mocks.NewMockMetricsInterface(ctrl)
+
+	// Setup common mock expectations
+	loggerMock.EXPECT().LogAsync(gomock.Any(), gomock.Any()).AnyTimes()
+	loggerMock.EXPECT().SetMetricsService(gomock.Any()).AnyTimes()
+	metricsMock.EXPECT().GetRegistry().Return(prometheus.NewRegistry()).AnyTimes()
+	metricsMock.EXPECT().RecordChatLog(gomock.Any()).AnyTimes()
+
+	return ctrl, loggerMock, metricsMock
+}
+
+func createTestServiceContext(t *testing.T, cfg *config.Config, tokenCounter interface{}) *svc.ServiceContext {
+	ctrl, loggerMock, metricsMock := createTestServiceMock(t)
+	defer ctrl.Finish()
+
 	svcCtx := &svc.ServiceContext{
 		Config: config.Config{
 			LLMEndpoint: cfg.LLMEndpoint,
 		},
+		LoggerService:  loggerMock,
+		MetricsService: metricsMock,
 	}
 
-	// 如果有tokenCounter且类型正确，设置到ServiceContext
+	// If tokenCounter exists and type is correct, set it to ServiceContext
 	if tc, ok := tokenCounter.(*utils.TokenCounter); ok {
 		svcCtx.TokenCounter = tc
 	}
@@ -36,7 +57,7 @@ func createTestServiceContext(cfg *config.Config, tokenCounter interface{}) *svc
 	return svcCtx
 }
 
-// createTestRequest 创建测试用的ChatCompletionRequest
+// createTestRequest creates a test ChatCompletionRequest
 func createTestRequest(model string, messages []types.Message, stream bool) *types.ChatCompletionRequest {
 	return &types.ChatCompletionRequest{
 		Model:    model,
@@ -45,7 +66,7 @@ func createTestRequest(model string, messages []types.Message, stream bool) *typ
 	}
 }
 
-// createTestIdentity 创建测试用的Identity
+// createTestIdentity creates a test Identity
 func createTestIdentity() *types.Identity {
 	return &types.Identity{
 		ClientID:    "test-client",
@@ -53,7 +74,7 @@ func createTestIdentity() *types.Identity {
 	}
 }
 
-// createTestRequestContext 创建测试用的RequestContext
+// createTestRequestContext creates a test RequestContext
 func createTestRequestContext(req *types.ChatCompletionRequest, writer http.ResponseWriter) *svc.RequestContext {
 	headers := make(http.Header)
 	return &svc.RequestContext{
@@ -63,15 +84,21 @@ func createTestRequestContext(req *types.ChatCompletionRequest, writer http.Resp
 	}
 }
 
-// setupTestLogic 组合所有辅助函数创建完整的测试逻辑
+// setupTestLogic combines all helper functions to create complete test logic
 func setupTestLogic(t *testing.T, cfg *config.Config, tokenCounter interface{},
 	model string, messages []types.Message, writer http.ResponseWriter) (*ChatCompletionLogic, *svc.ServiceContext) {
 	ctx := createTestContext()
-	svcCtx := createTestServiceContext(cfg, tokenCounter)
+	svcCtx := createTestServiceContext(t, cfg, tokenCounter)
 	req := createTestRequest(model, messages, false)
 	reqCtx := createTestRequestContext(req, writer)
 	svcCtx.SetRequestContext(reqCtx)
 	identity := createTestIdentity()
+
+	// Set mock expectations
+	if logger, ok := svcCtx.LoggerService.(*mocks.MockLoggerInterface); ok {
+		logger.EXPECT().LogAsync(gomock.Any(), gomock.Any()).AnyTimes()
+	}
+
 	return NewChatCompletionLogic(ctx, svcCtx, identity), svcCtx
 }
 
@@ -85,18 +112,18 @@ func TestChatCompletionLogic_NewChatCompletionLogic(t *testing.T) {
 	assert.NotNil(t, logic)
 	assert.Equal(t, createTestContext(), logic.ctx)
 	assert.Equal(t, svcCtx, logic.svcCtx)
-	// 验证ReqCtx设置是否正确
+	// Verify ReqCtx is set correctly
 	assert.NotNil(t, svcCtx.ReqCtx)
 	assert.Equal(t, mockWriter, svcCtx.ReqCtx.Writer)
 }
 
-// TestLLMClientMock 测试LLMClient mock
+// TestLLMClientMock tests LLMClient mock
 func TestLLMClientMock(t *testing.T) {
 	mock := &client.LLMClient{}
 	assert.NotNil(t, mock)
 }
 
-// 测试空消息时的token计算
+// Tests token counting with empty messages
 func TestChatCompletionLogic_countTokens_Empty(t *testing.T) {
 	cfg := &config.Config{}
 	logic, _ := setupTestLogic(t, cfg, nil, "test-model", []types.Message{}, &mockResponseWriter{})
@@ -119,7 +146,7 @@ func TestChatCompletionLogic_countTokensInMessages_Fallback(t *testing.T) {
 	}
 
 	count := logic.countTokensInMessages(messages)
-	assert.Greater(t, count, 0) // 应该返回估算的token数
+	assert.Greater(t, count, 0) // Should return estimated token count
 }
 
 func TestChatCompletionLogic_countTokens_Fallback(t *testing.T) {
@@ -128,7 +155,7 @@ func TestChatCompletionLogic_countTokens_Fallback(t *testing.T) {
 
 	text := "Hello, world!"
 	count := logic.countTokens(text)
-	assert.Greater(t, count, 0) // 应该返回估算的token数
+	assert.Greater(t, count, 0) // Should return estimated token count
 }
 
 func TestChatCompletionLogic_ChatCompletion_ValidationErrors(t *testing.T) {
@@ -146,13 +173,7 @@ func TestChatCompletionLogic_ChatCompletion_ValidationErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			logic, svcCtx := setupTestLogic(t, tt.config, nil, "test-model", []types.Message{}, &mockResponseWriter{})
-			// 创建mock服务用于测试
-			loggerService := service.LoggerService{
-				// 使用实际的NewLoggerService函数初始化
-			}
-			svcCtx.LoggerService = &loggerService
-			svcCtx.MetricsService = &service.MetricsService{}
+			logic, _ := setupTestLogic(t, tt.config, nil, "test-model", []types.Message{}, &mockResponseWriter{})
 
 			resp, err := logic.ChatCompletion()
 			t.Log("==>", err)
@@ -163,7 +184,7 @@ func TestChatCompletionLogic_ChatCompletion_ValidationErrors(t *testing.T) {
 		})
 	}
 
-	// 测试有效配置
+	// Test valid configuration
 	t.Run("valid config", func(t *testing.T) {
 		cfg := &config.Config{
 			LLMEndpoint: "http://test-endpoint",
@@ -174,7 +195,7 @@ func TestChatCompletionLogic_ChatCompletion_ValidationErrors(t *testing.T) {
 	})
 }
 
-// 测试TokenCounter正确设置的场景
+// Tests TokenCounter setup correctly
 func TestChatCompletionLogic_WithTokenCounter(t *testing.T) {
 	mockWriter := &mockResponseWriter{}
 	cfg := &config.Config{LLMEndpoint: "http://localhost:8080"}
@@ -190,23 +211,30 @@ func TestChatCompletionLogic_WithTokenCounter(t *testing.T) {
 
 func TestChatCompletionLogic_ChatCompletion_BasicRequest(t *testing.T) {
 	cfg := utils.MustLoadConfig("../../etc/chat-api.yaml")
-	svcCtx := svc.NewServiceContext(cfg)
-	defer svcCtx.Stop()
 
-	logic, _ := setupTestLogic(t, &svcCtx.Config, svcCtx.TokenCounter,
+	// Initialize token counter
+	tokenCounter, err := utils.NewTokenCounter()
+	if err != nil {
+		tokenCounter = &utils.TokenCounter{} // Fallback to basic counter
+	}
+
+	ctrl, _, _ := createTestServiceMock(t)
+	defer ctrl.Finish()
+
+	logic, _ := setupTestLogic(t, &cfg, tokenCounter,
 		"gpt-3.5-turbo", []types.Message{
 			{Role: "user", Content: "Hello, how are you?"},
 		}, &mockResponseWriter{})
 
-	// 测试基本请求
+	// Test basic request
 	resp, err := logic.ChatCompletion()
 
-	// 验证响应
+	// Verify response
 	assert.Error(t, err)
 	assert.Nil(t, resp)
 }
 
-// mockResponseWriter 模拟 http.ResponseWriter 和 http.Flusher 用于测试
+// mockResponseWriter mocks http.ResponseWriter and http.Flusher for testing
 type mockResponseWriter struct {
 	data       []byte
 	headers    http.Header
@@ -230,46 +258,59 @@ func (m *mockResponseWriter) WriteHeader(statusCode int) {
 	m.statusCode = statusCode
 }
 
-// Flush 实现http.Flusher接口
+// Flush implements http.Flusher interface
 func (m *mockResponseWriter) Flush() {
 	m.flushed = true
 }
 
 func TestChatCompletionLogic_ChatCompletion_StreamingRequest(t *testing.T) {
-	// 加载配置
+	// Load config
 	cfg := utils.MustLoadConfig("../../etc/chat-api.yaml")
 
-	// 准备测试数据
+	// Initialize token counter
+	tokenCounter, _ := utils.NewTokenCounter()
+
+	// Setup mocks
+	ctrl, loggerMock, metricsMock := createTestServiceMock(t)
+	defer ctrl.Finish()
+
+	// Prepare test data
 	testModel := "gpt-3.5-turbo"
 	testMessages := []types.Message{
 		{Role: "user", Content: "Hello, how are you?"},
 	}
 	testWriter := &mockResponseWriter{}
 
-	// 创建服务上下文
-	svcCtx := svc.NewServiceContext(cfg)
+	// Create service context
+	svcCtx := &svc.ServiceContext{
+		Config:         cfg,
+		LoggerService:  loggerMock,
+		MetricsService: metricsMock,
+		TokenCounter:   tokenCounter,
+	}
 
-	// 设置请求上下文
-	svcCtx.SetRequestContext(createTestRequestContext(
+	// Set request context
+	reqCtx := createTestRequestContext(
 		createTestRequest(testModel, testMessages, true),
 		testWriter,
-	))
+	)
+	svcCtx.SetRequestContext(reqCtx)
 
-	// 创建逻辑实例
+	// Create logic instance
 	logic := NewChatCompletionLogic(
 		createTestContext(),
 		svcCtx,
 		createTestIdentity(),
 	)
 
-	// 执行测试
+	// Execute test
 	err := logic.ChatCompletionStream()
 
-	// 验证预期错误
+	// Verify expected error
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "401 Authorization Required", "Expected 401 unauthorized error")
 
-	// 验证是否尝试写入响应
+	// Verify response write attempt
 	assert.Greater(t, len(testWriter.data), 0, "Expected response attempt data")
 	assert.True(t, testWriter.flushed, "Expected response flush attempt")
 }

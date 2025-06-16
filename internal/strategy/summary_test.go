@@ -78,11 +78,11 @@ func TestProcessSystemMessageUncached(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockLLMClient := mocks.NewMockLLMClientInterface(ctrl)
-	processor := NewSummaryProcessor("###分割符###", mockLLMClient)
+	processor := NewSummaryProcessor("###delimiter###", mockLLMClient)
 
 	testMsg := types.Message{
 		Role:    "system",
-		Content: "Pre content###分割符###Content to compress",
+		Content: "Pre content###delimiter###Content to compress",
 	}
 
 	// Clear cache before test
@@ -91,12 +91,12 @@ func TestProcessSystemMessageUncached(t *testing.T) {
 	ctx := context.Background()
 	expectedMessage := types.Message{
 		Role:    "user",
-		Content: "Please compress the following content:\n###分割符###Content to compress",
+		Content: "Please compress the following content:\n###delimiter###Content to compress",
 	}
 
-	exactPrompt := SYSTEM_SUMMARY_PROMPT // 直接使用常量
+	exactPrompt := SYSTEM_SUMMARY_PROMPT // Use constant directly
 
-	// 添加WaitGroup等待异步调用完成
+	// Add WaitGroup to wait for async call complete
 	var wg sync.WaitGroup
 	wg.Add(1)
 
@@ -112,7 +112,7 @@ func TestProcessSystemMessageUncached(t *testing.T) {
 
 	result := processor.processSystemMessageWithCache(testMsg)
 
-	// 等待异步调用完成
+	// Wait for async call to complete
 	wg.Wait()
 
 	if !strings.HasPrefix(result.Content.(string), testMsg.Content.(string)) {
@@ -125,11 +125,11 @@ func TestProcessSystemMessageCached(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockLLMClient := mocks.NewMockLLMClientInterface(ctrl)
-	processor := NewSummaryProcessor("###分割符###", mockLLMClient)
+	processor := NewSummaryProcessor("###delimiter###", mockLLMClient)
 
 	testMsg := types.Message{
 		Role:    "system",
-		Content: "Pre content###分割符###Content to compress",
+		Content: "Pre content###delimiter###Content to compress",
 	}
 
 	// Pre-populate cache
