@@ -6,12 +6,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/zgsm-ai/chat-rag/internal/bootstrap"
 	"github.com/zgsm-ai/chat-rag/internal/client"
 	"github.com/zgsm-ai/chat-rag/internal/config"
-	"github.com/zgsm-ai/chat-rag/internal/svc"
+	"github.com/zgsm-ai/chat-rag/internal/logger"
+	"github.com/zgsm-ai/chat-rag/internal/tokenizer"
 	"github.com/zgsm-ai/chat-rag/internal/types"
 	"github.com/zgsm-ai/chat-rag/internal/utils"
-	"github.com/zgsm-ai/chat-rag/internal/utils/logger"
 	"go.uber.org/zap"
 )
 
@@ -20,13 +21,13 @@ type RagProcessor struct {
 	ctx              context.Context
 	semanticClient   client.SemanticInterface
 	summaryProcessor *SummaryProcessor
-	tokenCounter     *utils.TokenCounter
+	tokenCounter     *tokenizer.TokenCounter
 	config           config.Config
 	identity         *types.Identity
 }
 
 // NewRagProcessor creates a new compression processor
-func NewRagProcessor(ctx context.Context, svcCtx *svc.ServiceContext, identity *types.Identity) (*RagProcessor, error) {
+func NewRagProcessor(ctx context.Context, svcCtx *bootstrap.ServiceContext, identity *types.Identity) (*RagProcessor, error) {
 	llmClient, err := client.NewLLMClient(svcCtx.Config.LLMEndpoint, svcCtx.Config.SummaryModel, svcCtx.ReqCtx.Headers)
 	if err != nil {
 		return nil, err

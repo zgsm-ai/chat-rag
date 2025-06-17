@@ -3,9 +3,9 @@ package strategy
 import (
 	"context"
 
-	"github.com/zgsm-ai/chat-rag/internal/svc"
+	"github.com/zgsm-ai/chat-rag/internal/bootstrap"
+	"github.com/zgsm-ai/chat-rag/internal/logger"
 	"github.com/zgsm-ai/chat-rag/internal/types"
-	"github.com/zgsm-ai/chat-rag/internal/utils/logger"
 	"go.uber.org/zap"
 )
 
@@ -40,7 +40,7 @@ func (d *DirectProcessor) Process(messages []types.Message) (*ProcessedPrompt, e
 // NewPromptProcessor creates a new processor based on chat type
 func NewPromptProcessor(
 	ctx context.Context,
-	svcCtx *svc.ServiceContext,
+	svcCtx *bootstrap.ServiceContext,
 	promptMode types.PromptMode,
 	identity *types.Identity,
 ) PromptProcessor {

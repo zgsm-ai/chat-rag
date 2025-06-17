@@ -7,10 +7,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/zgsm-ai/chat-rag/internal/utils/logger"
 	"go.uber.org/zap"
 
 	"github.com/zgsm-ai/chat-rag/internal/client"
+	"github.com/zgsm-ai/chat-rag/internal/logger"
 	"github.com/zgsm-ai/chat-rag/internal/types"
 )
 

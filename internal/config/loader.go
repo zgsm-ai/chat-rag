@@ -1,15 +1,14 @@
-package utils
+package config
 
 import (
 	"fmt"
 
 	"github.com/spf13/viper"
-	"github.com/zgsm-ai/chat-rag/internal/config"
 )
 
 // LoadConfig loads configuration from the specified file path using viper
-func LoadConfig(configPath string) (config.Config, error) {
-	var c config.Config
+func LoadConfig(configPath string) (Config, error) {
+	var c Config
 
 	viper.SetConfigFile(configPath)
 	viper.SetConfigType("yaml")
@@ -25,7 +24,7 @@ func LoadConfig(configPath string) (config.Config, error) {
 }
 
 // MustLoadConfig loads configuration and panics if there's an error
-func MustLoadConfig(configPath string) config.Config {
+func MustLoadConfig(configPath string) Config {
 	c, err := LoadConfig(configPath)
 	if err != nil {
 		panic("Failed to load config: " + err.Error())

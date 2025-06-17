@@ -5,13 +5,13 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/zgsm-ai/chat-rag/internal/bootstrap"
 	"github.com/zgsm-ai/chat-rag/internal/logic"
-	"github.com/zgsm-ai/chat-rag/internal/svc"
 	"github.com/zgsm-ai/chat-rag/internal/types"
 )
 
 // ChatCompletionHandler handles chat completion requests
-func ChatCompletionHandler(svcCtx *svc.ServiceContext) gin.HandlerFunc {
+func ChatCompletionHandler(svcCtx *bootstrap.ServiceContext) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req types.ChatCompletionRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -26,7 +26,7 @@ func ChatCompletionHandler(svcCtx *svc.ServiceContext) gin.HandlerFunc {
 		c.Request.Header.Set("Authorization", svcCtx.Config.OneApiAuthorization)
 
 		// Create RequestContext
-		reqCtx := &svc.RequestContext{
+		reqCtx := &bootstrap.RequestContext{
 			Request: &req,
 			Writer:  c.Writer,
 			Headers: &c.Request.Header,

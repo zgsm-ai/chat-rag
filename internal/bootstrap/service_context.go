@@ -1,4 +1,4 @@
-package svc
+package bootstrap
 
 import (
 	"net/http"
@@ -6,8 +6,8 @@ import (
 	"github.com/zgsm-ai/chat-rag/internal/client"
 	"github.com/zgsm-ai/chat-rag/internal/config"
 	"github.com/zgsm-ai/chat-rag/internal/service"
+	"github.com/zgsm-ai/chat-rag/internal/tokenizer"
 	"github.com/zgsm-ai/chat-rag/internal/types"
-	"github.com/zgsm-ai/chat-rag/internal/utils"
 )
 
 type RequestContext struct {
@@ -28,7 +28,7 @@ type ServiceContext struct {
 	MetricsService service.MetricsInterface
 
 	// Utilities
-	TokenCounter *utils.TokenCounter
+	TokenCounter *tokenizer.TokenCounter
 
 	// Request context
 	ReqCtx *RequestContext
@@ -40,7 +40,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	semanticClient := client.NewSemanticClient(c.SemanticApiEndpoint)
 
 	// Initialize token counter
-	tokenCounter, err := utils.NewTokenCounter()
+	tokenCounter, err := tokenizer.NewTokenCounter()
 	if err != nil {
 		// Create default token counter that uses simple estimation
 		panic("Failed to start NewTokenCounter:" + err.Error())

@@ -4,9 +4,9 @@ import (
 	"net/url"
 
 	"github.com/gin-gonic/gin"
+	"github.com/zgsm-ai/chat-rag/internal/logger"
 	"github.com/zgsm-ai/chat-rag/internal/types"
 	"github.com/zgsm-ai/chat-rag/internal/utils"
-	"github.com/zgsm-ai/chat-rag/internal/utils/logger"
 	"go.uber.org/zap"
 )
 

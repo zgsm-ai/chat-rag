@@ -11,24 +11,25 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/zgsm-ai/chat-rag/internal/bootstrap"
 	"github.com/zgsm-ai/chat-rag/internal/client"
+	"github.com/zgsm-ai/chat-rag/internal/logger"
 	"github.com/zgsm-ai/chat-rag/internal/model"
 	"github.com/zgsm-ai/chat-rag/internal/strategy"
-	"github.com/zgsm-ai/chat-rag/internal/svc"
+	"github.com/zgsm-ai/chat-rag/internal/tokenizer"
 	"github.com/zgsm-ai/chat-rag/internal/types"
 	"github.com/zgsm-ai/chat-rag/internal/utils"
-	"github.com/zgsm-ai/chat-rag/internal/utils/logger"
 )
 
 type ChatCompletionLogic struct {
 	ctx      context.Context
-	svcCtx   *svc.ServiceContext
+	svcCtx   *bootstrap.ServiceContext
 	identity *types.Identity
 }
 
 func NewChatCompletionLogic(
 	ctx context.Context,
-	svcCtx *svc.ServiceContext,
+	svcCtx *bootstrap.ServiceContext,
 	identity *types.Identity,
 ) *ChatCompletionLogic {
 	return &ChatCompletionLogic{
@@ -293,14 +294,14 @@ func (l *ChatCompletionLogic) countTokensInMessages(messages []types.Message) in
 	for _, msg := range messages {
 		totalText += msg.Role + ": " + utils.GetContentAsString(msg.Content) + "\n"
 	}
-	return utils.EstimateTokens(totalText)
+	return tokenizer.EstimateTokens(totalText)
 }
 
 func (l *ChatCompletionLogic) countTokens(text string) int {
 	if l.svcCtx.TokenCounter != nil {
 		return l.svcCtx.TokenCounter.CountTokens(text)
 	}
-	return utils.EstimateTokens(text)
+	return tokenizer.EstimateTokens(text)
 }
 
 // sendSSEError sends an error message in SSE format

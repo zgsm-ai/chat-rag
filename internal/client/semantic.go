@@ -9,7 +9,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/zgsm-ai/chat-rag/internal/utils/logger"
+	"github.com/zgsm-ai/chat-rag/internal/logger"
 	"go.uber.org/zap"
 )
 

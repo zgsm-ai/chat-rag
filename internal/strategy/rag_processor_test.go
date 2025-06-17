@@ -11,22 +11,22 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/zgsm-ai/chat-rag/internal/bootstrap"
 	"github.com/zgsm-ai/chat-rag/internal/client"
 	"github.com/zgsm-ai/chat-rag/internal/client/mocks"
 	"github.com/zgsm-ai/chat-rag/internal/config"
-	"github.com/zgsm-ai/chat-rag/internal/svc"
+	"github.com/zgsm-ai/chat-rag/internal/tokenizer"
 	"github.com/zgsm-ai/chat-rag/internal/types"
-	"github.com/zgsm-ai/chat-rag/internal/utils"
 )
 
 func TestNewRagProcessor(t *testing.T) {
 
 	// Setup mock dependencies
 	ctx := context.Background()
-	tokenCounter, err := utils.NewTokenCounter()
+	tokenCounter, err := tokenizer.NewTokenCounter()
 	assert.Nil(t, err)
 
-	svcCtx := &svc.ServiceContext{
+	svcCtx := &bootstrap.ServiceContext{
 		Config: config.Config{
 			LLMEndpoint:            "http://llm.example.com",
 			SemanticApiEndpoint:    "http://semantic.example.com",
@@ -37,7 +37,7 @@ func TestNewRagProcessor(t *testing.T) {
 			TokenThreshold:         1000,
 		},
 		TokenCounter: tokenCounter,
-		ReqCtx: &svc.RequestContext{
+		ReqCtx: &bootstrap.RequestContext{
 			Headers: &http.Header{},
 		},
 	}
@@ -148,7 +148,7 @@ func TestReplaceSysMsgWithCompressed(t *testing.T) {
 }
 
 func TestTrimMessagesToTokenThreshold(t *testing.T) {
-	tokenCounter, err := utils.NewTokenCounter()
+	tokenCounter, err := tokenizer.NewTokenCounter()
 	assert.Nil(t, err)
 
 	processor := &RagProcessor{
@@ -182,7 +182,7 @@ func TestProcess(t *testing.T) {
 	mockLLM := mocks.NewMockLLMClientInterface(ctrl)
 	mockSemantic := mocks.NewMockSemanticInterface(ctrl)
 
-	tokenCounter, err := utils.NewTokenCounter()
+	tokenCounter, err := tokenizer.NewTokenCounter()
 	assert.Nil(t, err)
 
 	// Initialize identity for processor

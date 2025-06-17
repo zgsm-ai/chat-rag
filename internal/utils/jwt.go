@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/golang-jwt/jwt"
-	"github.com/zgsm-ai/chat-rag/internal/utils/logger"
+	"github.com/zgsm-ai/chat-rag/internal/logger"
 	"go.uber.org/zap"
 )
 

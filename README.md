@@ -146,9 +146,9 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 ### Compression Flow
 
 1. **Token Analysis**: Count tokens in incoming messages
-2. **Threshold Check**: If tokens > 5000, trigger compression
+2. **Threshold Check**: If tokens > threshold, trigger compression
 3. **Semantic Search**: Query codebase for relevant context using latest user message
-4. **Summarization**: Use DeepSeek v3 to compress context + history + query
+4. **Summarization**: Use LLM to compress context + history + query
 5. **Final Assembly**: Combine system prompt + summary + latest user message
 6. **LLM Generation**: Send to main model and return response
 
@@ -165,19 +165,24 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 chat-rag/
 ├── etc/                   # Configuration files
 │   └── chat-api.yaml     # Service configuration
-├── internal/              # Internal packages
+├── deploy/               # Deployment configurations
+├── internal/             # Internal packages
+│   ├── bootstrap/        # Service context (DI container)
 │   ├── client/           # External service clients
 │   │   ├── llm.go       # LangChain-Go LLM client
-│   │   └── semantic.go  # Semantic search client
+│   │   ├── semantic.go  # Semantic search client
 │   ├── config/          # Configuration structures
+│   │   ├── config.go
+│   │   └── loader.go
 │   ├── handler/         # HTTP handlers
-│   ├── logic/           # Business logic
-│   ├── model/           # Data models
-│   ├── service/         # Background services
-│   ├── strategy/        # Strategy pattern implementations
-│   ├── svc/            # Service context (DI container)
+│   ├── logic/          # Business logic
+│   ├── model/          # Data models
+│   ├── service/        # Background services
+│   ├── strategy/       # Strategy pattern implementations
+│   ├── tokenizer/      # Token counting utilities
 │   ├── types/          # Generated type definitions
-│   └── utils/          # Utility functions
+│   ├── utils/          # Utility functions
+│   └── logger/         # Logging utilities
 ├── logs/               # Log files (created at runtime)
 ├── Makefile           # Build and development commands
 ├── main.go           # Application entry point
@@ -200,6 +205,16 @@ make api-gen        # Regenerate API code
 make deps           # Update dependencies
 ```
 
+### Docker Image
+
+```bash
+# Docker build
+make docker-build
+
+# Build and push Docker image
+make docker-release VERSION=v1.0.0
+```
+
 ### Adding New Features
 
 1. **New API Endpoints**: Update `api/chat.api` and run `make api-gen`
@@ -209,13 +224,12 @@ make deps           # Update dependencies
 
 ## Configuration Options
 
-| Option               | Description                        | Default       |
-| -------------------- | ---------------------------------- | ------------- |
-| `TokenThreshold`     | Token count to trigger compression | 32000         |
-| `TopK`               | Number of semantic search results  | 5             |
-| `LogBatchSize`       | Batch size for Loki uploads        | 100           |
-| `LogScanIntervalSec` | Log processing interval            | 60            |
-| `SummaryModel`       | Model for summarization            | deepseek-chat |
+| Option               | Description                        | Default     |
+| -------------------- | ---------------------------------- | ----------- |
+| `TokenThreshold`     | Token count to trigger compression | 32000       |
+| `TopK`               | Number of semantic search results  | 5           |
+| `LogScanIntervalSec` | Log processing interval            | 10          |
+| `SummaryModel`       | Model for summarization            | deepseek-v3 |
 
 ## Monitoring and Observability
 
@@ -241,7 +255,6 @@ make deps           # Update dependencies
 ### Core Dependencies
 
 - **gin**: Web framework and microservice toolkit
-- **langchaingo**: LLM integration and chaining
 - **tiktoken-go**: Token counting (with fallback)
 - **uuid**: Request ID generation
 
@@ -251,20 +264,3 @@ make deps           # Update dependencies
 - **Summary LLM**: DeepSeek v3 for compression
 - **Semantic Search**: Codebase indexer API
 - **Loki**: Log aggregation and storage
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make changes following the existing patterns
-4. Add tests for new functionality
-5. Run `make fmt && make vet && make test`
-6. Submit a pull request
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Support
-
-For questions and support, please open an issue on GitHub.

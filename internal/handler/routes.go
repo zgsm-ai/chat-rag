@@ -2,10 +2,10 @@ package handler
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/zgsm-ai/chat-rag/internal/svc"
+	"github.com/zgsm-ai/chat-rag/internal/bootstrap"
 )
 
-func RegisterHandlers(router *gin.Engine, serverCtx *svc.ServiceContext) {
+func RegisterHandlers(router *gin.Engine, serverCtx *bootstrap.ServiceContext) {
 	router.POST("/v1/chat/completions", ChatCompletionHandler(serverCtx))
 	router.GET("/metrics", MetricsHandler(serverCtx))
 }

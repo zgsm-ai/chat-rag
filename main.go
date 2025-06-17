@@ -5,15 +5,14 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/zgsm-ai/chat-rag/internal/utils/logger"
+	"github.com/zgsm-ai/chat-rag/internal/bootstrap"
+	"github.com/zgsm-ai/chat-rag/internal/logger"
 	"go.uber.org/zap"
 
 	"github.com/zgsm-ai/chat-rag/internal/config"
 	"github.com/zgsm-ai/chat-rag/internal/handler"
-	"github.com/zgsm-ai/chat-rag/internal/svc"
 
 	"github.com/gin-gonic/gin"
-	"github.com/spf13/viper"
 )
 
 // main is the entry point of the chat-rag service
@@ -23,22 +22,13 @@ func main() {
 	flag.StringVar(&configFile, "f", "etc/chat-api.yaml", "the config file")
 	flag.Parse()
 
-	viper.SetConfigFile(configFile)
-	viper.SetConfigType("yaml")
-	if err := viper.ReadInConfig(); err != nil {
-		panic("Failed to read config file: " + err.Error())
-	}
-
-	var c config.Config
-	if err := viper.Unmarshal(&c); err != nil {
-		panic("Failed to unmarshal config: " + err.Error())
-	}
+	c := config.MustLoadConfig(configFile)
 
 	// Create gin engine
 	router := gin.Default()
 
 	// Initialize service context
-	ctx := svc.NewServiceContext(c)
+	ctx := bootstrap.NewServiceContext(c)
 
 	// Register routes
 	handler.RegisterHandlers(router, ctx)

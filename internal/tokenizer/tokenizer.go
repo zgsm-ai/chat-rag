@@ -1,4 +1,4 @@
-package utils
+package tokenizer
 
 import (
 	"encoding/base64"
@@ -8,9 +8,10 @@ import (
 	"strings"
 
 	"github.com/pkoukk/tiktoken-go"
+	"github.com/zgsm-ai/chat-rag/internal/logger"
+	"github.com/zgsm-ai/chat-rag/internal/tokenizer/assets"
 	"github.com/zgsm-ai/chat-rag/internal/types"
-	"github.com/zgsm-ai/chat-rag/internal/utils/assets"
-	"github.com/zgsm-ai/chat-rag/internal/utils/logger"
+	"github.com/zgsm-ai/chat-rag/internal/utils"
 	"go.uber.org/zap"
 )
 
@@ -92,7 +93,7 @@ func (tc *TokenCounter) CountMessagesTokens(messages []types.Message) int {
 		totalTokens += tc.CountTokens(message.Role)
 
 		// Count tokens for content
-		totalTokens += tc.CountTokens(GetContentAsString(message.Content))
+		totalTokens += tc.CountTokens(utils.GetContentAsString(message.Content))
 
 		// Add overhead tokens per message (approximately 3 tokens per message)
 		totalTokens += 3
@@ -110,7 +111,7 @@ func (tc *TokenCounter) CountOneMesaageTokens(message types.Message) int {
 	totalTokens += tc.CountTokens(message.Role)
 
 	// Count tokens for content
-	totalTokens += tc.CountTokens(GetContentAsString(message.Content))
+	totalTokens += tc.CountTokens(utils.GetContentAsString(message.Content))
 
 	// Add overhead tokens per message (approximately 3 tokens per message)
 	totalTokens += 3

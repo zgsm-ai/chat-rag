@@ -8,12 +8,12 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
+	"github.com/zgsm-ai/chat-rag/internal/bootstrap"
 	"github.com/zgsm-ai/chat-rag/internal/client"
 	"github.com/zgsm-ai/chat-rag/internal/config"
 	"github.com/zgsm-ai/chat-rag/internal/service/mocks"
-	"github.com/zgsm-ai/chat-rag/internal/svc"
+	"github.com/zgsm-ai/chat-rag/internal/tokenizer"
 	"github.com/zgsm-ai/chat-rag/internal/types"
-	"github.com/zgsm-ai/chat-rag/internal/utils"
 )
 
 // createTestContext creates a test context
@@ -37,11 +37,11 @@ func createTestServiceMock(t *testing.T) (*gomock.Controller, *mocks.MockLoggerI
 	return ctrl, loggerMock, metricsMock
 }
 
-func createTestServiceContext(t *testing.T, cfg *config.Config, tokenCounter interface{}) *svc.ServiceContext {
+func createTestServiceContext(t *testing.T, cfg *config.Config, tokenCounter interface{}) *bootstrap.ServiceContext {
 	ctrl, loggerMock, metricsMock := createTestServiceMock(t)
 	defer ctrl.Finish()
 
-	svcCtx := &svc.ServiceContext{
+	svcCtx := &bootstrap.ServiceContext{
 		Config: config.Config{
 			LLMEndpoint: cfg.LLMEndpoint,
 		},
@@ -50,7 +50,7 @@ func createTestServiceContext(t *testing.T, cfg *config.Config, tokenCounter int
 	}
 
 	// If tokenCounter exists and type is correct, set it to ServiceContext
-	if tc, ok := tokenCounter.(*utils.TokenCounter); ok {
+	if tc, ok := tokenCounter.(*tokenizer.TokenCounter); ok {
 		svcCtx.TokenCounter = tc
 	}
 
@@ -75,9 +75,9 @@ func createTestIdentity() *types.Identity {
 }
 
 // createTestRequestContext creates a test RequestContext
-func createTestRequestContext(req *types.ChatCompletionRequest, writer http.ResponseWriter) *svc.RequestContext {
+func createTestRequestContext(req *types.ChatCompletionRequest, writer http.ResponseWriter) *bootstrap.RequestContext {
 	headers := make(http.Header)
-	return &svc.RequestContext{
+	return &bootstrap.RequestContext{
 		Request: req,
 		Writer:  writer,
 		Headers: &headers,
@@ -86,7 +86,7 @@ func createTestRequestContext(req *types.ChatCompletionRequest, writer http.Resp
 
 // setupTestLogic combines all helper functions to create complete test logic
 func setupTestLogic(t *testing.T, cfg *config.Config, tokenCounter interface{},
-	model string, messages []types.Message, writer http.ResponseWriter) (*ChatCompletionLogic, *svc.ServiceContext) {
+	model string, messages []types.Message, writer http.ResponseWriter) (*ChatCompletionLogic, *bootstrap.ServiceContext) {
 	ctx := createTestContext()
 	svcCtx := createTestServiceContext(t, cfg, tokenCounter)
 	req := createTestRequest(model, messages, false)
@@ -199,7 +199,7 @@ func TestChatCompletionLogic_ChatCompletion_ValidationErrors(t *testing.T) {
 func TestChatCompletionLogic_WithTokenCounter(t *testing.T) {
 	mockWriter := &mockResponseWriter{}
 	cfg := &config.Config{LLMEndpoint: "http://localhost:8080"}
-	tokenCounter := &utils.TokenCounter{}
+	tokenCounter := &tokenizer.TokenCounter{}
 
 	logic, svcCtx := setupTestLogic(t, cfg, tokenCounter, "test-model",
 		[]types.Message{{Role: "user", Content: "Hello"}}, mockWriter)
@@ -210,12 +210,12 @@ func TestChatCompletionLogic_WithTokenCounter(t *testing.T) {
 }
 
 func TestChatCompletionLogic_ChatCompletion_BasicRequest(t *testing.T) {
-	cfg := utils.MustLoadConfig("../../etc/chat-api.yaml")
+	cfg := config.MustLoadConfig("../../etc/chat-api.yaml")
 
 	// Initialize token counter
-	tokenCounter, err := utils.NewTokenCounter()
+	tokenCounter, err := tokenizer.NewTokenCounter()
 	if err != nil {
-		tokenCounter = &utils.TokenCounter{} // Fallback to basic counter
+		tokenCounter = &tokenizer.TokenCounter{} // Fallback to basic counter
 	}
 
 	ctrl, _, _ := createTestServiceMock(t)
@@ -265,10 +265,10 @@ func (m *mockResponseWriter) Flush() {
 
 func TestChatCompletionLogic_ChatCompletion_StreamingRequest(t *testing.T) {
 	// Load config
-	cfg := utils.MustLoadConfig("../../etc/chat-api.yaml")
+	cfg := config.MustLoadConfig("../../etc/chat-api.yaml")
 
 	// Initialize token counter
-	tokenCounter, _ := utils.NewTokenCounter()
+	tokenCounter, _ := tokenizer.NewTokenCounter()
 
 	// Setup mocks
 	ctrl, loggerMock, metricsMock := createTestServiceMock(t)
@@ -282,7 +282,7 @@ func TestChatCompletionLogic_ChatCompletion_StreamingRequest(t *testing.T) {
 	testWriter := &mockResponseWriter{}
 
 	// Create service context
-	svcCtx := &svc.ServiceContext{
+	svcCtx := &bootstrap.ServiceContext{
 		Config:         cfg,
 		LoggerService:  loggerMock,
 		MetricsService: metricsMock,
