@@ -23,25 +23,34 @@ import (
 	"go.uber.org/zap"
 )
 
-const systemClassificationPrompt = `Classify the LAST USER QUESTION in this conversation into one of these exact categories (respond ONLY with one of these exact names):
-- CodeGeneration: Creating new code or projects
-- BugFixing: Debugging or fixing issues
-- CodeExplanation: Asking questions about code or concepts
-- Documentation: Querying documentation or explanations or writing documentation
-- OtherQuestions: Asking questions about anything else`
+const systemClassificationPrompt = `Classify the LAST USER QUESTION in this conversation into ONE of the following EXACT categories based on the user's intention (respond ONLY with the exact category name, no extra text):
+
+- CodeWriting: Writing or generating code to implement functionality
+- BugFixing: Fixing errors, bugs, or unexpected behavior in existing code
+- CodeUnderstanding: Understanding how code works or asking about programming concepts
+- CodeRefactoring: Improving code readability, structure, or maintainability without changing its functionality
+- DesignDiscussion: Discussing software design, architecture, or best practices
+- DocumentationHelp: Asking about writing or understanding documentation, comments, or code explanations
+- EnvironmentHelp: Setting up or troubleshooting the development environment, dependencies, or tools
+- ToolUsage: Questions about using development tools, IDEs, debuggers, or plugins
+- GeneralQuestion: Any question unrelated to code or development tasks`
 
 const userClassificationPrompt = `
 Respond ONLY with one of these exact category names:
-- "CodeGeneration"
+- "CodeWriting"
 - "BugFixing"
-- "CodeExplanation"
-- "Documentation"
-- "OtherQuestions"
+- "CodeUnderstanding"
+- "CodeRefactoring"
+- "DesignDiscussion"
+- "DocumentationHelp"
+- "EnvironmentHelp"
+- "ToolUsage"
+- "GeneralQuestion"
 
 Do not include any extra text, just the exact matching category name.`
 
 // validCategories is a documentation string listing all accepted log categories
-const validCategoriesStr = "CodeGeneration,BugFixing,CodeExplanation,Documentation,OtherQuestions"
+const validCategoriesStr = "CodeWriting,BugFixing,CodeUnderstanding,CodeRefactoring,DesignDiscussion,DocumentationHelp,EnvironmentHelp,ToolUsage,GeneralQuestion"
 
 // LogRecordInterface defines the interface for the logger service
 type LogRecordInterface interface {
