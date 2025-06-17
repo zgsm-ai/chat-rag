@@ -46,10 +46,11 @@ func NewRagProcessor(ctx context.Context, svcCtx *svc.ServiceContext, identity *
 func (p *RagProcessor) searchSemanticContext(ctx context.Context, query string) (string, error) {
 	// Prepare semantic request
 	semanticReq := client.SemanticRequest{
-		ClientId:    p.identity.ClientID,
-		ProjectPath: p.identity.ProjectPath,
-		Query:       query,
-		TopK:        p.config.TopK,
+		ClientId:      p.identity.ClientID,
+		ProjectPath:   p.identity.ProjectPath,
+		Query:         query,
+		TopK:          p.config.TopK,
+		Authorization: p.identity.AuthToken,
 	}
 
 	// Execute search
