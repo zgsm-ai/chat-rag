@@ -22,7 +22,7 @@ type SemanticInterface interface {
 // SemanticRequest represents the request structure for semantic search
 type SemanticRequest struct {
 	ClientId      string `json:"clientId"`
-	ProjectPath   string `json:"projectPath"`
+	CodebasePath  string `json:"codebasePath"`
 	Query         string `json:"query"`
 	TopK          int    `json:"topK"`
 	Authorization string `json:"authorization"`
@@ -59,14 +59,6 @@ func NewSemanticClient(endpoint string) SemanticInterface {
 
 // Search performs semantic search and returns relevant context
 func (c *SemanticClient) Search(ctx context.Context, req SemanticRequest) (*SemanticResponse, error) {
-	logger.Info("Semantic search request",
-		zap.String("ClientId", req.ClientId),
-		zap.String("ProjectPath", req.ProjectPath),
-		zap.String("Authorization", req.Authorization),
-		zap.String("Query", req.Query),
-		zap.Int("TopK", req.TopK),
-	)
-
 	// Create URL with query parameters
 	u, err := url.Parse(c.endpoint)
 	if err != nil {
@@ -76,11 +68,14 @@ func (c *SemanticClient) Search(ctx context.Context, req SemanticRequest) (*Sema
 	// Add request fields as query parameters
 	q := u.Query()
 	q.Add("clientId", req.ClientId)
-	q.Add("projectPath", req.ProjectPath)
+	q.Add("codebasePath", req.CodebasePath)
 	q.Add("query", req.Query)
 	q.Add("topK", fmt.Sprintf("%d", req.TopK))
 	u.RawQuery = q.Encode()
 
+	logger.Info("Semantic search url",
+		zap.String("url", u.String()),
+	)
 	// Create HTTP request
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {

@@ -72,10 +72,10 @@ func TestSearchSemanticContext(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		query := "test query"
 		expectedReq := client.SemanticRequest{
-			ClientId:    processor.identity.ClientID,
-			ProjectPath: processor.identity.ProjectPath,
-			Query:       query,
-			TopK:        processor.config.TopK,
+			ClientId:     processor.identity.ClientID,
+			CodebasePath: processor.identity.ProjectPath,
+			Query:        query,
+			TopK:         processor.config.TopK,
 		}
 		mockSemantic.EXPECT().
 			Search(gomock.Any(), expectedReq).
@@ -220,10 +220,10 @@ func TestProcess(t *testing.T) {
 
 		// Mock semantic search
 		expectedReq := client.SemanticRequest{
-			ClientId:    processor.identity.ClientID,
-			ProjectPath: processor.identity.ProjectPath,
-			Query:       "user message 2",
-			TopK:        processor.config.TopK,
+			ClientId:     processor.identity.ClientID,
+			CodebasePath: processor.identity.ProjectPath,
+			Query:        "user message 2",
+			TopK:         processor.config.TopK,
 		}
 		mockSemantic.EXPECT().
 			Search(gomock.Any(), expectedReq).

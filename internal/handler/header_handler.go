@@ -24,6 +24,7 @@ func getIndentityFromHeaders(c *gin.Context) *types.Identity {
 			zap.String("projectPath", projectPath),
 			zap.Error(err),
 		)
+	} else {
 		projectPath = decodedPath
 	}
 

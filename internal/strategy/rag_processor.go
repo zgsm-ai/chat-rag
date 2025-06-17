@@ -47,7 +47,7 @@ func (p *RagProcessor) searchSemanticContext(ctx context.Context, query string) 
 	// Prepare semantic request
 	semanticReq := client.SemanticRequest{
 		ClientId:      p.identity.ClientID,
-		ProjectPath:   p.identity.ProjectPath,
+		CodebasePath:  p.identity.ProjectPath,
 		Query:         query,
 		TopK:          p.config.TopK,
 		Authorization: p.identity.AuthToken,

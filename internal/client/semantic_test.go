@@ -78,15 +78,15 @@ func TestSemanticClient_Search_Success(t *testing.T) {
 		}
 
 		expectedReq := SemanticRequest{
-			ClientId:    "test-client",
-			ProjectPath: "/test/project",
-			Query:       "test query",
-			TopK:        5,
+			ClientId:     "test-client",
+			CodebasePath: "/test/project",
+			Query:        "test query",
+			TopK:         5,
 		}
 
 		// Compare individual fields to avoid struct equality failures due to private fields
 		if req.ClientId != expectedReq.ClientId ||
-			req.ProjectPath != expectedReq.ProjectPath ||
+			req.CodebasePath != expectedReq.CodebasePath ||
 			req.Query != expectedReq.Query ||
 			req.TopK != expectedReq.TopK {
 			t.Errorf("Expected request fields %+v, got %+v", expectedReq, req)
@@ -104,10 +104,10 @@ func TestSemanticClient_Search_Success(t *testing.T) {
 
 	// Test request
 	req := SemanticRequest{
-		ClientId:    "test-client",
-		ProjectPath: "/test/project",
-		Query:       "test query",
-		TopK:        5,
+		ClientId:     "test-client",
+		CodebasePath: "/test/project",
+		Query:        "test query",
+		TopK:         5,
 	}
 
 	ctx := context.Background()
@@ -160,10 +160,10 @@ func TestSemanticClient_Search_EmptyResults(t *testing.T) {
 	client := NewSemanticClient(server.URL)
 
 	req := SemanticRequest{
-		ClientId:    "test-client",
-		ProjectPath: "/test/project",
-		Query:       "no results query",
-		TopK:        5,
+		ClientId:     "test-client",
+		CodebasePath: "/test/project",
+		Query:        "no results query",
+		TopK:         5,
 	}
 
 	ctx := context.Background()
@@ -192,10 +192,10 @@ func TestSemanticClient_Search_HTTPError(t *testing.T) {
 	client := NewSemanticClient(server.URL)
 
 	req := SemanticRequest{
-		ClientId:    "test-client",
-		ProjectPath: "/test/project",
-		Query:       "test query",
-		TopK:        5,
+		ClientId:     "test-client",
+		CodebasePath: "/test/project",
+		Query:        "test query",
+		TopK:         5,
 	}
 
 	ctx := context.Background()
@@ -223,10 +223,10 @@ func TestSemanticClient_Search_InvalidJSON(t *testing.T) {
 	client := NewSemanticClient(server.URL)
 
 	req := SemanticRequest{
-		ClientId:    "test-client",
-		ProjectPath: "/test/project",
-		Query:       "test query",
-		TopK:        5,
+		ClientId:     "test-client",
+		CodebasePath: "/test/project",
+		Query:        "test query",
+		TopK:         5,
 	}
 
 	ctx := context.Background()
@@ -255,10 +255,10 @@ func TestSemanticClient_Search_ContextCancellation(t *testing.T) {
 	client := NewSemanticClient(server.URL)
 
 	req := SemanticRequest{
-		ClientId:    "test-client",
-		ProjectPath: "/test/project",
-		Query:       "test query",
-		TopK:        5,
+		ClientId:     "test-client",
+		CodebasePath: "/test/project",
+		Query:        "test query",
+		TopK:         5,
 	}
 
 	// Create context with short timeout
@@ -283,10 +283,10 @@ func TestSemanticClient_Search_InvalidURL(t *testing.T) {
 	client := NewSemanticClient("invalid-url")
 
 	req := SemanticRequest{
-		ClientId:    "test-client",
-		ProjectPath: "/test/project",
-		Query:       "test query",
-		TopK:        5,
+		ClientId:     "test-client",
+		CodebasePath: "/test/project",
+		Query:        "test query",
+		TopK:         5,
 	}
 
 	ctx := context.Background()
@@ -304,10 +304,10 @@ func TestSemanticClient_Search_InvalidURL(t *testing.T) {
 
 func TestSemanticRequest_JSONSerialization(t *testing.T) {
 	req := SemanticRequest{
-		ClientId:    "test-client-123",
-		ProjectPath: "/home/user/project",
-		Query:       "search for functions",
-		TopK:        10,
+		ClientId:     "test-client-123",
+		CodebasePath: "/home/user/project",
+		Query:        "search for functions",
+		TopK:         10,
 	}
 
 	// Test JSON marshaling
@@ -399,10 +399,10 @@ func TestSemanticClient_Search_LargeResponse(t *testing.T) {
 	client := NewSemanticClient(server.URL)
 
 	req := SemanticRequest{
-		ClientId:    "test-client",
-		ProjectPath: "/test/project",
-		Query:       "large response test",
-		TopK:        50,
+		ClientId:     "test-client",
+		CodebasePath: "/test/project",
+		Query:        "large response test",
+		TopK:         50,
 	}
 
 	ctx := context.Background()
@@ -441,10 +441,10 @@ func TestSemanticClient_Search_DifferentStatusCodes(t *testing.T) {
 			client := NewSemanticClient(server.URL)
 
 			req := SemanticRequest{
-				ClientId:    "test-client",
-				ProjectPath: "/test/project",
-				Query:       "test query",
-				TopK:        5,
+				ClientId:     "test-client",
+				CodebasePath: "/test/project",
+				Query:        "test query",
+				TopK:         5,
 			}
 
 			ctx := context.Background()
@@ -473,40 +473,40 @@ func TestSemanticClient_Search_EdgeCases(t *testing.T) {
 		{
 			name: "EmptyQuery",
 			request: SemanticRequest{
-				ClientId:    "test-client",
-				ProjectPath: "/test/project",
-				Query:       "",
-				TopK:        5,
+				ClientId:     "test-client",
+				CodebasePath: "/test/project",
+				Query:        "",
+				TopK:         5,
 			},
 			response: SemanticResponse{Results: []SemanticResult{}},
 		},
 		{
 			name: "ZeroTopK",
 			request: SemanticRequest{
-				ClientId:    "test-client",
-				ProjectPath: "/test/project",
-				Query:       "test query",
-				TopK:        0,
+				ClientId:     "test-client",
+				CodebasePath: "/test/project",
+				Query:        "test query",
+				TopK:         0,
 			},
 			response: SemanticResponse{Results: []SemanticResult{}},
 		},
 		{
 			name: "LargeTopK",
 			request: SemanticRequest{
-				ClientId:    "test-client",
-				ProjectPath: "/test/project",
-				Query:       "test query",
-				TopK:        1000,
+				ClientId:     "test-client",
+				CodebasePath: "/test/project",
+				Query:        "test query",
+				TopK:         1000,
 			},
 			response: SemanticResponse{Results: []SemanticResult{}},
 		},
 		{
 			name: "SpecialCharactersInQuery",
 			request: SemanticRequest{
-				ClientId:    "test-client",
-				ProjectPath: "/test/project",
-				Query:       "test query with special chars: !@#$%^&*(){}[]|\\:;\"'<>?,./",
-				TopK:        5,
+				ClientId:     "test-client",
+				CodebasePath: "/test/project",
+				Query:        "test query with special chars: !@#$%^&*(){}[]|\\:;\"'<>?,./",
+				TopK:         5,
 			},
 			response: SemanticResponse{Results: []SemanticResult{}},
 		},
@@ -560,10 +560,10 @@ func BenchmarkSemanticClient_Search(b *testing.B) {
 	client := NewSemanticClient(server.URL)
 
 	req := SemanticRequest{
-		ClientId:    "benchmark-client",
-		ProjectPath: "/benchmark/project",
-		Query:       "benchmark query",
-		TopK:        1,
+		ClientId:     "benchmark-client",
+		CodebasePath: "/benchmark/project",
+		Query:        "benchmark query",
+		TopK:         1,
 	}
 
 	ctx := context.Background()
@@ -603,10 +603,10 @@ func BenchmarkSemanticClient_Search_LargeResponse(b *testing.B) {
 	client := NewSemanticClient(server.URL)
 
 	req := SemanticRequest{
-		ClientId:    "benchmark-client",
-		ProjectPath: "/benchmark/project",
-		Query:       "large benchmark query",
-		TopK:        100,
+		ClientId:     "benchmark-client",
+		CodebasePath: "/benchmark/project",
+		Query:        "large benchmark query",
+		TopK:         100,
 	}
 
 	ctx := context.Background()
@@ -627,10 +627,10 @@ func ExampleSemanticClient_Search() {
 
 	// Prepare search request
 	req := SemanticRequest{
-		ClientId:    "example-client",
-		ProjectPath: "/path/to/project",
-		Query:       "find function definitions",
-		TopK:        10,
+		ClientId:     "example-client",
+		CodebasePath: "/path/to/project",
+		Query:        "find function definitions",
+		TopK:         10,
 	}
 
 	// Perform search
