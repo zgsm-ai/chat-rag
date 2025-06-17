@@ -3,7 +3,6 @@ package utils
 import (
 	"encoding/base64"
 	"encoding/json"
-	"log"
 	"path"
 	"strconv"
 	"strings"
@@ -11,6 +10,8 @@ import (
 	"github.com/pkoukk/tiktoken-go"
 	"github.com/zgsm-ai/chat-rag/internal/types"
 	"github.com/zgsm-ai/chat-rag/internal/utils/assets"
+	"github.com/zgsm-ai/chat-rag/internal/utils/logger"
+	"go.uber.org/zap"
 )
 
 // TokenCounter provides token counting functionality
@@ -58,7 +59,9 @@ func NewTokenCounter() (*TokenCounter, error) {
 
 	encoder, err := tiktoken.GetEncoding("cl100k_base")
 	if err != nil {
-		log.Printf("Failed to initialize tiktoken encoder: %v", err)
+		logger.Error("failed to initialize tiktoken encoder",
+			zap.Error(err),
+			zap.String("method", "NewTokenCounter"))
 		// Return instance with nil encoder which will use fallback estimation
 		return &TokenCounter{encoder: nil}, nil
 	}
@@ -71,7 +74,8 @@ func NewTokenCounter() (*TokenCounter, error) {
 // CountTokens counts tokens in a text string
 func (tc *TokenCounter) CountTokens(text string) int {
 	if tc.encoder == nil {
-		log.Printf("[CountTokens][err] Encoder is not initialized")
+		logger.Warn("encoder is not initialized",
+			zap.String("method", "CountTokens"))
 		// Fallback to simple estimation if encoder is not available
 		return len(strings.Fields(text)) * 4 / 3 // Rough approximation
 	}

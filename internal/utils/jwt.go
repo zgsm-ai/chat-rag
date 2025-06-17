@@ -2,10 +2,11 @@ package utils
 
 import (
 	"fmt"
-	"log"
 	"strings"
 
 	"github.com/golang-jwt/jwt"
+	"github.com/zgsm-ai/chat-rag/internal/utils/logger"
+	"go.uber.org/zap"
 )
 
 const unknown = "unknown"
@@ -38,7 +39,9 @@ func ExtractUserNameFromToken(tokenString string) string {
 
 	claims, err := parseJwt(tokenString)
 	if err != nil {
-		log.Printf("[ExtractUserNameFromToken] Error parsing JWT: %v", err)
+		logger.Error("error parsing JWT",
+			zap.Error(err),
+			zap.String("method", "ExtractUserNameFromToken"))
 		return unknown
 	}
 
@@ -68,7 +71,9 @@ func ExtractUserNameFromToken(tokenString string) string {
 func ExtractLoginFromToken(tokenString string) string {
 	claims, err := parseJwt(tokenString)
 	if err != nil {
-		log.Printf("[ExtractUserNameFromToken] Error parsing JWT: %v", err)
+		logger.Error("error parsing JWT",
+			zap.Error(err),
+			zap.String("method", "ExtractLoginFromToken"))
 		return unknown
 	}
 

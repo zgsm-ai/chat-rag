@@ -1,7 +1,6 @@
 package svc
 
 import (
-	"log"
 	"net/http"
 
 	"github.com/zgsm-ai/chat-rag/internal/client"
@@ -25,7 +24,7 @@ type ServiceContext struct {
 	SemanticClient client.SemanticInterface
 
 	// Services
-	LoggerService  service.LoggerInterface
+	LoggerService  service.LogRecordInterface
 	MetricsService service.MetricsInterface
 
 	// Utilities
@@ -44,7 +43,6 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	tokenCounter, err := utils.NewTokenCounter()
 	if err != nil {
 		// Create default token counter that uses simple estimation
-		log.Printf("Failed to initialize token encoder, using fallback estimation: %v", err)
 		panic("Failed to start NewTokenCounter:" + err.Error())
 	}
 
@@ -52,7 +50,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	metricsService := service.NewMetricsService()
 
 	// Initialize logger service
-	loggerService := service.NewLoggerService(c)
+	loggerService := service.NewLogRecordService(c)
 
 	// Set metrics service in logger service
 	loggerService.SetMetricsService(metricsService)

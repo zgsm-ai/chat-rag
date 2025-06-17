@@ -2,9 +2,10 @@ package utils
 
 import (
 	"fmt"
-	"log"
 
 	"github.com/zgsm-ai/chat-rag/internal/types"
+	"github.com/zgsm-ai/chat-rag/internal/utils/logger"
+	"go.uber.org/zap"
 )
 
 const (
@@ -57,7 +58,8 @@ func GetSystemMsg(messages []types.Message) types.Message {
 		}
 	}
 
-	log.Printf("[GetSystemMsg] No system message found")
+	logger.Info("no system message found",
+		zap.String("method", "GetSystemMsg"))
 	return types.Message{Role: types.RoleSystem, Content: ""}
 }
 
@@ -115,7 +117,8 @@ func GetOldUserMsgsWithNum(messages []types.Message, num int) []types.Message {
 
 	// If no user message found, return all messages after system
 	if userPos == -1 {
-		log.Printf("[GetOldUserMsgsWithNum] No user message found")
+		logger.Info("no user message found",
+			zap.String("method", "GetOldUserMsgsWithNum"))
 		if sysPos >= len(messages)-1 {
 			return []types.Message{}
 		}
@@ -152,7 +155,8 @@ func GetRecentUserMsgsWithNum(messages []types.Message, num int) []types.Message
 
 	// If we didn't find enough user messages, return empty slice
 	if position == -1 {
-		log.Println("[GetRecentUserMsgsWithNum] No user message found")
+		logger.Info("no user message found",
+			zap.String("method", "GetRecentUserMsgsWithNum"))
 		return []types.Message{}
 	}
 

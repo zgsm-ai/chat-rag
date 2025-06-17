@@ -2,10 +2,11 @@ package strategy
 
 import (
 	"context"
-	"log"
 
 	"github.com/zgsm-ai/chat-rag/internal/svc"
 	"github.com/zgsm-ai/chat-rag/internal/types"
+	"github.com/zgsm-ai/chat-rag/internal/utils/logger"
+	"go.uber.org/zap"
 )
 
 // ProcessedPrompt contains the result of prompt processing
@@ -30,7 +31,7 @@ type DirectProcessor struct {
 
 // Process implements the PromptProcessor interface for DirectProcessor
 func (d *DirectProcessor) Process(messages []types.Message) (*ProcessedPrompt, error) {
-	log.Printf("[process] DirectProcessor process")
+	logger.Info("DirectProcessor process")
 	return &ProcessedPrompt{
 		Messages: messages,
 	}, nil
@@ -45,16 +46,20 @@ func NewPromptProcessor(
 ) PromptProcessor {
 	switch promptMode {
 	case types.Raw:
-		log.Printf("[NewPromptProcessor] Direct chat mode detected, using DirectProcessor")
+		logger.Info("Direct chat mode detected, using DirectProcessor")
 		return &DirectProcessor{}
 
 	case types.Cost, types.Performance, types.Balanced, types.Auto:
 		fallthrough
 	default:
-		log.Printf("[NewPromptProcessor] RAG processing mode activated for type: <%s>", promptMode)
+		logger.Info("RAG processing mode activated",
+			zap.String("mode", string(promptMode)),
+		)
 		ragProcessor, err := NewRagProcessor(ctx, svcCtx, identity)
 		if err != nil {
-			log.Printf("[NewPromptProcessor] Failed new RAG processor, falling back to DirectProcessor. Error: %v", err)
+			logger.Error("Failed new RAG processor, falling back to DirectProcessor",
+				zap.Error(err),
+			)
 			return &DirectProcessor{}
 		}
 		return ragProcessor

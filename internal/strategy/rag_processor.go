@@ -3,7 +3,6 @@ package strategy
 import (
 	"context"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
@@ -12,6 +11,8 @@ import (
 	"github.com/zgsm-ai/chat-rag/internal/svc"
 	"github.com/zgsm-ai/chat-rag/internal/types"
 	"github.com/zgsm-ai/chat-rag/internal/utils"
+	"github.com/zgsm-ai/chat-rag/internal/utils/logger"
+	"go.uber.org/zap"
 )
 
 // RagProcessor processes prompts with RAG compression
@@ -55,13 +56,19 @@ func (p *RagProcessor) searchSemanticContext(ctx context.Context, query string) 
 	semanticResp, err := p.semanticClient.Search(ctx, semanticReq)
 	if err != nil {
 		err := fmt.Errorf("failed to search semantic:\n%w", err)
-		log.Printf("[buildSemanticContext] error: %v", err)
+		logger.Error("build semantic context error",
+			zap.Error(err),
+			zap.String("method", "searchSemanticContext"),
+		)
 		return "", err
 	}
 
 	// Build context string from results
 	var contextParts []string
-	log.Printf("[buildSemanticContext] Semantic search results nums: %v", len(semanticResp.Results))
+	logger.Info("semantic search results",
+		zap.Int("count", len(semanticResp.Results)),
+		zap.String("method", "searchSemanticContext"),
+	)
 	for _, result := range semanticResp.Results {
 		if result.Score < p.config.SemanticScoreThreshold {
 			continue
@@ -72,7 +79,10 @@ func (p *RagProcessor) searchSemanticContext(ctx context.Context, query string) 
 	}
 
 	semanticContext := strings.Join(contextParts, "\n\n")
-	log.Printf("[buildSemanticContext] Searched semantic context: %s", semanticContext)
+	logger.Info("searched semantic context",
+		zap.String("context", semanticContext),
+		zap.String("method", "searchSemanticContext"),
+	)
 
 	return semanticContext, nil
 }
@@ -116,7 +126,10 @@ func (p *RagProcessor) Process(messages []types.Message) (*ProcessedPrompt, erro
 	semanticStart := time.Now()
 	semanticContext, err := p.searchSemanticContext(p.ctx, latestUserMessage)
 	if err != nil {
-		log.Printf("Failed to search semantic: %v\n", err)
+		logger.Error("failed to search semantic",
+			zap.Error(err),
+			zap.String("method", "Process"),
+		)
 		proceedPrompt.SemanticErr = err
 	}
 
@@ -129,15 +142,23 @@ func (p *RagProcessor) Process(messages []types.Message) (*ProcessedPrompt, erro
 
 	userMessageTokens := p.tokenCounter.CountMessagesTokens(utils.GetUserMsgs(messages))
 	needsCompressUserMsg := userMessageTokens > p.config.TokenThreshold
-	log.Printf("[process] userMessageTokens: %v, needsCompression: %v\n\n", userMessageTokens, needsCompressUserMsg)
+	logger.Info("user message tokens",
+		zap.Int("tokens", userMessageTokens),
+		zap.Bool("needsCompression", needsCompressUserMsg),
+		zap.String("method", "Process"),
+	)
 
 	if !needsCompressUserMsg {
-		log.Printf("[process] No need to compress user message\n")
+		logger.Info("no need to compress user message",
+			zap.String("method", "Process"),
+		)
 		proceedPrompt.Messages = replacedSystemMsgs
 		return proceedPrompt, nil
 	}
 
-	log.Printf("[process] start compress user prompt message\n")
+	logger.Info("start compress user prompt message",
+		zap.String("method", "Process"),
+	)
 	// Record start time for summary process
 	summaryStart := time.Now()
 	// Get messages to summarize (exclude system messages and num-th user message)
@@ -146,7 +167,10 @@ func (p *RagProcessor) Process(messages []types.Message) (*ProcessedPrompt, erro
 
 	summary, err := p.summaryProcessor.GenerateUserPromptSummary(p.ctx, semanticContext, messagesToSummarize)
 	if err != nil {
-		log.Printf("[process] Failed to generate summary: %v\n", err)
+		logger.Error("failed to generate summary",
+			zap.Error(err),
+			zap.String("method", "Process"),
+		)
 		// On error, proceed with original messages
 		proceedPrompt.SummaryErr = err
 		proceedPrompt.Messages = replacedSystemMsgs
@@ -166,7 +190,9 @@ func (p *RagProcessor) Process(messages []types.Message) (*ProcessedPrompt, erro
 
 // BuildUserSummaryMessages builds the final messages with user prompt summary
 func (p *RagProcessor) assmebleSummaryMessages(systemMsg types.Message, summary string, recentMessages []types.Message) []types.Message {
-	log.Printf("[assmebleSummaryMessages] start assmeble summary messages")
+	logger.Info("start assemble summary messages",
+		zap.String("method", "assmebleSummaryMessages"),
+	)
 	var finalMessages []types.Message
 
 	// Add system message
@@ -200,12 +226,17 @@ func (p *RagProcessor) trimMessagesToTokenThreshold(semanticContext string, mess
 		removedCount++
 	}
 
-	log.Printf(
-		"[trimMessagesToTokenThreshold] totalTokens: %d, removedCount: %d, usedCount: %d\n",
-		totalTokens, removedCount, len(messagesToSummarize),
+	logger.Info("message token stats",
+		zap.Int("totalTokens", totalTokens),
+		zap.Int("removedCount", removedCount),
+		zap.Int("usedCount", len(messagesToSummarize)),
+		zap.String("method", "trimMessagesToTokenThreshold"),
 	)
 	if removedCount > 0 {
-		log.Printf("[trimMessagesToTokenThreshold] Removed %d messages to meet token threshold", removedCount)
+		logger.Info("removed messages to meet threshold",
+			zap.Int("count", removedCount),
+			zap.String("method", "trimMessagesToTokenThreshold"),
+		)
 	}
 
 	return messagesToSummarize

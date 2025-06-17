@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"math/rand"
 	"net/http"
 	"os"
@@ -20,6 +19,8 @@ import (
 	"github.com/zgsm-ai/chat-rag/internal/model"
 	"github.com/zgsm-ai/chat-rag/internal/types"
 	"github.com/zgsm-ai/chat-rag/internal/utils"
+	"github.com/zgsm-ai/chat-rag/internal/utils/logger"
+	"go.uber.org/zap"
 )
 
 const systemClassificationPrompt = `Classify the LAST USER QUESTION in this conversation into one of these exact categories (respond ONLY with one of these exact names):
@@ -42,8 +43,8 @@ Do not include any extra text, just the exact matching category name.`
 // validCategories is a documentation string listing all accepted log categories
 const validCategoriesStr = "CodeGeneration,BugFixing,CodeExplanation,Documentation,OtherQuestions"
 
-// LoggerInterface defines the interface for the logger service
-type LoggerInterface interface {
+// LogRecordInterface defines the interface for the logger service
+type LogRecordInterface interface {
 	// Start starts the logger service
 	Start() error
 	// Stop stops the logger service
@@ -54,8 +55,8 @@ type LoggerInterface interface {
 	SetMetricsService(metricsService MetricsInterface)
 }
 
-// LoggerService handles logging operations
-type LoggerService struct {
+// LoggerRecordService handles logging operations
+type LoggerRecordService struct {
 	logFilePath     string // Permanent storage log directory path
 	tempLogFilePath string // Temporary log file path
 	lokiEndpoint    string
@@ -74,7 +75,7 @@ type LoggerService struct {
 }
 
 // sanitizeFilename cleans a string to make it safe for use in file/folder names
-func (ls *LoggerService) sanitizeFilename(name string, defaultName string) string {
+func (ls *LoggerRecordService) sanitizeFilename(name string, defaultName string) string {
 	if name == "" {
 		return defaultName
 	}
@@ -97,12 +98,12 @@ func (ls *LoggerService) sanitizeFilename(name string, defaultName string) strin
 	return name
 }
 
-// NewLoggerService creates a new logger service
-func NewLoggerService(config config.Config) LoggerInterface {
+// NewLogRecordService creates a new logger service
+func NewLogRecordService(config config.Config) LogRecordInterface {
 	// Create temp directory under logFilePath for temporary log files
 	tempLogDir := filepath.Join(config.LogFilePath, "temp")
 
-	return &LoggerService{
+	return &LoggerRecordService{
 		logFilePath:     config.LogFilePath, // Permanent storage directory
 		tempLogFilePath: tempLogDir,         // Temporary logs directory
 		lokiEndpoint:    config.LokiEndpoint,
@@ -115,13 +116,13 @@ func NewLoggerService(config config.Config) LoggerInterface {
 }
 
 // SetMetricsService sets the metrics service for the logger
-func (ls *LoggerService) SetMetricsService(metricsService MetricsInterface) {
+func (ls *LoggerRecordService) SetMetricsService(metricsService MetricsInterface) {
 	ls.metricsService = metricsService
 }
 
 // Start starts the logger service
-func (ls *LoggerService) Start() error {
-	fmt.Println("==> Start logger")
+func (ls *LoggerRecordService) Start() error {
+	logger.Info("==> Start logger")
 	// Ensure permanent log directory exists
 	if err := os.MkdirAll(ls.logFilePath, 0755); err != nil {
 		return fmt.Errorf("failed to create permanent log directory: %w", err)
@@ -140,17 +141,20 @@ func (ls *LoggerService) Start() error {
 }
 
 // Stop stops the logger service
-func (ls *LoggerService) Stop() {
+func (ls *LoggerRecordService) Stop() {
 	close(ls.stopChan)
 	close(ls.logChan)
 	ls.wg.Wait()
 }
 
 // LogAsync logs a chat completion asynchronously
-func (ls *LoggerService) LogAsync(logs *model.ChatLog, headers *http.Header) {
+func (ls *LoggerRecordService) LogAsync(logs *model.ChatLog, headers *http.Header) {
 	llmClient, err := client.NewLLMClient(ls.llmEndpoint, ls.classifyModel, headers)
 	if err != nil {
-		log.Printf("[LogAsync] Failed to create LLM client: %v\n", err)
+		logger.Error("Failed to create LLM client",
+			zap.String("operation", "LogAsync"),
+			zap.Error(err),
+		)
 		return
 	}
 
@@ -174,7 +178,7 @@ func (ls *LoggerService) LogAsync(logs *model.ChatLog, headers *http.Header) {
 }
 
 // logWriter writes logs to file
-func (ls *LoggerService) logWriter() {
+func (ls *LoggerRecordService) logWriter() {
 	defer ls.wg.Done()
 
 	for {
@@ -197,7 +201,7 @@ func (ls *LoggerService) logWriter() {
 }
 
 // writeLogToFile writes log content to specified file path
-func (ls *LoggerService) writeLogToFile(filePath string, content string, mode int) error {
+func (ls *LoggerRecordService) writeLogToFile(filePath string, content string, mode int) error {
 	// Create directory if needed
 	if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
@@ -223,12 +227,12 @@ func (ls *LoggerService) writeLogToFile(filePath string, content string, mode in
 }
 
 // generateRandomNumber creates a 6-digit random number from 100000 to 999999
-func (ls *LoggerService) generateRandomNumber() int {
+func (ls *LoggerRecordService) generateRandomNumber() int {
 	return rand.Intn(900000) + 100000
 }
 
 // logSync writes a log entry to temp file synchronously
-func (ls *LoggerService) logSync(logs *model.ChatLog) {
+func (ls *LoggerRecordService) logSync(logs *model.ChatLog) {
 	ls.mu.Lock()
 	defer ls.mu.Unlock()
 
@@ -242,18 +246,22 @@ func (ls *LoggerService) logSync(logs *model.ChatLog) {
 
 	logJSON, err := logs.ToJSON()
 	if err != nil {
-		log.Printf("Failed to marshal log: %v\n", err)
+		logger.Error("Failed to marshal log",
+			zap.Error(err),
+		)
 		return
 	}
 
 	if err := ls.writeLogToFile(filePath, logJSON, os.O_CREATE|os.O_WRONLY); err != nil {
-		log.Printf("Failed to write temp log: %v\n", err)
+		logger.Error("Failed to write temp log",
+			zap.Error(err),
+		)
 	}
 }
 
 // logProcessor processes logs periodically
-func (ls *LoggerService) logProcessor() {
-	fmt.Println("==> start logProcessor")
+func (ls *LoggerRecordService) logProcessor() {
+	logger.Info("==> start logProcessor")
 	defer ls.wg.Done()
 
 	ticker := time.NewTicker(ls.scanInterval)
@@ -272,14 +280,16 @@ func (ls *LoggerService) logProcessor() {
 }
 
 // processLogs reads logs from files one by one, processes each, and uploads to Loki
-func (ls *LoggerService) processLogs() {
+func (ls *LoggerRecordService) processLogs() {
 	// Get list of log files
 	files, err := os.ReadDir(ls.tempLogFilePath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return
 		}
-		log.Printf("Failed to list log files: %v\n", err)
+		logger.Error("Failed to list log files",
+			zap.Error(err),
+		)
 		return
 	}
 
@@ -297,13 +307,19 @@ func (ls *LoggerService) processLogs() {
 		filePath := filepath.Join(ls.tempLogFilePath, name)
 		fileContent, err := os.ReadFile(filePath)
 		if err != nil {
-			log.Printf("Failed to read log file %s: %v\n", file.Name(), err)
+			logger.Error("Failed to read log file",
+				zap.String("filename", file.Name()),
+				zap.Error(err),
+			)
 			continue
 		}
 
 		chatLog, err := model.FromJSON(string(fileContent))
 		if err != nil {
-			log.Printf("Failed to parse log file %s: %v\n", file.Name(), err)
+			logger.Error("Failed to parse log file",
+				zap.String("filename", file.Name()),
+				zap.Error(err),
+			)
 			continue
 		}
 
@@ -315,22 +331,30 @@ func (ls *LoggerService) processLogs() {
 			// Update temp log file with category info
 			logJSON, err := chatLog.ToJSON()
 			if err != nil {
-				log.Printf("Failed to marshal updated log: %v\n", err)
+				logger.Error("Failed to marshal updated log",
+					zap.Error(err),
+				)
 				continue
 			}
 			if err := ls.writeLogToFile(filePath, logJSON, os.O_WRONLY|os.O_TRUNC); err != nil {
-				log.Printf("Failed to update temp log file: %v\n", err)
+				logger.Error("Failed to update temp log file",
+					zap.Error(err),
+				)
 				continue
 			}
 		}
 
 		// Upload single log to Loki
 		if success := ls.uploadToLoki(chatLog); !success {
-			log.Printf("Loki upload failed for file %s, keeping log file\n", file.Name())
+			logger.Error("Loki upload failed, keeping log file",
+				zap.String("filename", file.Name()),
+			)
 			continue
 		}
 
-		log.Printf("[processLogs] %s uploaded to loki \n", file.Name())
+		logger.Info("Log uploaded to Loki",
+			zap.String("filename", file.Name()),
+		)
 
 		// Record metrics if metrics service is available
 		if ls.metricsService != nil {
@@ -346,7 +370,7 @@ func (ls *LoggerService) processLogs() {
 }
 
 // classifyLog classifies a single log entry
-func (ls *LoggerService) classifyLog(logs *model.ChatLog) string {
+func (ls *LoggerRecordService) classifyLog(logs *model.ChatLog) string {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -358,18 +382,22 @@ func (ls *LoggerService) classifyLog(logs *model.ChatLog) string {
 
 	category, err := ls.llmClient.GenerateContent(ctx, systemClassificationPrompt, userMessages)
 	if err != nil {
-		log.Printf("Failed to classify log: %v\n", err)
+		logger.Error("Failed to classify log",
+			zap.Error(err),
+		)
 		return "unknown"
 	}
 
 	validatedCategory := ls.validateCategory(category)
-	log.Printf("[classifyLog] category: %s \n", validatedCategory)
+	logger.Info("Log classification result",
+		zap.String("category", validatedCategory),
+	)
 
 	return validatedCategory
 }
 
 // validateCategory checks if the LLM generated category is valid, returns "extra" if not
-func (ls *LoggerService) validateCategory(category string) string {
+func (ls *LoggerRecordService) validateCategory(category string) string {
 	valid := strings.Split(validCategoriesStr, ",")
 	for _, v := range valid {
 		if category == v {
@@ -377,23 +405,31 @@ func (ls *LoggerService) validateCategory(category string) string {
 		}
 	}
 
-	log.Printf("[validateCategory] invalid category: %s \n", category)
+	logger.Debug("Invalid category detected",
+		zap.String("category", category),
+	)
 	return "extra"
 }
 
 // uploadSingleLog uploads a single log to Loki
-func (ls *LoggerService) uploadToLoki(chatLog *model.ChatLog) bool {
+func (ls *LoggerRecordService) uploadToLoki(chatLog *model.ChatLog) bool {
 	lokiStream := model.CreateLokiStream(chatLog)
 	lokiBatch := model.LogBatch{Streams: []model.LogStream{*lokiStream}}
 	jsonData, err := json.Marshal(lokiBatch)
 	if err != nil {
-		log.Printf("[uploadToLoki] Failed to marshal Loki data: %v\n", err)
+		logger.Error("Failed to marshal Loki data",
+			zap.String("operation", "uploadToLoki"),
+			zap.Error(err),
+		)
 		return false
 	}
 
 	req, err := http.NewRequest(http.MethodPost, ls.lokiEndpoint, bytes.NewBuffer(jsonData))
 	if err != nil {
-		log.Printf("[uploadToLoki] Failed to create Loki request: %v\n", err)
+		logger.Error("Failed to create Loki request",
+			zap.String("operation", "uploadToLoki"),
+			zap.Error(err),
+		)
 		return false
 	}
 
@@ -402,7 +438,10 @@ func (ls *LoggerService) uploadToLoki(chatLog *model.ChatLog) bool {
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Printf("[uploadToLoki] Failed to upload to Loki: %v\n", err)
+		logger.Error("Failed to upload to Loki",
+			zap.String("operation", "uploadToLoki"),
+			zap.Error(err),
+		)
 		return false
 	}
 	defer resp.Body.Close()
@@ -410,9 +449,17 @@ func (ls *LoggerService) uploadToLoki(chatLog *model.ChatLog) bool {
 	if resp.StatusCode != http.StatusNoContent {
 		body, err := io.ReadAll(io.LimitReader(resp.Body, 1024))
 		if err != nil {
-			log.Printf("[uploadToLoki] Loki upload failed with status: %d, failed to read response body: %v\n", resp.StatusCode, err)
+			logger.Error("Loki upload failed",
+				zap.String("operation", "uploadToLoki"),
+				zap.Int("status", resp.StatusCode),
+				zap.Error(err),
+			)
 		} else {
-			log.Printf("[uploadToLoki] Loki upload failed with status: %d, response: %q\n", resp.StatusCode, string(body))
+			logger.Error("Loki upload failed",
+				zap.String("operation", "uploadToLoki"),
+				zap.Int("status", resp.StatusCode),
+				zap.String("response", string(body)),
+			)
 		}
 		return false
 	}
@@ -421,9 +468,9 @@ func (ls *LoggerService) uploadToLoki(chatLog *model.ChatLog) bool {
 }
 
 // saveLogToPermanentStorage saves a single log to permanent storage
-func (ls *LoggerService) saveLogToPermanentStorage(chatLog *model.ChatLog) {
+func (ls *LoggerRecordService) saveLogToPermanentStorage(chatLog *model.ChatLog) {
 	if chatLog == nil {
-		log.Printf("Invalid log or missing required identity fields\n")
+		logger.Error("Invalid log or missing required identity fields")
 		return
 	}
 
@@ -449,22 +496,29 @@ func (ls *LoggerService) saveLogToPermanentStorage(chatLog *model.ChatLog) {
 
 	logJSON, err := chatLog.ToJSON()
 	if err != nil {
-		log.Printf("Failed to marshal log for permanent storage: %v\n", err)
+		logger.Error("Failed to marshal log for permanent storage",
+			zap.Error(err),
+		)
 		return
 	}
 
 	// Create new file instead of appending
 	if err := ls.writeLogToFile(logFile, logJSON, os.O_CREATE|os.O_WRONLY); err != nil {
-		log.Printf("Failed to write log to permanent storage: %v\n", err)
+		logger.Error("Failed to write log to permanent storage",
+			zap.Error(err),
+		)
 	}
 }
 
 // deleteTempLogFile deletes a single temp log file
-func (ls *LoggerService) deleteTempLogFile(filePath string) {
+func (ls *LoggerRecordService) deleteTempLogFile(filePath string) {
 	ls.mu.Lock()
 	defer ls.mu.Unlock()
 
 	if err := os.Remove(filePath); err != nil {
-		log.Printf("Failed to remove temp log file %s: %v\n", filepath.Base(filePath), err)
+		logger.Error("Failed to remove temp log file",
+			zap.String("filename", filepath.Base(filePath)),
+			zap.Error(err),
+		)
 	}
 }

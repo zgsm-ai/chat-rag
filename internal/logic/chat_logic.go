@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
+
+	"go.uber.org/zap"
 
 	"github.com/zgsm-ai/chat-rag/internal/client"
 	"github.com/zgsm-ai/chat-rag/internal/model"
@@ -16,6 +17,7 @@ import (
 	"github.com/zgsm-ai/chat-rag/internal/svc"
 	"github.com/zgsm-ai/chat-rag/internal/types"
 	"github.com/zgsm-ai/chat-rag/internal/utils"
+	"github.com/zgsm-ai/chat-rag/internal/utils/logger"
 )
 
 type ChatCompletionLogic struct {
@@ -50,7 +52,9 @@ func (l *ChatCompletionLogic) getWriter() http.ResponseWriter {
 
 // processRequest handles common request processing logic
 func (l *ChatCompletionLogic) processRequest(req *types.ChatCompletionRequest) (*model.ChatLog, *strategy.ProcessedPrompt, error) {
-	log.Printf("[processRequest] start to process request, user: %s", l.identity.UserName)
+	logger.Info("start to process request",
+		zap.String("user", l.identity.UserName),
+	)
 	startTime := time.Now()
 
 	// Initialize chat log
@@ -61,7 +65,9 @@ func (l *ChatCompletionLogic) processRequest(req *types.ChatCompletionRequest) (
 	if err != nil {
 		err := fmt.Errorf("failed to process prompt:\n %w", err)
 		chatLog.AddError(types.ErrExtra, err)
-		log.Printf("[processRequest] error: %v", err)
+		logger.Error("failed to process prompt",
+			zap.Error(err),
+		)
 		return chatLog, nil, err
 	}
 
@@ -132,7 +138,9 @@ func (l *ChatCompletionLogic) ChatCompletion() (resp *types.ChatCompletionRespon
 	processedMsgs := l.getRequest().Messages
 	if err != nil {
 		err := fmt.Errorf("ChatCompletion failed to process request:\n%w", err)
-		log.Printf("[ChatCompletion] error: %v", err)
+		logger.Error("failed to process request",
+			zap.Error(err),
+		)
 		chatLog.AddError(types.ErrExtra, err)
 		chatLog.IsPromptProceed = false
 	} else {
@@ -175,7 +183,9 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 	processedMsgs := l.getRequest().Messages
 	if err != nil {
 		err := fmt.Errorf("ChatCompletionStream failed to process request: %w", err)
-		log.Printf("[ChatCompletionStream] error: %v", err)
+		logger.Error("failed to process request in streaming",
+			zap.Error(err),
+		)
 		chatLog.AddError(types.ErrExtra, err)
 		chatLog.IsPromptProceed = false
 	} else {
@@ -229,7 +239,9 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 			// Output SSE formatted data, ensuring correct line breaks
 			_, writeErr := fmt.Fprintf(l.getWriter(), "%s\n\n", sseData)
 			if writeErr != nil {
-				log.Printf("Failed to write SSE stream line: %v", writeErr)
+				logger.Error("failed to write SSE stream line",
+					zap.Error(writeErr),
+				)
 				return writeErr
 			}
 
@@ -257,7 +269,9 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 	} else {
 		// Calculate usage if not provided in streaming response
 		chatLog.Usage = l.calculateUsage(chatLog.CompressedTokens.All, responseText)
-		log.Printf("Calculated usage for streaming response - TotalTokens: %d", chatLog.Usage.TotalTokens)
+		logger.Info("calculated usage for streaming response",
+			zap.Int("totalTokens", chatLog.Usage.TotalTokens),
+		)
 	}
 
 	// Send stream response end marker
@@ -291,7 +305,9 @@ func (l *ChatCompletionLogic) countTokens(text string) int {
 
 // sendSSEError sends an error message in SSE format
 func (l *ChatCompletionLogic) sendSSEError(w http.ResponseWriter, message string, err error) {
-	log.Printf("%s: %v", message, err)
+	logger.Error(message,
+		zap.Error(err),
+	)
 
 	// Create error response in OpenAI format
 	errorResponse := map[string]interface{}{
@@ -304,7 +320,9 @@ func (l *ChatCompletionLogic) sendSSEError(w http.ResponseWriter, message string
 
 	errorData, marshalErr := json.Marshal(errorResponse)
 	if marshalErr != nil {
-		log.Printf("Failed to marshal error response: %v", marshalErr)
+		logger.Error("failed to marshal error response",
+			zap.Error(marshalErr),
+		)
 		fmt.Fprintf(w, "data: {\"error\":{\"message\":\"Internal server error\",\"type\":\"server_error\"}}\n\n")
 	} else {
 		fmt.Fprintf(w, "data: %s\n\n", string(errorData))
@@ -321,25 +339,31 @@ func (l *ChatCompletionLogic) sendSSEError(w http.ResponseWriter, message string
 
 // extractResponseInfo extracts response content and usage from non-streaming response
 func (l *ChatCompletionLogic) extractResponseInfo(chatLog *model.ChatLog, response *types.ChatCompletionResponse) {
-	log.Printf("Extracting response info - Choices count: %d", len(response.Choices))
+	logger.Info("extracting response info",
+		zap.Int("choicesCount", len(response.Choices)),
+	)
 
 	// Extract response content from choices
 	if len(response.Choices) > 0 {
 		contentStr := utils.GetContentAsString(response.Choices[0].Message.Content)
-		log.Printf("Response content length: %d", len(contentStr))
 		chatLog.ResponseContent = contentStr
 	}
 
 	// Extract usage information
-	log.Printf("Response usage - TotalTokens: %d, PromptTokens: %d, CompletionTokens: %d",
-		response.Usage.TotalTokens, response.Usage.PromptTokens, response.Usage.CompletionTokens)
+	logger.Info("response usage",
+		zap.Int("totalTokens", response.Usage.TotalTokens),
+		zap.Int("promptTokens", response.Usage.PromptTokens),
+		zap.Int("completionTokens", response.Usage.CompletionTokens),
+	)
 
 	if response.Usage.TotalTokens > 0 {
 		chatLog.Usage = response.Usage
 	} else {
 		// Calculate usage if not provided
 		chatLog.Usage = l.calculateUsage(chatLog.CompressedTokens.All, chatLog.ResponseContent)
-		log.Printf("Calculated usage - TotalTokens: %d", chatLog.Usage.TotalTokens)
+		logger.Info("calculated usage",
+			zap.Int("totalTokens", chatLog.Usage.TotalTokens),
+		)
 	}
 }
 
@@ -359,7 +383,10 @@ func (l *ChatCompletionLogic) extractStreamingData(rawLine string, responseConte
 	// Parse streaming chunk
 	var chunk map[string]interface{}
 	if err := json.Unmarshal([]byte(jsonData), &chunk); err != nil {
-		log.Printf("Failed to parse streaming chunk: %v, data: %s", err, jsonData)
+		logger.Error("failed to parse streaming chunk",
+			zap.Error(err),
+			zap.String("data", jsonData),
+		)
 		return
 	}
 
@@ -376,7 +403,7 @@ func (l *ChatCompletionLogic) extractStreamingData(rawLine string, responseConte
 
 	// Extract usage information (usually in the last chunk)
 	if usage, ok := chunk["usage"].(map[string]interface{}); ok {
-		log.Printf("Found usage information in streaming response")
+		logger.Debug("found usage information in streaming response")
 		*finalUsage = &types.Usage{}
 		if promptTokens, ok := usage["prompt_tokens"].(float64); ok {
 			(*finalUsage).PromptTokens = int(promptTokens)
@@ -387,8 +414,11 @@ func (l *ChatCompletionLogic) extractStreamingData(rawLine string, responseConte
 		if totalTokens, ok := usage["total_tokens"].(float64); ok {
 			(*finalUsage).TotalTokens = int(totalTokens)
 		}
-		log.Printf("Extracted usage - PromptTokens: %d, CompletionTokens: %d, TotalTokens: %d",
-			(*finalUsage).PromptTokens, (*finalUsage).CompletionTokens, (*finalUsage).TotalTokens)
+		logger.Debug("extracted usage",
+			zap.Int("promptTokens", (*finalUsage).PromptTokens),
+			zap.Int("completionTokens", (*finalUsage).CompletionTokens),
+			zap.Int("totalTokens", (*finalUsage).TotalTokens),
+		)
 	}
 }
 

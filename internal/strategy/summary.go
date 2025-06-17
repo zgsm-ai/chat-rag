@@ -4,9 +4,11 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"log"
 	"strings"
 	"sync"
+
+	"github.com/zgsm-ai/chat-rag/internal/utils/logger"
+	"go.uber.org/zap"
 
 	"github.com/zgsm-ai/chat-rag/internal/client"
 	"github.com/zgsm-ai/chat-rag/internal/types"
@@ -135,7 +137,10 @@ func NewSummaryProcessor(systemPromptSplitter string, llmClient client.LLMInterf
 
 // GenerateUserPromptSummary generates a user prompt summary of the conversation
 func (p *SummaryProcessor) GenerateUserPromptSummary(ctx context.Context, semanticContext string, messages []types.Message) (string, error) {
-	log.Printf("[GenerateUserPromptSummary] Start generating user prompt summary whit %v\n", p.llmClient.GetModelName())
+	logger.Info("start generating user prompt summary",
+		zap.String("model", p.llmClient.GetModelName()),
+		zap.String("method", "GenerateUserPromptSummary"),
+	)
 	// Create a new slice of messages for the summary request
 	var summaryMessages []types.Message
 
@@ -163,7 +168,9 @@ func (p *SummaryProcessor) GenerateUserPromptSummary(ctx context.Context, semant
 
 // GenerateSystemPromptSummary generates a system prompt summary of the conversation
 func (p *SummaryProcessor) GenerateSystemPromptSummary(ctx context.Context, systemPrompt string) (string, error) {
-	log.Printf("[GenerateSystemPromptSummary] Generating system prompt summary...\n")
+	logger.Info("generating system prompt summary",
+		zap.String("method", "GenerateSystemPromptSummary"),
+	)
 	// Create a new slice of messages for the summary request
 	var summaryMessages []types.Message
 
@@ -192,7 +199,9 @@ func (p *SummaryProcessor) processSystemMessageWithCache(msg types.Message) type
 
 	// If no SystemPromptSplitter found, use original message without compression
 	if toolGuidelinesIndex == -1 {
-		log.Printf("[processSystemMessageWithCache] No SystemPromptSplitter found!\n")
+		logger.Info("no SystemPromptSplitter found",
+			zap.String("method", "processSystemMessageWithCache"),
+		)
 		return msg
 	}
 
@@ -205,7 +214,9 @@ func (p *SummaryProcessor) processSystemMessageWithCache(msg types.Message) type
 
 	// Check if compressed version exists in cache
 	if compressedContent, exists := cache.Get(systemHash); exists {
-		log.Printf("[processSystemMessageWithCache] Using cached compressed system prompt\n")
+		logger.Info("using cached compressed system prompt",
+			zap.String("method", "processSystemMessageWithCache"),
+		)
 		// Use cached compressed version, combining with content before guidelines
 		return types.Message{
 			Role:    "system",
@@ -213,10 +224,14 @@ func (p *SummaryProcessor) processSystemMessageWithCache(msg types.Message) type
 		}
 	} else {
 		// Asynchronously compress and cache the guidelines content
-		log.Printf("[processSystemMessageWithCache] uncached, generating compressed system prompt for guidelines section\n")
+		logger.Info("uncached, generating compressed system prompt",
+			zap.String("method", "processSystemMessageWithCache"),
+		)
 		go func(content, hash string) {
 			if compressed, err := p.GenerateSystemPromptSummary(context.Background(), content); err == nil {
-				log.Printf("[processSystemMessageWithCache] compressed system prompt")
+				logger.Info("compressed system prompt success",
+					zap.String("method", "processSystemMessageWithCache"),
+				)
 				cache.Set(hash, compressed)
 			}
 		}(contentToCompress, systemHash)

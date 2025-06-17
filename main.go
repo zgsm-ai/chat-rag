@@ -2,9 +2,11 @@ package main
 
 import (
 	"flag"
-	"log"
 	"net/http"
 	"strconv"
+
+	"github.com/zgsm-ai/chat-rag/internal/utils/logger"
+	"go.uber.org/zap"
 
 	"github.com/zgsm-ai/chat-rag/internal/config"
 	"github.com/zgsm-ai/chat-rag/internal/handler"
@@ -43,7 +45,9 @@ func main() {
 
 	// Start server
 	addr := c.Host + ":" + strconv.Itoa(c.Port)
-	log.Printf("[start] server starting at %s", addr)
+	logger.Info("server starting",
+		zap.String("address", addr),
+	)
 	if err := http.ListenAndServe(addr, router); err != nil {
 		panic("Failed to start server: " + err.Error())
 	}
