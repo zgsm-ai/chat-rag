@@ -140,6 +140,11 @@ func (p *RagProcessor) Process(messages []types.Message) (*ProcessedPrompt, erro
 	proceedPrompt.SemanticLatency = semanticLatency
 	proceedPrompt.SemanticContext = semanticContext
 
+	messages = append(messages, types.Message{
+		Role:    types.RoleAssistant,
+		Content: fmt.Sprintf("<codebase_search_details>%s</codebase_seach_details>", semanticContext),
+	})
+
 	// Replace system messages with compressed messages
 	replacedSystemMsgs := p.replaceSysMsgWithCompressed(messages)
 

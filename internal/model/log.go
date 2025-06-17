@@ -38,6 +38,9 @@ type ChatLog struct {
 	MainModelLatency int64 `json:"main_model_latency_ms"`
 	TotalLatency     int64 `json:"total_latency_ms"`
 
+	// Semantic context
+	SemanticContext string `json:"semantic_context"`
+
 	// Content samples (truncated for logging)
 	OriginalPrompt   []types.Message `json:"original_prompt"`
 	CompressedPrompt []types.Message `json:"compressed_prompt"`

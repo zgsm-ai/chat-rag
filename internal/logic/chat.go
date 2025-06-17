@@ -103,6 +103,7 @@ func (l *ChatCompletionLogic) updateChatLogWithProcessedPrompt(chatLog *model.Ch
 	// Record timing information from processed prompt
 	chatLog.SemanticLatency = processedPrompt.SemanticLatency
 	chatLog.SummaryLatency = processedPrompt.SummaryLatency
+	chatLog.SemanticContext = processedPrompt.SemanticContext
 
 	// Update log with processed prompt info
 	chatLog.IsUserPromptCompressed = processedPrompt.IsCompressed
