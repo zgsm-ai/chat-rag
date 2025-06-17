@@ -36,10 +36,10 @@ func (m *MockSemanticInterface) EXPECT() *MockSemanticInterfaceMockRecorder {
 }
 
 // Search mocks base method.
-func (m *MockSemanticInterface) Search(ctx context.Context, req client.SemanticRequest) (*client.SemanticResponse, error) {
+func (m *MockSemanticInterface) Search(ctx context.Context, req client.SemanticRequest) (*client.SemanticData, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Search", ctx, req)
-	ret0, _ := ret[0].(*client.SemanticResponse)
+	ret0, _ := ret[0].(*client.SemanticData)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

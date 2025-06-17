@@ -76,11 +76,12 @@ func (p *RagProcessor) searchSemanticContext(ctx context.Context, query string) 
 			continue
 		}
 
-		contextParts = append(contextParts, fmt.Sprintf("File: %s (Line %d)\n%s",
-			result.FilePath, result.LineNumber, result.Content))
+		contextParts = append(contextParts,
+			fmt.Sprintf("File path: %s\nScore: %.2f\nCode Chunk: \n%s",
+				result.FilePath, result.Score, result.Content))
 	}
 
-	semanticContext := strings.Join(contextParts, "\n\n")
+	semanticContext := "[codebase_search] Result:\n" + strings.Join(contextParts, "\n\n")
 	logger.Info("searched semantic context",
 		zap.String("context", semanticContext),
 		zap.String("method", "searchSemanticContext"),

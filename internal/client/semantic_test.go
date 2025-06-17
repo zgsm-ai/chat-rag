@@ -40,19 +40,17 @@ func TestNewSemanticClient(t *testing.T) {
 
 func TestSemanticClient_Search_Success(t *testing.T) {
 	// Mock response data
-	mockResponse := SemanticResponse{
+	mockResponse := SemanticData{
 		Results: []SemanticResult{
 			{
-				Content:    "This is a test content",
-				Score:      0.95,
-				FilePath:   "/path/to/file1.go",
-				LineNumber: 10,
+				Content:  "This is a test content",
+				Score:    0.95,
+				FilePath: "/path/to/file1.go",
 			},
 			{
-				Content:    "Another test content",
-				Score:      0.87,
-				FilePath:   "/path/to/file2.go",
-				LineNumber: 25,
+				Content:  "Another test content",
+				Score:    0.87,
+				FilePath: "/path/to/file2.go",
 			},
 		},
 	}
@@ -138,14 +136,11 @@ func TestSemanticClient_Search_Success(t *testing.T) {
 		t.Errorf("Expected file path '/path/to/file1.go', got '%s'", resp.Results[0].FilePath)
 	}
 
-	if resp.Results[0].LineNumber != 10 {
-		t.Errorf("Expected line number 10, got %d", resp.Results[0].LineNumber)
-	}
 }
 
 func TestSemanticClient_Search_EmptyResults(t *testing.T) {
 	// Mock empty response
-	mockResponse := SemanticResponse{
+	mockResponse := SemanticData{
 		Results: []SemanticResult{},
 	}
 
@@ -248,7 +243,7 @@ func TestSemanticClient_Search_ContextCancellation(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(SemanticResponse{Results: []SemanticResult{}})
+		json.NewEncoder(w).Encode(SemanticData{Results: []SemanticResult{}})
 	}))
 	defer server.Close()
 
@@ -328,20 +323,18 @@ func TestSemanticRequest_JSONSerialization(t *testing.T) {
 	}
 }
 
-func TestSemanticResponse_JSONSerialization(t *testing.T) {
-	resp := SemanticResponse{
+func TestSemanticData_JSONSerialization(t *testing.T) {
+	resp := SemanticData{
 		Results: []SemanticResult{
 			{
-				Content:    "func main() { ... }",
-				Score:      0.98,
-				FilePath:   "/src/main.go",
-				LineNumber: 1,
+				Content:  "func main() { ... }",
+				Score:    0.98,
+				FilePath: "/src/main.go",
 			},
 			{
-				Content:    "func helper() { ... }",
-				Score:      0.85,
-				FilePath:   "/src/utils.go",
-				LineNumber: 15,
+				Content:  "func helper() { ... }",
+				Score:    0.85,
+				FilePath: "/src/utils.go",
 			},
 		},
 	}
@@ -353,7 +346,7 @@ func TestSemanticResponse_JSONSerialization(t *testing.T) {
 	}
 
 	// Test JSON unmarshaling
-	var unmarshaled SemanticResponse
+	var unmarshaled SemanticData
 	err = json.Unmarshal(data, &unmarshaled)
 	if err != nil {
 		t.Fatalf("Failed to unmarshal response: %v", err)
@@ -366,8 +359,7 @@ func TestSemanticResponse_JSONSerialization(t *testing.T) {
 	for i, result := range resp.Results {
 		if unmarshaled.Results[i].Content != result.Content ||
 			unmarshaled.Results[i].Score != result.Score ||
-			unmarshaled.Results[i].FilePath != result.FilePath ||
-			unmarshaled.Results[i].LineNumber != result.LineNumber {
+			unmarshaled.Results[i].FilePath != result.FilePath {
 			t.Errorf("Result %d doesn't match: %+v != %+v", i, unmarshaled.Results[i], result)
 		}
 	}
@@ -378,14 +370,13 @@ func TestSemanticClient_Search_LargeResponse(t *testing.T) {
 	results := make([]SemanticResult, 50)
 	for i := 0; i < 50; i++ {
 		results[i] = SemanticResult{
-			Content:    strings.Repeat("test content ", 10),
-			Score:      float64(i) / 50.0,
-			FilePath:   "/path/to/file" + string(rune(i+48)) + ".go", // ASCII 48 = '0'
-			LineNumber: i + 1,
+			Content:  strings.Repeat("test content ", 10),
+			Score:    float64(i) / 50.0,
+			FilePath: "/path/to/file" + string(rune(i+48)) + ".go", // ASCII 48 = '0'
 		}
 	}
 
-	mockResponse := SemanticResponse{
+	mockResponse := SemanticData{
 		Results: results,
 	}
 
@@ -468,7 +459,7 @@ func TestSemanticClient_Search_EdgeCases(t *testing.T) {
 	testCases := []struct {
 		name     string
 		request  SemanticRequest
-		response SemanticResponse
+		response SemanticData
 	}{
 		{
 			name: "EmptyQuery",
@@ -478,7 +469,7 @@ func TestSemanticClient_Search_EdgeCases(t *testing.T) {
 				Query:        "",
 				TopK:         5,
 			},
-			response: SemanticResponse{Results: []SemanticResult{}},
+			response: SemanticData{Results: []SemanticResult{}},
 		},
 		{
 			name: "ZeroTopK",
@@ -488,7 +479,7 @@ func TestSemanticClient_Search_EdgeCases(t *testing.T) {
 				Query:        "test query",
 				TopK:         0,
 			},
-			response: SemanticResponse{Results: []SemanticResult{}},
+			response: SemanticData{Results: []SemanticResult{}},
 		},
 		{
 			name: "LargeTopK",
@@ -498,7 +489,7 @@ func TestSemanticClient_Search_EdgeCases(t *testing.T) {
 				Query:        "test query",
 				TopK:         1000,
 			},
-			response: SemanticResponse{Results: []SemanticResult{}},
+			response: SemanticData{Results: []SemanticResult{}},
 		},
 		{
 			name: "SpecialCharactersInQuery",
@@ -508,7 +499,7 @@ func TestSemanticClient_Search_EdgeCases(t *testing.T) {
 				Query:        "test query with special chars: !@#$%^&*(){}[]|\\:;\"'<>?,./",
 				TopK:         5,
 			},
-			response: SemanticResponse{Results: []SemanticResult{}},
+			response: SemanticData{Results: []SemanticResult{}},
 		},
 	}
 
@@ -539,13 +530,12 @@ func TestSemanticClient_Search_EdgeCases(t *testing.T) {
 
 // Benchmark tests
 func BenchmarkSemanticClient_Search(b *testing.B) {
-	mockResponse := SemanticResponse{
+	mockResponse := SemanticData{
 		Results: []SemanticResult{
 			{
-				Content:    "Benchmark test content",
-				Score:      0.95,
-				FilePath:   "/path/to/benchmark.go",
-				LineNumber: 1,
+				Content:  "Benchmark test content",
+				Score:    0.95,
+				FilePath: "/path/to/benchmark.go",
 			},
 		},
 	}
@@ -582,14 +572,13 @@ func BenchmarkSemanticClient_Search_LargeResponse(b *testing.B) {
 	results := make([]SemanticResult, 100)
 	for i := 0; i < 100; i++ {
 		results[i] = SemanticResult{
-			Content:    strings.Repeat("benchmark content ", 20),
-			Score:      float64(i) / 100.0,
-			FilePath:   "/benchmark/file" + string(rune(i+48)) + ".go",
-			LineNumber: i + 1,
+			Content:  strings.Repeat("benchmark content ", 20),
+			Score:    float64(i) / 100.0,
+			FilePath: "/benchmark/file" + string(rune(i+48)) + ".go",
 		}
 	}
 
-	mockResponse := SemanticResponse{
+	mockResponse := SemanticData{
 		Results: results,
 	}
 

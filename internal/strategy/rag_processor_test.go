@@ -79,11 +79,11 @@ func TestSearchSemanticContext(t *testing.T) {
 		}
 		mockSemantic.EXPECT().
 			Search(gomock.Any(), expectedReq).
-			Return(&client.SemanticResponse{
+			Return(&client.SemanticData{
 				Results: []client.SemanticResult{
-					{Score: 0.8, FilePath: "file1", LineNumber: 10, Content: "content1"},
-					{Score: 0.6, FilePath: "file2", LineNumber: 20, Content: "content2"},
-					{Score: 0.4, FilePath: "file3", LineNumber: 30, Content: "content3"}, // should be filtered
+					{Score: 0.8, FilePath: "file1", Content: "content1"},
+					{Score: 0.6, FilePath: "file2", Content: "content2"},
+					{Score: 0.4, FilePath: "file3", Content: "content3"}, // should be filtered
 				},
 			}, nil)
 
@@ -227,9 +227,9 @@ func TestProcess(t *testing.T) {
 		}
 		mockSemantic.EXPECT().
 			Search(gomock.Any(), expectedReq).
-			Return(&client.SemanticResponse{
+			Return(&client.SemanticData{
 				Results: []client.SemanticResult{
-					{Score: 0.8, FilePath: "file1", LineNumber: 10, Content: "context1"},
+					{Score: 0.8, FilePath: "file1", Content: "context1"},
 				},
 			}, nil).Times(1)
 
@@ -279,9 +279,9 @@ func TestProcess(t *testing.T) {
 		// Mock semantic search
 		mockSemantic.EXPECT().
 			Search(gomock.Any(), gomock.Any()).
-			Return(&client.SemanticResponse{
+			Return(&client.SemanticData{
 				Results: []client.SemanticResult{
-					{Score: 0.8, FilePath: "file1", LineNumber: 10, Content: "context1"},
+					{Score: 0.8, FilePath: "file1", Content: "context1"},
 				},
 			}, nil)
 

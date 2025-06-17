@@ -16,7 +16,7 @@ import (
 // SemanticInterface defines the interface for semantic search client
 type SemanticInterface interface {
 	// Search performs semantic search and returns relevant context
-	Search(ctx context.Context, req SemanticRequest) (*SemanticResponse, error)
+	Search(ctx context.Context, req SemanticRequest) (*SemanticData, error)
 }
 
 // SemanticRequest represents the request structure for semantic search
@@ -28,17 +28,23 @@ type SemanticRequest struct {
 	Authorization string `json:"authorization"`
 }
 
-// SemanticResponse represents the response structure from semantic search
-type SemanticResponse struct {
-	Results []SemanticResult `json:"results"`
+// ResponseWrapper represents the API standard response wrapper
+type ResponseWrapper struct {
+	Code    int           `json:"code"`
+	Message string        `json:"message"`
+	Data    *SemanticData `json:"data"`
+}
+
+// SemanticData wraps the actual semantic search results
+type SemanticData struct {
+	Results []SemanticResult `json:"list"`
 }
 
 // SemanticResult represents a single semantic search result
 type SemanticResult struct {
-	Content    string  `json:"content"`
-	Score      float64 `json:"score"`
-	FilePath   string  `json:"filePath"`
-	LineNumber int     `json:"lineNumber"`
+	Content  string  `json:"content"`
+	Score    float64 `json:"score"`
+	FilePath string  `json:"filePath"`
 }
 
 // SemanticClient handles communication with the semantic search service
@@ -58,7 +64,7 @@ func NewSemanticClient(endpoint string) SemanticInterface {
 }
 
 // Search performs semantic search and returns relevant context
-func (c *SemanticClient) Search(ctx context.Context, req SemanticRequest) (*SemanticResponse, error) {
+func (c *SemanticClient) Search(ctx context.Context, req SemanticRequest) (*SemanticData, error) {
 	// Create URL with query parameters
 	u, err := url.Parse(c.endpoint)
 	if err != nil {
@@ -104,10 +110,14 @@ func (c *SemanticClient) Search(ctx context.Context, req SemanticRequest) (*Sema
 	}
 
 	// Parse response
-	var semanticResp SemanticResponse
-	if err := json.NewDecoder(resp.Body).Decode(&semanticResp); err != nil {
+	var wrapper ResponseWrapper
+	if err := json.NewDecoder(resp.Body).Decode(&wrapper); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
-	return &semanticResp, nil
+	if wrapper.Data == nil {
+		return nil, fmt.Errorf("empty response data")
+	}
+
+	return wrapper.Data, nil
 }
