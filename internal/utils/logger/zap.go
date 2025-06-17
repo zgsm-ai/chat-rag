@@ -4,14 +4,18 @@ import (
 	"fmt"
 
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 // L is the global logger instance
 var L *zap.Logger
 
 func init() {
+	config := zap.NewProductionConfig()
+	config.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
+
 	var err error
-	L, err = zap.NewProduction()
+	L, err = config.Build()
 	if err != nil {
 		panic(fmt.Sprintf("Failed to initialize zap logger: %v", err))
 	}

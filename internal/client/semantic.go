@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 )
@@ -61,7 +62,7 @@ func (c *SemanticClient) Search(ctx context.Context, req SemanticRequest) (*Sema
 	}
 
 	// Create HTTP request
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.endpoint, bytes.NewBuffer(reqBody))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, c.endpoint, bytes.NewBuffer(reqBody))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -77,7 +78,12 @@ func (c *SemanticClient) Search(ctx context.Context, req SemanticRequest) (*Sema
 
 	// Check response status
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("semantic search failed with status: %d", resp.StatusCode)
+		body, err := io.ReadAll(resp.Body)
+		respBody := ""
+		if err == nil {
+			respBody = string(body)
+		}
+		return nil, fmt.Errorf("semantic search failed with status: %d, response body:%s", resp.StatusCode, respBody)
 	}
 
 	// Parse response
