@@ -120,14 +120,14 @@ func (p *RagProcessor) Process(messages []types.Message) (*ProcessedPrompt, erro
 	}
 
 	// Get the latest user message
-	latestUserMessage, err := utils.GetLatestUserMsg(messages)
+	lastUserMsgContent, err := utils.GetLatestUserMsgContent(messages)
 	if err != nil {
 		return proceedPrompt, fmt.Errorf("no user message found: %w", err)
 	}
 
 	// Record start time for semantic search
 	semanticStart := time.Now()
-	semanticContext, err := p.searchSemanticContext(p.ctx, latestUserMessage)
+	semanticContext, err := p.searchSemanticContext(p.ctx, lastUserMsgContent)
 	if err != nil {
 		logger.Error("failed to search semantic",
 			zap.Error(err),
@@ -140,10 +140,32 @@ func (p *RagProcessor) Process(messages []types.Message) (*ProcessedPrompt, erro
 	proceedPrompt.SemanticLatency = semanticLatency
 	proceedPrompt.SemanticContext = semanticContext
 
-	messages = append(messages, types.Message{
-		Role:    types.RoleAssistant,
-		Content: fmt.Sprintf("<codebase_search_details>%s</codebase_seach_details>", semanticContext),
-	})
+	if semanticContext != "" {
+		codebaseContextText := types.ContentText{
+			Type: "text",
+			Text: fmt.Sprintf("<codebase_search_details>\n%s\n</codebase_search_details>", semanticContext),
+		}
+
+		lastUserMsg := utils.GetRecentUserMsgsWithNum(messages, 1)
+		// Handle user message content
+
+		lastContentList, ok := lastUserMsg[0].Content.([]any)
+		if !ok {
+			// If content is not a list, convert to list
+			logger.Warn("user last message content is not a list")
+			lastContentList = []any{lastUserMsg[0].Content.(string)}
+		}
+
+		// Insert contextText to user message content
+		lastContentList = append(lastContentList, codebaseContextText)
+		lastMsg := types.Message{
+			Role:    types.RoleUser,
+			Content: lastContentList,
+		}
+
+		// Replace last user message with modified version
+		messages[len(messages)-1] = lastMsg
+	}
 
 	// Replace system messages with compressed messages
 	replacedSystemMsgs := p.replaceSysMsgWithCompressed(messages)

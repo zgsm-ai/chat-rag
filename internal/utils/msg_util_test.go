@@ -173,7 +173,7 @@ func TestGetLatestUserMsg(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := GetLatestUserMsg(tt.messages)
+			got, err := GetLatestUserMsgContent(tt.messages)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetLatestUserMsg() error = %v, wantErr %v", err, tt.wantErr)
 				return

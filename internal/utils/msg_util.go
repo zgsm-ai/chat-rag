@@ -71,8 +71,8 @@ func TruncateContent(content string, maxLength int) string {
 	return content[:maxLength] + "..."
 }
 
-// GetLatestUserMsg gets the newest user message content from message list
-func GetLatestUserMsg(messages []types.Message) (string, error) {
+// GetLatestUserMsgContent gets the newest user message content from message list
+func GetLatestUserMsgContent(messages []types.Message) (string, error) {
 	latestUserMsg := GetRecentUserMsgsWithNum(messages, 1)
 	if len(latestUserMsg) == 0 {
 		return "", fmt.Errorf("no user message found")

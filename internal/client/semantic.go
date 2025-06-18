@@ -8,9 +8,6 @@ import (
 	"net/http"
 	"net/url"
 	"time"
-
-	"github.com/zgsm-ai/chat-rag/internal/logger"
-	"go.uber.org/zap"
 )
 
 // SemanticInterface defines the interface for semantic search client
@@ -79,9 +76,6 @@ func (c *SemanticClient) Search(ctx context.Context, req SemanticRequest) (*Sema
 	q.Add("topK", fmt.Sprintf("%d", req.TopK))
 	u.RawQuery = q.Encode()
 
-	logger.Info("Semantic search url",
-		zap.String("url", u.String()),
-	)
 	// Create HTTP request
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {

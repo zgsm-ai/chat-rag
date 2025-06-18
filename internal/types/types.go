@@ -94,6 +94,11 @@ type Message struct {
 	Content any    `json:"content"`
 }
 
+type ContentText struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
+}
+
 type StreamOptions struct {
 	IncludeUsage bool `json:"include_usage"`
 }
