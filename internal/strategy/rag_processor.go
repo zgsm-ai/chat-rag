@@ -144,7 +144,7 @@ func (p *RagProcessor) Process(messages []types.Message) (*ProcessedPrompt, erro
 	replacedSystemMsgs := p.replaceSysMsgWithCompressed(messages)
 
 	if semanticContext != "" {
-		codebaseContextText := types.ContentText{
+		codebaseContextText := types.Content{
 			Type: "text",
 			Text: fmt.Sprintf("<codebase_search_details>\n%s\n</codebase_search_details>", semanticContext),
 		}

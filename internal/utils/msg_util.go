@@ -20,10 +20,10 @@ func GetContentAsString(content interface{}) string {
 	if ok {
 		return con
 	}
-	contentList, ok := content.([]any)
+	contentListAny, ok := content.([]any)
 	if ok {
 		var contentStr string
-		for _, contentItem := range contentList {
+		for _, contentItem := range contentListAny {
 			contentMap, ok := contentItem.(map[string]any)
 			if !ok {
 				continue
@@ -33,6 +33,16 @@ func GetContentAsString(content interface{}) string {
 					contentStr += subStr
 				}
 			}
+		}
+		return contentStr
+	}
+
+	// compatible types.Content type
+	contentList, ok := content.([]types.Content)
+	if ok {
+		var contentStr string
+		for _, contentItem := range contentList {
+			contentStr += contentItem.Text
 		}
 		return contentStr
 	}

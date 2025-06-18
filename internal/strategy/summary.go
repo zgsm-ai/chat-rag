@@ -186,12 +186,58 @@ func (p *SummaryProcessor) GenerateSystemPromptSummary(ctx context.Context, syst
 // processSystemMessageWithCache processes system message with caching logic
 func (p *SummaryProcessor) processSystemMessageWithCache(msg types.Message) types.Message {
 	cache := GetSystemPromptCache()
+	var content []types.Content
 
-	// Convert content to string
+	// check string type system content
 	systemContent, ok := msg.Content.(string)
 	if !ok {
 		// If content is not string, use original message
-		return msg
+		contentList, ok := msg.Content.([]interface{})
+		if !ok {
+			logger.Warn("No string and List type content found",
+				zap.String("method", "processSystemMessageWithCache"),
+			)
+			return msg
+		}
+		var systemContentList []types.Content
+		for _, item := range contentList {
+			contentMap, ok := item.(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			content := types.Content{
+				Type: types.ContTypeText,
+				Text: contentMap["text"].(string),
+			}
+			if cacheControl, exists := contentMap["cache_control"]; exists {
+				content.CacheControl = cacheControl
+			}
+
+			systemContentList = append(systemContentList, content)
+		}
+		if len(systemContentList) != 1 {
+			logger.Error("systemContentList length is not 1",
+				zap.Int("length", len(systemContentList)),
+				zap.String("method", "processSystemMessageWithCache"),
+			)
+			return msg
+		}
+
+		logger.Info("system content is not string type, converted to string")
+		systemContent = systemContentList[0].Text
+		content = systemContentList
+	} else {
+		logger.Info("system content is string type",
+			zap.String("method", "processSystemMessageWithCache"),
+		)
+
+		content = []types.Content{
+			{
+				Type: types.ContTypeText,
+				Text: systemContent,
+			},
+		}
 	}
 
 	// Check if system prompt contains SystemPromptSplitter
@@ -218,25 +264,29 @@ func (p *SummaryProcessor) processSystemMessageWithCache(msg types.Message) type
 			zap.String("method", "processSystemMessageWithCache"),
 		)
 		// Use cached compressed version, combining with content before guidelines
+		content[0].Text = contentBeforeGuidelines + compressedContent
 		return types.Message{
-			Role:    "system",
-			Content: contentBeforeGuidelines + compressedContent,
+			Role:    types.RoleSystem,
+			Content: content,
 		}
-	} else {
-		// Asynchronously compress and cache the guidelines content
-		logger.Info("uncached, generating compressed system prompt",
-			zap.String("method", "processSystemMessageWithCache"),
-		)
-		go func(content, hash string) {
-			if compressed, err := p.GenerateSystemPromptSummary(context.Background(), content); err == nil {
-				logger.Info("compressed system prompt success",
-					zap.String("method", "processSystemMessageWithCache"),
-				)
-				cache.Set(hash, compressed)
-			}
-		}(contentToCompress, systemHash)
+	}
 
-		// Use original system prompt
-		return msg
+	// Asynchronously compress and cache the guidelines content
+	logger.Info("uncached, generating compressed system prompt",
+		zap.String("method", "processSystemMessageWithCache"),
+	)
+	go func(content, hash string) {
+		if compressed, err := p.GenerateSystemPromptSummary(context.Background(), content); err == nil {
+			logger.Info("compressed system prompt success",
+				zap.String("method", "processSystemMessageWithCache"),
+			)
+			cache.Set(hash, compressed)
+		}
+	}(contentToCompress, systemHash)
+
+	// Use original system prompt
+	return types.Message{
+		Role:    types.RoleSystem,
+		Content: content,
 	}
 }
