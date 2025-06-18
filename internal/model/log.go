@@ -56,17 +56,28 @@ type ChatLog struct {
 	Error []map[types.ErrorType]string `json:"error,omitempty"`
 }
 
-// ToJSON converts the log entry to JSON string
-func (cl *ChatLog) ToJSON() (string, error) {
+// toStringJSON converts the log entry to indented JSON string
+func (cl *ChatLog) toStringJSON(indent string) (string, error) {
 	buf := &bytes.Buffer{}
 	encoder := json.NewEncoder(buf)
 	encoder.SetEscapeHTML(false)
+	encoder.SetIndent("", indent)
 	err := encoder.Encode(cl)
 	if err != nil {
 		return "", err
 	}
 	// Remove the newline added by Encode()
 	return strings.TrimSuffix(buf.String(), "\n"), nil
+}
+
+// ToCompressedJSON converts the log entry to JSON string
+func (cl *ChatLog) ToCompressedJSON() (string, error) {
+	return cl.toStringJSON("")
+}
+
+// // Using 2 spaces for compact yet readable indentation (standard JSON formatting practice)
+func (cl *ChatLog) ToPrettyJSON() (string, error) {
+	return cl.toStringJSON("  ")
 }
 
 // FromJSON creates a ChatLog from JSON string
@@ -113,7 +124,7 @@ func CreateLokiStream(log *ChatLog) *LogStream {
 	logCopy := *log
 	logCopy.OriginalPrompt = nil
 	logCopy.CompressedPrompt = nil
-	logJSON, _ := logCopy.ToJSON()
+	logJSON, _ := logCopy.ToCompressedJSON()
 
 	return &LogStream{
 		Stream: labels,

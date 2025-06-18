@@ -253,7 +253,7 @@ func (ls *LoggerRecordService) logSync(logs *model.ChatLog) {
 	filename := fmt.Sprintf("%s-%s-%s-%d.log", datePart, timePart, username, randNum)
 	filePath := filepath.Join(ls.tempLogFilePath, filename)
 
-	logJSON, err := logs.ToJSON()
+	logJSON, err := logs.ToCompressedJSON()
 	if err != nil {
 		logger.Error("Failed to marshal log",
 			zap.Error(err),
@@ -338,7 +338,7 @@ func (ls *LoggerRecordService) processLogs() {
 			chatLog.Category = ls.classifyLog(chatLog)
 
 			// Update temp log file with category info
-			logJSON, err := chatLog.ToJSON()
+			logJSON, err := chatLog.ToCompressedJSON()
 			if err != nil {
 				logger.Error("Failed to marshal updated log",
 					zap.Error(err),
@@ -492,18 +492,19 @@ func (ls *LoggerRecordService) saveLogToPermanentStorage(chatLog *model.ChatLog)
 	// Create hierarchical directory path
 	dateDir := filepath.Join(ls.logFilePath, yearMonth, day, username)
 
-	// Timestamp for filename: yyyymmdd-HHMMSS_requestID.log
+	// Timestamp for filename: yyyymmdd-HHMMSS_requestID.json
 	timestamp := chatLog.Timestamp.Format("20060102-150405")
 	requestId := chatLog.Identity.RequestID
 	if requestId == "" {
 		requestId = "null"
 	}
-	filename := fmt.Sprintf("%s_%s_%d.log", timestamp, requestId, ls.generateRandomNumber())
+	filename := fmt.Sprintf("%s_%s_%d.json", timestamp, requestId, ls.generateRandomNumber())
 
 	// Full file path
 	logFile := filepath.Join(dateDir, filename)
 
-	logJSON, err := chatLog.ToJSON()
+	// Convert to pretty JSON using the extracted method
+	jsonStr, err := chatLog.ToPrettyJSON()
 	if err != nil {
 		logger.Error("Failed to marshal log for permanent storage",
 			zap.Error(err),
@@ -512,7 +513,7 @@ func (ls *LoggerRecordService) saveLogToPermanentStorage(chatLog *model.ChatLog)
 	}
 
 	// Create new file instead of appending
-	if err := ls.writeLogToFile(logFile, logJSON, os.O_CREATE|os.O_WRONLY); err != nil {
+	if err := ls.writeLogToFile(logFile, jsonStr, os.O_CREATE|os.O_WRONLY); err != nil {
 		logger.Error("Failed to write log to permanent storage",
 			zap.Error(err),
 		)
