@@ -199,7 +199,7 @@ func (p *SummaryProcessor) processSystemMessageWithCache(msg types.Message) type
 
 	// If no SystemPromptSplitter found, use original message without compression
 	if toolGuidelinesIndex == -1 {
-		logger.Info("no SystemPromptSplitter found",
+		logger.Error("No SystemPromptSplitter found",
 			zap.String("method", "processSystemMessageWithCache"),
 		)
 		return msg

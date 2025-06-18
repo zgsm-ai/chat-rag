@@ -314,6 +314,14 @@ func (ls *LoggerRecordService) processLogs() {
 			continue
 		}
 		filePath := filepath.Join(ls.tempLogFilePath, name)
+		if _, err := os.Stat(filePath); os.IsNotExist(err) {
+			logger.Warn("Log file not found",
+				zap.String("filename", file.Name()),
+				zap.Error(err),
+			)
+			continue
+		}
+
 		fileContent, err := os.ReadFile(filePath)
 		if err != nil {
 			logger.Error("Failed to read log file",

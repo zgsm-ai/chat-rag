@@ -97,7 +97,7 @@ func (p *RagProcessor) replaceSysMsgWithCompressed(messages []types.Message) []t
 	var hasSystem bool
 
 	for _, msg := range messages {
-		if msg.Role == "system" {
+		if msg.Role == types.RoleSystem {
 			processedMsgs = append(processedMsgs, p.summaryProcessor.processSystemMessageWithCache(msg))
 			hasSystem = true
 		} else {
