@@ -140,6 +140,9 @@ func (p *RagProcessor) Process(messages []types.Message) (*ProcessedPrompt, erro
 	proceedPrompt.SemanticLatency = semanticLatency
 	proceedPrompt.SemanticContext = semanticContext
 
+	// Replace system messages with compressed messages
+	replacedSystemMsgs := p.replaceSysMsgWithCompressed(messages)
+
 	if semanticContext != "" {
 		codebaseContextText := types.ContentText{
 			Type: "text",
@@ -164,13 +167,10 @@ func (p *RagProcessor) Process(messages []types.Message) (*ProcessedPrompt, erro
 		}
 
 		// Replace last user message with modified version
-		messages[len(messages)-1] = lastMsg
+		replacedSystemMsgs[len(replacedSystemMsgs)-1] = lastMsg
 	}
 
-	// Replace system messages with compressed messages
-	replacedSystemMsgs := p.replaceSysMsgWithCompressed(messages)
-
-	userMessageTokens := p.tokenCounter.CountMessagesTokens(utils.GetUserMsgs(messages))
+	userMessageTokens := p.tokenCounter.CountMessagesTokens(utils.GetUserMsgs(replacedSystemMsgs))
 	needsCompressUserMsg := userMessageTokens > p.config.TokenThreshold
 	logger.Info("user message tokens",
 		zap.Int("tokens", userMessageTokens),
@@ -192,7 +192,7 @@ func (p *RagProcessor) Process(messages []types.Message) (*ProcessedPrompt, erro
 	// Record start time for summary process
 	summaryStart := time.Now()
 	// Get messages to summarize (exclude system messages and num-th user message)
-	messagesToSummarize := utils.GetOldUserMsgsWithNum(messages, p.config.RecentUserMsgUsedNums)
+	messagesToSummarize := utils.GetOldUserMsgsWithNum(replacedSystemMsgs, p.config.RecentUserMsgUsedNums)
 	messagesToSummarize = p.trimMessagesToTokenThreshold(semanticContext, messagesToSummarize)
 
 	summary, err := p.summaryProcessor.GenerateUserPromptSummary(p.ctx, semanticContext, messagesToSummarize)
@@ -208,7 +208,7 @@ func (p *RagProcessor) Process(messages []types.Message) (*ProcessedPrompt, erro
 	}
 
 	// Sumary successfuly, build final messages
-	recentMessages := utils.GetRecentUserMsgsWithNum(messages, p.config.RecentUserMsgUsedNums)
+	recentMessages := utils.GetRecentUserMsgsWithNum(replacedSystemMsgs, p.config.RecentUserMsgUsedNums)
 	finalMessages := p.assmebleSummaryMessages(utils.GetSystemMsg(replacedSystemMsgs), summary, recentMessages)
 	summaryLatency = time.Since(summaryStart).Milliseconds()
 
