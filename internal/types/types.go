@@ -46,14 +46,6 @@ const (
 	Auto PromptMode = "auto"
 )
 
-// ContentTextType defines different types of content in prompt message
-type ContentTextType string
-
-const (
-	// ContTypeText content type
-	ContTypeText ContentTextType = "text"
-)
-
 type ChatCompletionRequest struct {
 	Model         string        `json:"model"`
 	Messages      []Message     `json:"messages"`
@@ -100,12 +92,6 @@ type Choice struct {
 type Message struct {
 	Role    string `json:"role"`
 	Content any    `json:"content"`
-}
-
-type Content struct {
-	Type         ContentTextType `json:"type"`
-	Text         string          `json:"text"`
-	CacheControl any             `json:"cache_control,omitempty"`
 }
 
 type StreamOptions struct {

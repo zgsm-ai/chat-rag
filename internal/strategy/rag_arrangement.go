@@ -10,6 +10,7 @@ import (
 	"github.com/zgsm-ai/chat-rag/internal/client"
 	"github.com/zgsm-ai/chat-rag/internal/config"
 	"github.com/zgsm-ai/chat-rag/internal/logger"
+	"github.com/zgsm-ai/chat-rag/internal/model"
 	"github.com/zgsm-ai/chat-rag/internal/tokenizer"
 	"github.com/zgsm-ai/chat-rag/internal/types"
 	"github.com/zgsm-ai/chat-rag/internal/utils"
@@ -26,7 +27,7 @@ type RagProcessor struct {
 	identity         *types.Identity
 }
 
-// NewRagProcessor creates a new compression processor
+// NewRagProcessor creates a new rag compression processor
 func NewRagProcessor(ctx context.Context, svcCtx *bootstrap.ServiceContext, identity *types.Identity) (*RagProcessor, error) {
 	llmClient, err := client.NewLLMClient(svcCtx.Config.LLMEndpoint, svcCtx.Config.SummaryModel, svcCtx.ReqCtx.Headers)
 	if err != nil {
@@ -131,7 +132,7 @@ func (p *RagProcessor) Process(messages []types.Message) (*ProcessedPrompt, erro
 	}
 
 	// Get the latest user message
-	lastUserMsgContent, err := utils.GetLatestUserMsgContent(messages)
+	lastUserMsgContent, err := utils.GetLastUserMsgContent(messages)
 	if err != nil {
 		return proceedPrompt, fmt.Errorf("no user message found: %w", err)
 	}
@@ -155,7 +156,7 @@ func (p *RagProcessor) Process(messages []types.Message) (*ProcessedPrompt, erro
 	replacedSystemMsgs := p.replaceSysMsgWithCompressed(messages)
 
 	if semanticContext != "" {
-		codebaseContextText := types.Content{
+		codebaseContextText := model.Content{
 			Type: "text",
 			Text: fmt.Sprintf("<codebase_search_details>\n%s\n</codebase_search_details>", semanticContext),
 		}

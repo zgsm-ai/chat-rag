@@ -178,7 +178,7 @@ chat-rag/
 │   ├── logic/          # Business logic
 │   ├── model/          # Data models
 │   ├── service/        # Background services
-│   ├── strategy/       # Strategy pattern implementations
+│   ├── strategy/       # Prompt arrangement strategy implementations
 │   ├── tokenizer/      # Token counting utilities
 │   ├── types/          # Generated type definitions
 │   ├── utils/          # Utility functions

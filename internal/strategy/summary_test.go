@@ -33,7 +33,7 @@ func TestGenerateSystemPromptSummary(t *testing.T) {
 	).Return("compressed_content", nil)
 
 	// Test the function
-	result, err := processor.GenerateSystemPromptSummary(ctx, testSystemPrompt)
+	result, err := processor.generateSystemPromptSummary(ctx, testSystemPrompt)
 	if err != nil {
 		t.Errorf("GenerateSystemPromptSummary failed: %v", err)
 	}

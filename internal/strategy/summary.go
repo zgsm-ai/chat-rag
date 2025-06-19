@@ -11,6 +11,7 @@ import (
 
 	"github.com/zgsm-ai/chat-rag/internal/client"
 	"github.com/zgsm-ai/chat-rag/internal/logger"
+	"github.com/zgsm-ai/chat-rag/internal/model"
 	"github.com/zgsm-ai/chat-rag/internal/types"
 )
 
@@ -166,8 +167,8 @@ func (p *SummaryProcessor) GenerateUserPromptSummary(ctx context.Context, semant
 	return p.llmClient.GenerateContent(ctx, USER_SUMMARY_PROMPT, summaryMessages)
 }
 
-// GenerateSystemPromptSummary generates a system prompt summary of the conversation
-func (p *SummaryProcessor) GenerateSystemPromptSummary(ctx context.Context, systemPrompt string) (string, error) {
+// generateSystemPromptSummary generates a system prompt summary of the conversation
+func (p *SummaryProcessor) generateSystemPromptSummary(ctx context.Context, systemPrompt string) (string, error) {
 	logger.Info("generating system prompt summary",
 		zap.String("method", "GenerateSystemPromptSummary"),
 	)
@@ -186,7 +187,7 @@ func (p *SummaryProcessor) GenerateSystemPromptSummary(ctx context.Context, syst
 // processSystemMessageWithCache processes system message with caching logic
 func (p *SummaryProcessor) processSystemMessageWithCache(msg types.Message) types.Message {
 	cache := GetSystemPromptCache()
-	var content []types.Content
+	var content []model.Content
 
 	// check string type system content
 	systemContent, ok := msg.Content.(string)
@@ -199,15 +200,15 @@ func (p *SummaryProcessor) processSystemMessageWithCache(msg types.Message) type
 			)
 			return msg
 		}
-		var systemContentList []types.Content
+		var systemContentList []model.Content
 		for _, item := range contentList {
 			contentMap, ok := item.(map[string]interface{})
 			if !ok {
 				continue
 			}
 
-			content := types.Content{
-				Type: types.ContTypeText,
+			content := model.Content{
+				Type: model.ContTypeText,
 				Text: contentMap["text"].(string),
 			}
 			if cacheControl, exists := contentMap["cache_control"]; exists {
@@ -232,9 +233,9 @@ func (p *SummaryProcessor) processSystemMessageWithCache(msg types.Message) type
 			zap.String("method", "processSystemMessageWithCache"),
 		)
 
-		content = []types.Content{
+		content = []model.Content{
 			{
-				Type: types.ContTypeText,
+				Type: model.ContTypeText,
 				Text: systemContent,
 			},
 		}
@@ -276,7 +277,7 @@ func (p *SummaryProcessor) processSystemMessageWithCache(msg types.Message) type
 		zap.String("method", "processSystemMessageWithCache"),
 	)
 	go func(content, hash string) {
-		if compressed, err := p.GenerateSystemPromptSummary(context.Background(), content); err == nil {
+		if compressed, err := p.generateSystemPromptSummary(context.Background(), content); err == nil {
 			logger.Info("compressed system prompt success",
 				zap.String("method", "processSystemMessageWithCache"),
 			)

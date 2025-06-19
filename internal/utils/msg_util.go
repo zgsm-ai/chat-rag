@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/zgsm-ai/chat-rag/internal/logger"
+	"github.com/zgsm-ai/chat-rag/internal/model"
 	"github.com/zgsm-ai/chat-rag/internal/types"
 	"go.uber.org/zap"
 )
@@ -37,8 +38,8 @@ func GetContentAsString(content interface{}) string {
 		return contentStr
 	}
 
-	// compatible types.Content type
-	contentList, ok := content.([]types.Content)
+	// compatible Content type
+	contentList, ok := content.([]model.Content)
 	if ok {
 		var contentStr string
 		for _, contentItem := range contentList {
@@ -81,13 +82,24 @@ func TruncateContent(content string, maxLength int) string {
 	return content[:maxLength] + "..."
 }
 
-// GetLatestUserMsgContent gets the newest user message content from message list
-func GetLatestUserMsgContent(messages []types.Message) (string, error) {
+// GetLastUserMsgContent gets the newest user message content from message list
+func GetLastUserMsgContent(messages []types.Message) (string, error) {
+	lastUserMsg, err := GetLastUserMsg(messages)
+	if err != nil {
+		return "", err
+	}
+
+	return GetContentAsString(lastUserMsg.Content), nil
+}
+
+// GetLastUserMsg gets the newest user message from message list
+func GetLastUserMsg(messages []types.Message) (types.Message, error) {
 	latestUserMsg := GetRecentUserMsgsWithNum(messages, 1)
 	if len(latestUserMsg) == 0 {
-		return "", fmt.Errorf("no user message found")
+		return types.Message{}, fmt.Errorf("no user message found")
 	}
-	return GetContentAsString(latestUserMsg[0].Content), nil
+
+	return latestUserMsg[0], nil
 }
 
 // GetOldUserMsgsWithNum returns messages between the first system message and the num-th last user message

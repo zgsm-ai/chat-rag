@@ -75,7 +75,7 @@ func (cl *ChatLog) ToCompressedJSON() (string, error) {
 	return cl.toStringJSON("")
 }
 
-// // Using 2 spaces for compact yet readable indentation (standard JSON formatting practice)
+// ToPrettyJSON Using 2 spaces for compact yet readable indentation (standard JSON formatting practice)
 func (cl *ChatLog) ToPrettyJSON() (string, error) {
 	return cl.toStringJSON("  ")
 }
