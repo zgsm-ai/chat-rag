@@ -45,11 +45,22 @@ func NewRagProcessor(ctx context.Context, svcCtx *bootstrap.ServiceContext, iden
 
 // searchSemanticContext performs semantic search and constructs context string
 func (p *RagProcessor) searchSemanticContext(ctx context.Context, query string) (string, error) {
-	// Prepare semantic request
+	// Filter query to remove environment details
+	filterQuery := query
+	if strings.Contains(query, "<environment_details>") {
+		start := strings.Index(query, "<environment_details>")
+		end := strings.Index(query, "</environment_details>") + len("</environment_details>")
+		filterQuery = query[:start] + query[end:]
+	}
+	logger.Info("semantic search query",
+		zap.String("query", filterQuery),
+		zap.String("method", "searchSemanticContext"),
+	)
+
 	semanticReq := client.SemanticRequest{
 		ClientId:      p.identity.ClientID,
 		CodebasePath:  p.identity.ProjectPath,
-		Query:         query,
+		Query:         filterQuery,
 		TopK:          p.config.TopK,
 		Authorization: p.identity.AuthToken,
 	}
