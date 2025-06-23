@@ -177,6 +177,11 @@ func (s *SemanticSearch) buildContextString(results []client.SemanticResult) str
 	var contextParts []string
 
 	for _, result := range results {
+		logger.Info("==> result score threshold",
+			zap.Float64("score", result.Score),
+			zap.Float64("SemanticScoreThreshold", s.config.SemanticScoreThreshold),
+			zap.String("method", "SemanticSearch.buildContextString"),
+		)
 		if result.Score < s.config.SemanticScoreThreshold {
 			continue
 		}
@@ -192,122 +197,3 @@ func (s *SemanticSearch) buildContextString(results []client.SemanticResult) str
 
 	return "[codebase_search] Result:\n" + strings.Join(contextParts, "\n\n")
 }
-
-// func (s *SemanticSearch) Execute(promptMsg *PromptMsg) {
-// 	logger.Info("[SemanticSearch] starting system prompt compression",
-// 		zap.String("method", "Execute"),
-// 	)
-// 	if promptMsg == nil {
-// 		logger.Error("promptMsg is nil!")
-// 		return
-// 	}
-
-// 	var semanticLatency int64
-
-// 	// Record start time for semantic search
-// 	semanticStart := time.Now()
-// 	semanticContext, err := s.searchSemanticContext(utils.GetContentAsString(promptMsg.lastUserMsg))
-// 	if err != nil {
-// 		logger.Error("failed to search semantic",
-// 			zap.Error(err),
-// 			zap.String("method", "Process"),
-// 		)
-// 		s.Err = err
-// 	}
-
-// 	if semanticContext != "" {
-// 		codebaseContextText := model.Content{
-// 			Type: model.ContTypeText,
-// 			Text: fmt.Sprintf("<codebase_search_details>\n%s\n</codebase_search_details>", semanticContext),
-// 		}
-
-// 		var content model.Content
-
-// 		contents, err := content.ExtractMsgContent(promptMsg.lastUserMsg)
-// 		if err != nil {
-// 			logger.Error("failed to extract user message content",
-// 				zap.Error(err),
-// 				zap.String("method", "Process"),
-// 			)
-// 			s.Err = err
-// 			return
-// 		}
-
-// 		// Insert contextText to user message content
-// 		contents = append(contents, codebaseContextText)
-// 		lastMsg := &types.Message{
-// 			Role:    types.RoleUser,
-// 			Content: contents,
-// 		}
-
-// 		promptMsg.lastUserMsg = lastMsg
-// 	}
-
-// 	semanticLatency = time.Since(semanticStart).Milliseconds()
-// 	s.Lantency = semanticLatency
-// 	if s.next != nil {
-// 		s.next.Execute(promptMsg)
-// 	} else {
-// 		logger.Error("semantic search completed, but no next processor found",
-// 			zap.String("method", "Execute"),
-// 		)
-// 	}
-// }
-
-// func (s *SemanticSearch) SetNext(next Processor) {
-// 	s.next = next
-// }
-
-// // searchSemanticContext performs semantic search and constructs context string
-// func (s *SemanticSearch) searchSemanticContext(query string) (string, error) {
-// 	// Filter query to remove environment details
-// 	filterQuery := query
-// 	if strings.Contains(query, "<environment_details>") {
-// 		start := strings.Index(query, "<environment_details>")
-// 		end := strings.Index(query, "</environment_details>") + len("</environment_details>")
-// 		filterQuery = query[:start] + query[end:]
-// 	}
-// 	logger.Info("semantic search query",
-// 		zap.String("query", filterQuery),
-// 		zap.String("method", "searchSemanticContext"),
-// 	)
-
-// 	semanticReq := client.SemanticRequest{
-// 		ClientId:      s.identity.ClientID,
-// 		CodebasePath:  s.identity.ProjectPath,
-// 		Query:         filterQuery,
-// 		TopK:          s.config.TopK,
-// 		Authorization: s.identity.AuthToken,
-// 	}
-
-// 	// Execute search
-// 	semanticResp, err := s.semanticClient.Search(s.ctx, semanticReq)
-// 	if err != nil {
-// 		err := fmt.Errorf("failed to search semantic:\n%w", err)
-// 		return "", err
-// 	}
-
-// 	// Build context string from results
-// 	var contextParts []string
-// 	logger.Info("semantic search results",
-// 		zap.Int("count", len(semanticResp.Results)),
-// 		zap.String("method", "searchSemanticContext"),
-// 	)
-// 	for _, result := range semanticResp.Results {
-// 		if result.Score < s.config.SemanticScoreThreshold {
-// 			continue
-// 		}
-
-// 		contextParts = append(contextParts,
-// 			fmt.Sprintf("File path: %s\nScore: %.2f\nCode Chunk: \n%s",
-// 				result.FilePath, result.Score, result.Content))
-// 	}
-
-// 	semanticContext := "[codebase_search] Result:\n" + strings.Join(contextParts, "\n\n")
-// 	logger.Info("searched semantic context",
-// 		zap.String("context", semanticContext),
-// 		zap.String("method", "searchSemanticContext"),
-// 	)
-
-// 	return semanticContext, nil
-// }
