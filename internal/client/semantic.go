@@ -100,7 +100,10 @@ func (c *SemanticClient) Search(ctx context.Context, req SemanticRequest) (*Sema
 		if err == nil {
 			respBody = string(body)
 		}
-		return nil, fmt.Errorf("semantic search failed with status: %d, response body:%s", resp.StatusCode, respBody)
+		return nil, fmt.Errorf(
+			"semantic search failed! status: %d, response:%s, url: %s",
+			resp.StatusCode, respBody, u.String(),
+		)
 	}
 
 	// Parse response
