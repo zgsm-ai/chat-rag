@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"strings"
 	"sync"
 
@@ -81,29 +82,34 @@ func generateHash(content string) string {
 }
 
 type SystemCompressor struct {
+	Recorder
 	systemPromptSplitStr string
 	llmClient            client.LLMInterface
-	next                 Processor
+
+	next Processor
 }
 
 func (s *SystemCompressor) Execute(promptMsg *PromptMsg) {
-	logger.Info("[SystemCompressor] starting system prompt compression",
-		zap.String("method", "Execute"),
+	logger.Info("starting system prompt compression",
+		zap.String("method", "SystemCompressor.Execute"),
 	)
 	if promptMsg == nil {
-		logger.Error("promptMsg is nil!")
+		logger.Error("nil prompt message received", zap.String("method", "SystemCompressor.Execute"))
+		s.Err = fmt.Errorf("nil prompt message received")
 		return
 	}
 
 	processedMsg := s.processSystemMessageWithCache(promptMsg.systemMsg)
 	promptMsg.systemMsg = processedMsg
-	if s.next != nil {
-		s.next.Execute(promptMsg)
-	} else {
-		logger.Error("system prompt compression completed, but no next processor found",
-			zap.String("method", "Execute"),
+	if s.next == nil {
+		logger.Warn("system prompt compression completed, but no next processor found",
+			zap.String("method", "SystemCompressor.Execute"),
 		)
+		return
 	}
+
+	s.Handled = true
+	s.next.Execute(promptMsg)
 }
 
 func (s *SystemCompressor) SetNext(next Processor) {

@@ -62,12 +62,12 @@ func (c *LLMClient) GenerateContent(ctx context.Context, systemPrompt string, us
 
 	// Add system message with the summary prompt
 	messages = append(messages, types.Message{
-		Role:    "system",
+		Role:    types.RoleSystem,
 		Content: systemPrompt,
 	})
 
 	messages = append(messages, userMessages...)
-
+	fmt.Printf("==> messages\n %+v", messages)
 	// Call ChatLLMWithMessagesRaw to get the raw response
 	result, err := c.ChatLLMWithMessagesRaw(ctx, messages)
 	if err != nil {
@@ -81,6 +81,8 @@ func (c *LLMClient) GenerateContent(ctx context.Context, systemPrompt string, us
 
 	// Extract content from the first choice's message
 	content := utils.GetContentAsString(result.Choices[0].Message.Content)
+	fmt.Printf("==> result %+v", result)
+
 	return content, nil
 }
 

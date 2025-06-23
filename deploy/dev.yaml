@@ -18,7 +18,7 @@ data:
     # Semantic API configuration
     SemanticApiEndpoint: "http://codebase-indexer-svc.shenma:8888/codebase-indexer/api/v1/search/semantic"
     TopK: 5
-    SemanticSocreThreshold: 0.5
+    SemanticSocreThreshold: 0.6
 
     # Feature flags
     EnableCompression: true
@@ -38,8 +38,6 @@ data:
 
     # used recent user prompt messages nums
     RecentUserMsgUsedNums: 10
-    # used recent system prompt messages nums
-    RecentSystemMsgUsedNums: 10
 
     # oneapi Authorization
     OneApiAuthorization: sk-tQ5599ZxVKePZtN69a3d1eC9748944DbA4CcBc5a60C2F085

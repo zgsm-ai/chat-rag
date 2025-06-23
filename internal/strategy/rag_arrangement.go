@@ -3,283 +3,110 @@ package strategy
 import (
 	"context"
 	"fmt"
-	"strings"
-	"time"
 
 	"github.com/zgsm-ai/chat-rag/internal/bootstrap"
 	"github.com/zgsm-ai/chat-rag/internal/client"
 	"github.com/zgsm-ai/chat-rag/internal/config"
-	"github.com/zgsm-ai/chat-rag/internal/logger"
-	"github.com/zgsm-ai/chat-rag/internal/model"
+	"github.com/zgsm-ai/chat-rag/internal/strategy/processor"
 	"github.com/zgsm-ai/chat-rag/internal/tokenizer"
 	"github.com/zgsm-ai/chat-rag/internal/types"
-	"github.com/zgsm-ai/chat-rag/internal/utils"
-	"go.uber.org/zap"
 )
 
-// RagProcessor processes prompts with RAG compression
 type RagProcessor struct {
-	ctx              context.Context
-	semanticClient   client.SemanticInterface
-	summaryProcessor *SummaryProcessor
-	tokenCounter     *tokenizer.TokenCounter
-	config           config.Config
-	identity         *types.Identity
+	ctx            context.Context
+	semanticClient client.SemanticInterface
+	llmClient      client.LLMInterface
+	tokenCounter   *tokenizer.TokenCounter
+	config         config.Config
+	identity       *types.Identity
+
+	systemCompressor *processor.SystemCompressor
+	semanticSearch   *processor.SemanticSearch
+	userCompressor   *processor.UserCompressor
 }
 
-// NewRagProcessor creates a new rag compression processor
-func NewRagProcessor(ctx context.Context, svcCtx *bootstrap.ServiceContext, identity *types.Identity) (*RagProcessor, error) {
-	llmClient, err := client.NewLLMClient(svcCtx.Config.LLMEndpoint, svcCtx.Config.SummaryModel, svcCtx.ReqCtx.Headers)
+// NewRagProcessor creates a new RAG compression processor
+func NewRagProcessor(
+	ctx context.Context,
+	svcCtx *bootstrap.ServiceContext,
+	identity *types.Identity,
+) (*RagProcessor, error) {
+	llmClient, err := client.NewLLMClient(
+		svcCtx.Config.LLMEndpoint,
+		svcCtx.Config.SummaryModel,
+		svcCtx.ReqCtx.Headers,
+	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create LLM client: %w", err)
 	}
 
 	return &RagProcessor{
-		ctx:              ctx,
-		semanticClient:   client.NewSemanticClient(svcCtx.Config.SemanticApiEndpoint),
-		summaryProcessor: NewSummaryProcessor(svcCtx.Config.SystemPromptSplitter, llmClient),
-		config:           svcCtx.Config,
-		tokenCounter:     svcCtx.TokenCounter,
-		identity:         identity,
+		ctx:            ctx,
+		semanticClient: client.NewSemanticClient(svcCtx.Config.SemanticApiEndpoint),
+		llmClient:      llmClient,
+		config:         svcCtx.Config,
+		tokenCounter:   svcCtx.TokenCounter,
+		identity:       identity,
 	}, nil
 }
 
-// searchSemanticContext performs semantic search and constructs context string
-func (p *RagProcessor) searchSemanticContext(ctx context.Context, query string) (string, error) {
-	// Filter query to remove environment details
-	filterQuery := query
-	if strings.Contains(query, "<environment_details>") {
-		start := strings.Index(query, "<environment_details>")
-		end := strings.Index(query, "</environment_details>") + len("</environment_details>")
-		filterQuery = query[:start] + query[end:]
-	}
-	logger.Info("semantic search query",
-		zap.String("query", filterQuery),
-		zap.String("method", "searchSemanticContext"),
-	)
-
-	semanticReq := client.SemanticRequest{
-		ClientId:      p.identity.ClientID,
-		CodebasePath:  p.identity.ProjectPath,
-		Query:         filterQuery,
-		TopK:          p.config.TopK,
-		Authorization: p.identity.AuthToken,
-	}
-
-	// Execute search
-	semanticResp, err := p.semanticClient.Search(ctx, semanticReq)
-	if err != nil {
-		err := fmt.Errorf("failed to search semantic:\n%w", err)
-		logger.Error("build semantic context error",
-			zap.Error(err),
-			zap.String("method", "searchSemanticContext"),
-		)
-		return "", err
-	}
-
-	// Build context string from results
-	var contextParts []string
-	logger.Info("semantic search results",
-		zap.Int("count", len(semanticResp.Results)),
-		zap.String("method", "searchSemanticContext"),
-	)
-	for _, result := range semanticResp.Results {
-		if result.Score < p.config.SemanticScoreThreshold {
-			continue
-		}
-
-		contextParts = append(contextParts,
-			fmt.Sprintf("File path: %s\nScore: %.2f\nCode Chunk: \n%s",
-				result.FilePath, result.Score, result.Content))
-	}
-
-	semanticContext := "[codebase_search] Result:\n" + strings.Join(contextParts, "\n\n")
-	logger.Info("searched semantic context",
-		zap.String("context", semanticContext),
-		zap.String("method", "searchSemanticContext"),
-	)
-
-	return semanticContext, nil
-}
-
-// replaceSysMsgWithCompressed replaces system messages in the message list
-// messages: original message list
-func (p *RagProcessor) replaceSysMsgWithCompressed(messages []types.Message) []types.Message {
-	var processedMsgs []types.Message
-	var hasSystem bool
-
-	for _, msg := range messages {
-		if msg.Role == types.RoleSystem {
-			processedMsgs = append(processedMsgs, p.summaryProcessor.processSystemMessageWithCache(msg))
-			hasSystem = true
-		} else {
-			processedMsgs = append(processedMsgs, msg)
-		}
-	}
-
-	// If no system message is found, return the original message list
-	if !hasSystem {
-		return messages
-	}
-	return processedMsgs
-}
-
-// Process process the prompt with RAG compression
+// Process processes the prompt with RAG compression
 func (p *RagProcessor) Process(messages []types.Message) (*ProcessedPrompt, error) {
-	var semanticLatency, summaryLatency int64
-	proceedPrompt := &ProcessedPrompt{
-		Messages: messages,
-	}
-
-	// Get the latest user message
-	lastUserMsgContent, err := utils.GetLastUserMsgContent(messages)
+	promptMsg, err := processor.NewPromptMsg(messages)
 	if err != nil {
-		return proceedPrompt, fmt.Errorf("no user message found: %w", err)
+		return &ProcessedPrompt{
+			Messages: messages,
+		}, fmt.Errorf("create prompt message: %w", err)
 	}
 
-	// Record start time for semantic search
-	semanticStart := time.Now()
-	semanticContext, err := p.searchSemanticContext(p.ctx, lastUserMsgContent)
-	if err != nil {
-		logger.Error("failed to search semantic",
-			zap.Error(err),
-			zap.String("method", "Process"),
-		)
-		proceedPrompt.SemanticErr = err
+	if err := p.buildProcessorChain(); err != nil {
+		return &ProcessedPrompt{
+			Messages: messages,
+		}, fmt.Errorf("build processor chain: %w", err)
 	}
 
-	semanticLatency = time.Since(semanticStart).Milliseconds()
-	proceedPrompt.SemanticLatency = semanticLatency
-	proceedPrompt.SemanticContext = semanticContext
+	p.systemCompressor.Execute(promptMsg)
 
-	// Replace system messages with compressed messages
-	replacedSystemMsgs := p.replaceSysMsgWithCompressed(messages)
-
-	if semanticContext != "" {
-		codebaseContextText := model.Content{
-			Type: "text",
-			Text: fmt.Sprintf("<codebase_search_details>\n%s\n</codebase_search_details>", semanticContext),
-		}
-
-		lastUserMsg := utils.GetRecentUserMsgsWithNum(messages, 1)
-		// Handle user message content
-
-		lastContentList, ok := lastUserMsg[0].Content.([]any)
-		if !ok {
-			// If content is not a list, convert to list
-			logger.Warn("user last message content is not a list")
-			lastContentList = []any{lastUserMsg[0].Content.(string)}
-		}
-
-		// Insert contextText to user message content
-		lastContentList = append(lastContentList, codebaseContextText)
-		lastMsg := types.Message{
-			Role:    types.RoleUser,
-			Content: lastContentList,
-		}
-
-		// Replace last user message with modified version
-		replacedSystemMsgs[len(replacedSystemMsgs)-1] = lastMsg
-	}
-
-	userMessageTokens := p.tokenCounter.CountMessagesTokens(utils.GetUserMsgs(replacedSystemMsgs))
-	needsCompressUserMsg := userMessageTokens > p.config.TokenThreshold
-	logger.Info("user message tokens",
-		zap.Int("tokens", userMessageTokens),
-		zap.Bool("needsCompression", needsCompressUserMsg),
-		zap.String("method", "Process"),
-	)
-
-	if !needsCompressUserMsg {
-		logger.Info("no need to compress user message",
-			zap.String("method", "Process"),
-		)
-		proceedPrompt.Messages = replacedSystemMsgs
-		return proceedPrompt, nil
-	}
-
-	logger.Info("start compress user prompt message",
-		zap.String("method", "Process"),
-	)
-	// Record start time for summary process
-	summaryStart := time.Now()
-	// Get messages to summarize (exclude system messages and num-th user message)
-	messagesToSummarize := utils.GetOldUserMsgsWithNum(replacedSystemMsgs, p.config.RecentUserMsgUsedNums)
-	messagesToSummarize = p.trimMessagesToTokenThreshold(semanticContext, messagesToSummarize)
-
-	summary, err := p.summaryProcessor.GenerateUserPromptSummary(p.ctx, semanticContext, messagesToSummarize)
-	if err != nil {
-		logger.Error("failed to generate summary",
-			zap.Error(err),
-			zap.String("method", "Process"),
-		)
-		// On error, proceed with original messages
-		proceedPrompt.SummaryErr = err
-		proceedPrompt.Messages = replacedSystemMsgs
-		return proceedPrompt, nil
-	}
-
-	// Sumary successfuly, build final messages
-	recentMessages := utils.GetRecentUserMsgsWithNum(replacedSystemMsgs, p.config.RecentUserMsgUsedNums)
-	finalMessages := p.assmebleSummaryMessages(utils.GetSystemMsg(replacedSystemMsgs), summary, recentMessages)
-	summaryLatency = time.Since(summaryStart).Milliseconds()
-
-	proceedPrompt.SummaryLatency = summaryLatency
-	proceedPrompt.Messages = finalMessages
-	proceedPrompt.IsCompressed = true
-	return proceedPrompt, nil
+	return p.createProcessedPrompt(promptMsg), nil
 }
 
-// BuildUserSummaryMessages builds the final messages with user prompt summary
-func (p *RagProcessor) assmebleSummaryMessages(systemMsg types.Message, summary string, recentMessages []types.Message) []types.Message {
-	logger.Info("start assemble summary messages",
-		zap.String("method", "assmebleSummaryMessages"),
+// buildProcessorChain constructs and connects the processor chain
+func (p *RagProcessor) buildProcessorChain() error {
+	p.systemCompressor = processor.NewSystemCompressor(
+		p.config.SystemPromptSplitStr,
+		p.llmClient,
 	)
-	var finalMessages []types.Message
+	p.semanticSearch = processor.NewSemanticSearch(
+		p.ctx,
+		p.config,
+		p.semanticClient,
+		p.identity,
+	)
+	p.userCompressor = processor.NewUserCompressor(
+		p.ctx,
+		p.config,
+		p.llmClient,
+		p.tokenCounter,
+	)
 
-	// Add system message
-	finalMessages = append(finalMessages, systemMsg)
+	// chain order: system -> semantic -> user
+	p.systemCompressor.SetNext(p.semanticSearch)
+	p.semanticSearch.SetNext(p.userCompressor)
 
-	// Add summary as context
-	finalMessages = append(finalMessages, types.Message{
-		Role:    "assistant",
-		Content: summary,
-	})
-
-	// Add system message
-	finalMessages = append(finalMessages, recentMessages...)
-
-	return finalMessages
+	return nil
 }
 
-// trimMessagesToTokenThreshold checks and removes messages from the front until token count is below threshold
-func (p *RagProcessor) trimMessagesToTokenThreshold(semanticContext string, messagesToSummarize []types.Message) []types.Message {
-	// Calculate total tokens
-	semanticContextTokens := p.tokenCounter.CountTokens(semanticContext)
-	messagesTokens := p.tokenCounter.CountMessagesTokens(messagesToSummarize)
-	totalTokens := semanticContextTokens + messagesTokens + 5000
-
-	// Remove messages from front if exceeding threshold
-	removedCount := 0
-	for totalTokens > p.config.SummaryModelTokenThreshold && len(messagesToSummarize) > 0 {
-		removedTokens := p.tokenCounter.CountOneMesaageTokens(messagesToSummarize[0])
-		totalTokens -= removedTokens
-		messagesToSummarize = messagesToSummarize[1:]
-		removedCount++
+// createProcessedPrompt creates the final processed prompt result
+func (p *RagProcessor) createProcessedPrompt(
+	promptMsg *processor.PromptMsg,
+) *ProcessedPrompt {
+	return &ProcessedPrompt{
+		Messages:        promptMsg.AssemblePrompt(),
+		SemanticLatency: p.semanticSearch.Latency,
+		SemanticContext: p.semanticSearch.SemanticResult,
+		SemanticErr:     p.semanticSearch.Err,
+		SummaryLatency:  p.userCompressor.Latency,
+		SummaryErr:      p.userCompressor.Err,
+		IsCompressed:    p.userCompressor.Handled,
 	}
-
-	logger.Info("message token stats",
-		zap.Int("totalTokens", totalTokens),
-		zap.Int("removedCount", removedCount),
-		zap.Int("usedCount", len(messagesToSummarize)),
-		zap.String("method", "trimMessagesToTokenThreshold"),
-	)
-	if removedCount > 0 {
-		logger.Info("removed messages to meet threshold",
-			zap.Int("count", removedCount),
-			zap.String("method", "trimMessagesToTokenThreshold"),
-		)
-	}
-
-	return messagesToSummarize
 }

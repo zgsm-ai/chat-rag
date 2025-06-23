@@ -21,8 +21,11 @@ type SemanticSearch struct {
 	semanticClient client.SemanticInterface
 	config         config.Config
 	identity       *types.Identity
-	next           Processor
-	semanticResult *client.SemanticData
+
+	next Processor
+
+	// SemanticResult is the result of the semantic search.
+	SemanticResult *client.SemanticData
 }
 
 func NewSemanticSearch(
@@ -45,6 +48,7 @@ func (s *SemanticSearch) Execute(promptMsg *PromptMsg) {
 
 	if promptMsg == nil {
 		logger.Error("nil prompt message received", zap.String("method", method))
+		s.Err = fmt.Errorf("nil prompt message received")
 		return
 	}
 
@@ -60,6 +64,7 @@ func (s *SemanticSearch) Execute(promptMsg *PromptMsg) {
 			zap.String("method", method),
 		)
 		s.Err = err
+		s.passToNext(promptMsg)
 		return
 	}
 
@@ -75,9 +80,11 @@ func (s *SemanticSearch) Execute(promptMsg *PromptMsg) {
 			zap.String("method", method),
 		)
 		s.Err = err
+		s.passToNext(promptMsg)
 		return
 	}
 
+	s.Handled = true
 	s.passToNext(promptMsg)
 }
 
@@ -130,7 +137,7 @@ func (s *SemanticSearch) searchSemanticContext(query string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("semantic client search: %w", err)
 	}
-	s.semanticResult = resp
+	s.SemanticResult = resp
 
 	contextStr := s.buildContextString(resp.Results)
 	if contextStr == "" {

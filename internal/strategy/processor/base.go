@@ -14,6 +14,7 @@ type PromptMsg struct {
 type Recorder struct {
 	Latency int64
 	Err     error
+	Handled bool
 }
 
 func NewPromptMsg(messages []types.Message) (*PromptMsg, error) {
@@ -29,6 +30,13 @@ func NewPromptMsg(messages []types.Message) (*PromptMsg, error) {
 		olderUserMsgList: olderUserMsg,
 		lastUserMsg:      &lastUserMsg,
 	}, nil
+}
+
+func (p *PromptMsg) AssemblePrompt() []types.Message {
+	messages := []types.Message{*p.systemMsg}
+	messages = append(messages, p.olderUserMsgList...)
+	messages = append(messages, *p.lastUserMsg)
+	return messages
 }
 
 type Processor interface {

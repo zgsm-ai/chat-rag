@@ -28,7 +28,7 @@ type Config struct {
 	ClassifyModel              string
 
 	// Split system prompt
-	SystemPromptSplitter string
+	SystemPromptSplitStr string
 
 	// used recent user prompt messages nums
 	RecentUserMsgUsedNums int

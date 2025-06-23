@@ -104,7 +104,7 @@ func (tc *TokenCounter) CountMessagesTokens(messages []types.Message) int {
 	return totalTokens
 }
 
-func (tc *TokenCounter) CountOneMesaageTokens(message types.Message) int {
+func (tc *TokenCounter) CountOneMessageTokens(message types.Message) int {
 	totalTokens := 0
 
 	// Count tokens for role

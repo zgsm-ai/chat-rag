@@ -177,7 +177,7 @@ func GetRecentUserMsgsWithNum(messages []types.Message, num int) []types.Message
 
 	// If we didn't find enough user messages, return empty slice
 	if position == -1 {
-		logger.Info("no user message found",
+		logger.Info("no enough user message found",
 			zap.String("method", "GetRecentUserMsgsWithNum"))
 		return []types.Message{}
 	}

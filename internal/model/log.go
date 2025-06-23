@@ -39,7 +39,7 @@ type ChatLog struct {
 	TotalLatency     int64 `json:"total_latency_ms"`
 
 	// Semantic context
-	SemanticContext string `json:"semantic_context"`
+	SemanticContext any `json:"semantic_context"`
 
 	// Content samples (truncated for logging)
 	OriginalPrompt   []types.Message `json:"original_prompt"`

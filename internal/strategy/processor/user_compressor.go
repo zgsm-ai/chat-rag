@@ -2,6 +2,7 @@ package processor
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/zgsm-ai/chat-rag/internal/client"
@@ -61,7 +62,8 @@ type UserCompressor struct {
 	config       config.Config
 	llmClient    client.LLMInterface
 	tokenCounter *tokenizer.TokenCounter
-	next         Processor
+
+	next Processor
 }
 
 func NewUserCompressor(
@@ -79,107 +81,120 @@ func NewUserCompressor(
 }
 
 func (u *UserCompressor) Execute(promptMsg *PromptMsg) {
-	logger.Info("[SystemCompressor] starting system prompt compression",
-		zap.String("method", "Execute"),
-	)
+	const method = "UserCompressor.Execute"
+	logger.Info("starting user prompt compression", zap.String("method", method))
+
 	if promptMsg == nil {
-		logger.Error("promptMsg is nil!")
+		logger.Error("nil prompt message received", zap.String("method", method))
+		u.Err = fmt.Errorf("nil prompt message received")
 		return
 	}
 
-	logger.Info("start compress user prompt message",
-		zap.String("method", "Process"),
-	)
-	// Record start time for summary process
-	summaryStart := time.Now()
-	// Get messages to summarize (exclude system messages and num-th user message)
-	messagesToSummarize := utils.GetOldUserMsgsWithNum(replacedSystemMsgs, p.config.RecentUserMsgUsedNums)
-	messagesToSummarize = s.trimMessagesToTokenThreshold(semanticContext, messagesToSummarize)
+	startTime := time.Now()
+	defer func() {
+		u.Latency = time.Since(startTime).Milliseconds()
+	}()
 
-	summary, err := s.generateUserPromptSummary(s.ctx, semanticContext, messagesToSummarize)
+	userMsgList := append(promptMsg.olderUserMsgList, *promptMsg.lastUserMsg)
+	userMessageTokens := u.tokenCounter.CountMessagesTokens(userMsgList)
+	needsCompressUserMsg := userMessageTokens > u.config.TokenThreshold
+	logger.Info("user message tokens",
+		zap.Int("tokens", userMessageTokens),
+		zap.Bool("needsCompression", needsCompressUserMsg),
+		zap.String("method", method),
+	)
+
+	if !needsCompressUserMsg {
+		logger.Info("no need to compress user message", zap.String("method", method))
+		u.passToNext(promptMsg)
+		return
+	}
+
+	messagesToSummarize, retainedMessages := u.trimMessagesToTokenThreshold(userMsgList)
+	if len(messagesToSummarize) == 0 {
+		logger.Info("no messages to summarize", zap.String("method", method))
+		u.passToNext(promptMsg)
+		return
+	}
+
+	summary, err := u.compressMessages(messagesToSummarize)
 	if err != nil {
-		logger.Error("failed to generate summary",
+		logger.Error("failed to compress messages",
 			zap.Error(err),
-			zap.String("method", "Process"),
+			zap.String("method", method),
 		)
-		// On error, proceed with original messages
-		proceedPrompt.SummaryErr = err
-		proceedPrompt.Messages = replacedSystemMsgs
-		return proceedPrompt, nil
+		u.Err = err
+		u.passToNext(promptMsg)
+		return
 	}
 
-	if s.next != nil {
-		s.next.Execute(promptMsg)
-	} else {
-		logger.Error("system prompt compression completed, but no next processor found",
-			zap.String("method", "Execute"),
-		)
-	}
+	fmt.Printf("==> User Compressed Message: %s\n", summary)
+
+	u.updatePromptMessages(promptMsg, summary, retainedMessages)
+	u.Handled = true
+	u.passToNext(promptMsg)
 }
 
-func (s *UserCompressor) SetNext(next Processor) {
-	s.next = next
+func (u *UserCompressor) SetNext(next Processor) {
+	u.next = next
 }
 
-// generateUserPromptSummary generates a user prompt summary of the conversation
-func (u *UserCompressor) generateUserPromptSummary(ctx context.Context, semanticContext string, messages []types.Message) (string, error) {
-	logger.Info("start generating user prompt summary",
-		zap.String("model", u.llmClient.GetModelName()),
-		zap.String("method", "GenerateUserPromptSummary"),
-	)
-	// Create a new slice of messages for the summary request
-	var summaryMessages []types.Message
-
-	for _, msg := range messages {
-		if msg.Role != "system" {
-			summaryMessages = append(summaryMessages, msg)
-		}
+func (u *UserCompressor) passToNext(promptMsg *PromptMsg) {
+	if u.next == nil {
+		logger.Warn("user compression completed but no next processor configured",
+			zap.String("method", "UserCompressor.Execute"),
+		)
+		return
 	}
+	u.next.Execute(promptMsg)
+}
 
-	if semanticContext != "" {
-		summaryMessages = append(summaryMessages, types.Message{
-			Role:    "assistant",
-			Content: "semanticContext: " + semanticContext + "\n\n",
-		})
+func (u *UserCompressor) compressMessages(messages []types.Message) (string, error) {
+	summary, err := u.llmClient.GenerateContent(u.ctx, USER_SUMMARY_PROMPT, messages)
+	if err != nil {
+		return "", fmt.Errorf("LLM generate content: %w", err)
 	}
+	return summary, nil
+}
 
-	// Add final user instruction
-	summaryMessages = append(summaryMessages, types.Message{
-		Role:    "user",
-		Content: "Summarize the conversation so far, as described in the prompt instructions.",
+func (u *UserCompressor) updatePromptMessages(promptMsg *PromptMsg, summary string, retained []types.Message) {
+	var compressedMessages []types.Message
+	compressedMessages = append(compressedMessages, types.Message{
+		Role:    types.RoleAssistant,
+		Content: summary,
 	})
-
-	return u.llmClient.GenerateContent(ctx, USER_SUMMARY_PROMPT, summaryMessages)
+	compressedMessages = append(compressedMessages, retained...)
+	promptMsg.olderUserMsgList = compressedMessages
 }
 
-// trimMessagesToTokenThreshold checks and removes messages from the front until token count is below threshold
-func (u *UserCompressor) trimMessagesToTokenThreshold(messagesToSummarize []types.Message) []types.Message {
-	// Calculate total tokens
-	semanticContextTokens := u.tokenCounter.CountTokens(semanticContext)
-	messagesTokens := u.tokenCounter.CountMessagesTokens(messagesToSummarize)
-	totalTokens := semanticContextTokens + messagesTokens + 5000
+func (u *UserCompressor) trimMessagesToTokenThreshold(messages []types.Message) ([]types.Message, []types.Message) {
+	const method = "UserCompressor.trimMessagesToTokenThreshold"
 
-	// Remove messages from front if exceeding threshold
-	removedCount := 0
-	for totalTokens > p.config.SummaryModelTokenThreshold && len(messagesToSummarize) > 0 {
-		removedTokens := p.tokenCounter.CountOneMesaageTokens(messagesToSummarize[0])
+	if len(messages) <= u.config.RecentUserMsgUsedNums {
+		return []types.Message{}, messages
+	}
+
+	messagesToSummarize := utils.GetOldUserMsgsWithNum(messages, u.config.RecentUserMsgUsedNums)
+	retainedMessages := utils.GetRecentUserMsgsWithNum(messages, u.config.RecentUserMsgUsedNums)
+
+	currentTokens := u.tokenCounter.CountMessagesTokens(messagesToSummarize)
+	bufferTokens := 5000 // buffer for summary tokens
+	totalTokens := currentTokens + bufferTokens
+
+	var removedCount int
+	for totalTokens > u.config.SummaryModelTokenThreshold && len(messagesToSummarize) > 0 {
+		removedTokens := u.tokenCounter.CountOneMessageTokens(messagesToSummarize[0])
 		totalTokens -= removedTokens
 		messagesToSummarize = messagesToSummarize[1:]
 		removedCount++
 	}
 
-	logger.Info("message token stats",
+	logger.Info("message token statistics",
 		zap.Int("totalTokens", totalTokens),
-		zap.Int("removedCount", removedCount),
-		zap.Int("usedCount", len(messagesToSummarize)),
-		zap.String("method", "trimMessagesToTokenThreshold"),
+		zap.Int("remainingMessages", len(messagesToSummarize)),
+		zap.Int("removedMessages", removedCount),
+		zap.String("method", method),
 	)
-	if removedCount > 0 {
-		logger.Info("removed messages to meet threshold",
-			zap.Int("count", removedCount),
-			zap.String("method", "trimMessagesToTokenThreshold"),
-		)
-	}
 
-	return messagesToSummarize
+	return messagesToSummarize, retainedMessages
 }

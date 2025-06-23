@@ -168,6 +168,7 @@ func (l *ChatCompletionLogic) ChatCompletion() (resp *types.ChatCompletionRespon
 	// Generate completion using structured messages
 	response, err := llmClient.ChatLLMWithMessagesRaw(l.ctx, processedMsgs)
 	if err != nil {
+		chatLog.AddError(types.ErrExtra, err)
 		return nil, fmt.Errorf("failed to generate completion: %w", err)
 	}
 
@@ -256,6 +257,7 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 
 	if err != nil {
 		l.sendSSEError(l.getWriter(), "Failed to generate streaming completion", err)
+		chatLog.AddError(types.ErrExtra, err)
 		return fmt.Errorf("failed to generate streaming completion: %w", err)
 	}
 

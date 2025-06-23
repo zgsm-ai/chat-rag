@@ -6,7 +6,7 @@ Port: 8888
 LLMEndpoint: "https://zgsm.sangfor.com/v1/chat/completions"
 
 # Token processing configuration
-TokenThreshold: 32_000
+TokenThreshold: 5_000
 
 # Semantic API configuration
 SemanticApiEndpoint: "http://localhost:8002/codebase-indexer/api/v1/semantics"
@@ -27,7 +27,7 @@ ClassifyModel: "deepseek-v3"
 SystemPromptSplitter: "====\n\nRULES"
 
 # used recent user prompt messages nums
-RecentUserMsgUsedNums: 10
+RecentUserMsgUsedNums: 3
 
 # oneapi Authorization
 OneApiAuthorization: Bearer 92fb7a5bd85b49e5bf433bb42ede38c0

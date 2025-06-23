@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/zgsm-ai/chat-rag/internal/bootstrap"
+	"github.com/zgsm-ai/chat-rag/internal/client"
 	"github.com/zgsm-ai/chat-rag/internal/logger"
 	"github.com/zgsm-ai/chat-rag/internal/types"
 	"go.uber.org/zap"
@@ -11,13 +12,13 @@ import (
 
 // ProcessedPrompt contains the result of prompt processing
 type ProcessedPrompt struct {
-	Messages        []types.Message `json:"messages"`
-	IsCompressed    bool            `json:"is_compressed"`
-	SemanticLatency int64           `json:"semantic_latency_ms"`
-	SemanticContext string          `json:"semantic_context"`
-	SummaryLatency  int64           `json:"summary_latency_ms"`
-	SemanticErr     error           `json:"semantic_err"`
-	SummaryErr      error           `json:"summary_err"`
+	Messages        []types.Message      `json:"messages"`
+	IsCompressed    bool                 `json:"is_compressed"`
+	SemanticLatency int64                `json:"semantic_latency_ms"`
+	SemanticContext *client.SemanticData `json:"semantic_context"`
+	SummaryLatency  int64                `json:"summary_latency_ms"`
+	SemanticErr     error                `json:"semantic_err"`
+	SummaryErr      error                `json:"summary_err"`
 }
 
 // PromptProcessor is the interface for processing chat prompts
