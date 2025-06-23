@@ -57,7 +57,7 @@ func (s *SemanticSearch) Execute(promptMsg *PromptMsg) {
 		s.Latency = time.Since(startTime).Milliseconds()
 	}()
 
-	semanticContext, err := s.searchSemanticContext(utils.GetContentAsString(promptMsg.lastUserMsg))
+	semanticContext, err := s.searchSemanticContext(utils.GetContentAsString(promptMsg.lastUserMsg.Content))
 	if err != nil {
 		logger.Error("failed to search semantic context",
 			zap.Error(err),
