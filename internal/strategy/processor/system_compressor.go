@@ -152,10 +152,10 @@ func (p *SystemCompressor) processSystemMessageWithCache(msg *types.Message) *ty
 
 // processContentWithCache handles the caching logic for system content
 func (p *SystemCompressor) processContentWithCache(content []model.Content, systemContent string) *types.Message {
-	// Check if system prompt contains SystemPromptSplitter
+	// Check if system prompt contains SystemPromptSplitStr
 	toolGuidelinesIndex := strings.Index(systemContent, p.systemPromptSplitStr)
 	if toolGuidelinesIndex == -1 {
-		logger.Warn("No SystemPromptSplitter found",
+		logger.Warn("No SystemPromptSplitStr found",
 			zap.String("method", "processSystemMessageWithCache"),
 		)
 		return &types.Message{
@@ -221,7 +221,7 @@ func (p *SystemCompressor) generateSystemPromptSummary(ctx context.Context, syst
 	// Add final user instruction
 	summaryMessages = append(summaryMessages, types.Message{
 		Role:    "user",
-		Content: "Please compress the following content:\n" + systemPrompt,
+		Content: "Please compress the following content:\n\n" + systemPrompt,
 	})
 
 	return p.llmClient.GenerateContent(ctx, SYSTEM_SUMMARY_PROMPT, summaryMessages)

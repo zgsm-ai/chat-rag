@@ -34,7 +34,7 @@ data:
     ClassifyModel: "deepseek-v3"
 
     # Split system prompt, used to compress system prompt
-    SystemPromptSplitter: "====\n\nRULES"
+    SystemPromptSplitStr: "====\n\nRULES"
 
     # used recent user prompt messages nums
     RecentUserMsgUsedNums: 10

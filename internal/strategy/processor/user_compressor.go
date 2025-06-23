@@ -128,8 +128,6 @@ func (u *UserCompressor) Execute(promptMsg *PromptMsg) {
 		return
 	}
 
-	fmt.Printf("==> User Compressed Message: %s\n", summary)
-
 	u.updatePromptMessages(promptMsg, summary, retainedMessages)
 	u.Handled = true
 	u.passToNext(promptMsg)
@@ -150,9 +148,21 @@ func (u *UserCompressor) passToNext(promptMsg *PromptMsg) {
 }
 
 func (u *UserCompressor) compressMessages(messages []types.Message) (string, error) {
-	summary, err := u.llmClient.GenerateContent(u.ctx, USER_SUMMARY_PROMPT, messages)
+	// Add final user instruction
+	messagesToSummarize := make([]types.Message, len(messages), len(messages)+1)
+	copy(messagesToSummarize, messages)
+	messagesToSummarize = append(messagesToSummarize, types.Message{
+		Role:    types.RoleUser,
+		Content: "Summarize the conversation so far, as described in the prompt instructions.",
+	})
+
+	summary, err := u.llmClient.GenerateContent(
+		u.ctx,
+		USER_SUMMARY_PROMPT,
+		messagesToSummarize,
+	)
 	if err != nil {
-		return "", fmt.Errorf("LLM generate content: %w", err)
+		return "", fmt.Errorf("LLM generate content failed in UserCompressor: %w", err)
 	}
 	return summary, nil
 }
