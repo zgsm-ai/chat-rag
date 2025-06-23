@@ -11,7 +11,7 @@ TokenThreshold: 5_000
 # Semantic API configuration
 SemanticApiEndpoint: "http://localhost:8002/codebase-indexer/api/v1/semantics"
 TopK: 5
-SemanticSocreThreshold: 0.5
+SemanticScoreThreshold: 0.5
 
 # Logging configuration
 LogFilePath: "logs/"

@@ -18,7 +18,7 @@ data:
     # Semantic API configuration
     SemanticApiEndpoint: "http://codebase-indexer-svc.shenma:8888/codebase-indexer/api/v1/search/semantic"
     TopK: 5
-    SemanticSocreThreshold: 0.6
+    SemanticScoreThreshold: 0.75
 
     # Feature flags
     EnableCompression: true

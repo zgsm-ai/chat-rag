@@ -177,11 +177,6 @@ func (s *SemanticSearch) buildContextString(results []client.SemanticResult) str
 	var contextParts []string
 
 	for _, result := range results {
-		logger.Info("==> result score threshold",
-			zap.Float64("score", result.Score),
-			zap.Float64("SemanticScoreThreshold", s.config.SemanticScoreThreshold),
-			zap.String("method", "SemanticSearch.buildContextString"),
-		)
 		if result.Score < s.config.SemanticScoreThreshold {
 			continue
 		}
