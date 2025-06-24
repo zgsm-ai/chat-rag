@@ -95,6 +95,7 @@ func (u *UserCompressor) Execute(promptMsg *PromptMsg) {
 		u.Latency = time.Since(startTime).Milliseconds()
 	}()
 
+	// Check if user message needs to be compressed
 	userMsgList := append(promptMsg.olderUserMsgList, *promptMsg.lastUserMsg)
 	userMessageTokens := u.tokenCounter.CountMessagesTokens(userMsgList)
 	needsCompressUserMsg := userMessageTokens > u.config.TokenThreshold
@@ -110,7 +111,8 @@ func (u *UserCompressor) Execute(promptMsg *PromptMsg) {
 		return
 	}
 
-	messagesToSummarize, retainedMessages := u.trimMessagesToTokenThreshold(userMsgList)
+	// Split out the messages that need to be summarized from olderUserMsgList according to the threshold
+	messagesToSummarize, retainedMessages := u.trimMessagesToTokenThreshold(promptMsg.olderUserMsgList)
 	if len(messagesToSummarize) == 0 {
 		logger.Info("no messages to summarize", zap.String("method", method))
 		u.passToNext(promptMsg)

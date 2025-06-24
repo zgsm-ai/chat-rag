@@ -18,13 +18,16 @@ type Recorder struct {
 }
 
 func NewPromptMsg(messages []types.Message) (*PromptMsg, error) {
-	systemMsg := utils.GetSystemMsg(messages)
-	lastUserMsg, err := utils.GetLastUserMsg(messages)
+	messagesCopy := make([]types.Message, len(messages))
+	copy(messagesCopy, messages)
+
+	systemMsg := utils.GetSystemMsg(messagesCopy)
+	lastUserMsg, err := utils.GetLastUserMsg(messagesCopy)
 	if err != nil {
 		return nil, err
 	}
 
-	olderUserMsg := utils.GetOldUserMsgsWithNum(messages, 1)
+	olderUserMsg := utils.GetOldUserMsgsWithNum(messagesCopy, 1)
 	return &PromptMsg{
 		systemMsg:        &systemMsg,
 		olderUserMsgList: olderUserMsg,
