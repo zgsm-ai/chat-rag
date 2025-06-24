@@ -5,94 +5,187 @@ import (
 	"strings"
 
 	"github.com/golang-jwt/jwt"
+	"github.com/google/uuid"
 	"github.com/zgsm-ai/chat-rag/internal/logger"
 	"go.uber.org/zap"
 )
 
-const unknown = "unknown"
+// UserInfo defines the user information structure
+type UserInfo struct {
+	ID             string `json:"id"`
+	Phone          string `json:"phone"`
+	GithubID       string `json:"github_id"`
+	Email          string `json:"email"`
+	Name           string `json:"name"`
+	GithubName     string `json:"github_name"`
+	EmployeeNumber string `json:"employee_number"`
+}
 
-func parseJwt(tokenString string) (map[string]interface{}, error) {
-	// Remove Bearer prefix if present
-	if len(tokenString) > 7 && tokenString[:7] == "Bearer " {
-		tokenString = tokenString[7:]
+// JWTClaims defines the JWT claims structure
+type JWTClaims struct {
+	Phone       string                 `json:"phone"`
+	UniversalID string                 `json:"universal_id"`
+	Email       string                 `json:"email,omitempty"`
+	Properties  map[string]interface{} `json:"properties,omitempty"`
+}
+
+// CustomProperties defines the custom properties structure
+type CustomProperties struct {
+	GithubID       string `json:"oauth_GitHub_id,omitempty"`
+	GithubName     string `json:"oauth_GitHub_username,omitempty"`
+	CustomName     string `json:"oauth_Custom_username,omitempty"`
+	EmployeeNumber string `json:"oauth_Custom_id,omitempty"`
+	CustomPhone    string `json:"oauth_Custom_email,omitempty"`
+}
+
+// NewUserInfo creates user info from JWT token
+func NewUserInfo(jwtToken string) *UserInfo {
+	claims, err := parseJWT(jwtToken)
+	if err != nil {
+		logger.Error("Failed to parse JWT:", zap.Error(err))
+		return &UserInfo{}
 	}
 
-	// Parse without verification since we only need to extract info
+	userInfo, err := extractUserInfo(claims)
+	if err != nil {
+		logger.Error("Failed to extract user info:", zap.Error(err))
+		return &UserInfo{}
+	}
+
+	return userInfo
+}
+
+// parseJWT parses JWT token
+func parseJWT(tokenString string) (*JWTClaims, error) {
+	tokenString = strings.TrimPrefix(tokenString, "Bearer ")
+
 	token, _, err := new(jwt.Parser).ParseUnverified(tokenString, jwt.MapClaims{})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid JWT format: %w", err)
 	}
 
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
-		err := fmt.Errorf("[parseJwt] Invalid JWT claims structure")
-		return nil, err
+		return nil, fmt.Errorf("invalid JWT claims structure")
 	}
 
-	return claims, nil
+	return mapClaimsToJWTClaims(claims)
 }
 
-// ExtractUserNameFromToken parses JWT token to extract name and email claims.
-// If parsing fails, returns "unknown". Missing fields are replaced with "unknown".
-func ExtractUserNameFromToken(tokenString string) string {
-	var name, contactDetals string
+// mapClaimsToJWTClaims maps jwt.MapClaims to JWTClaims structure
+func mapClaimsToJWTClaims(claims jwt.MapClaims) (*JWTClaims, error) {
+	var jwtClaims JWTClaims
 
-	claims, err := parseJwt(tokenString)
+	if phone, ok := claims["phone"].(string); ok {
+		jwtClaims.Phone = phone
+	}
+	if universalID, ok := claims["universal_id"].(string); ok {
+		jwtClaims.UniversalID = universalID
+	}
+	if email, ok := claims["email"].(string); ok {
+		jwtClaims.Email = email
+	}
+	if properties, ok := claims["properties"].(map[string]interface{}); ok {
+		jwtClaims.Properties = properties
+	}
+
+	return &jwtClaims, nil
+}
+
+// extractUserInfo extracts user info from JWT claims
+func extractUserInfo(claims *JWTClaims) (*UserInfo, error) {
+	id, err := uuid.Parse(claims.UniversalID)
 	if err != nil {
-		logger.Error("error parsing JWT",
-			zap.Error(err),
-			zap.String("method", "ExtractUserNameFromToken"))
-		return unknown
+		return nil, fmt.Errorf("invalid universal_id: %w", err)
 	}
 
-	if n, ok := claims["name"].(string); ok && n != "" {
-		name = n
+	customProps := parseCustomProperties(claims.Properties)
+	user := buildUserInfo(claims, customProps, id.String())
+
+	return user, nil
+}
+
+// parseCustomProperties parses custom properties
+func parseCustomProperties(properties map[string]interface{}) CustomProperties {
+	var props CustomProperties
+
+	if properties == nil {
+		return props
 	}
 
-	if e, ok := claims["email"].(string); ok && e != "" {
-		contactDetals = e
-	} else if p, ok := claims["phone_number"].(string); ok && p != "" {
-		contactDetals = p
+	if id, ok := properties["oauth_GitHub_id"].(string); ok {
+		props.GithubID = id
+	}
+	if name, ok := properties["oauth_GitHub_username"].(string); ok {
+		props.GithubName = name
+	}
+	if customName, ok := properties["oauth_Custom_username"].(string); ok {
+		props.CustomName = customName
+	}
+	if empNum, ok := properties["oauth_Custom_id"].(string); ok {
+		props.EmployeeNumber = empNum
+	}
+	if phone, ok := properties["oauth_Custom_email"].(string); ok {
+		props.CustomPhone = phone
 	}
 
+	return props
+}
+
+// buildUserInfo constructs user info from claims and properties
+func buildUserInfo(claims *JWTClaims, props CustomProperties, id string) *UserInfo {
+	user := &UserInfo{
+		ID:             id,
+		Phone:          normalizePhone(claims.Phone),
+		GithubID:       props.GithubID,
+		Email:          claims.Email,
+		GithubName:     props.GithubName,
+		EmployeeNumber: props.EmployeeNumber,
+	}
+
+	applyCustomProperties(user, props)
+	determineUserName(user, props)
+
+	return user
+}
+
+// applyCustomProperties applies custom properties to user info
+func applyCustomProperties(user *UserInfo, props CustomProperties) {
+	if props.CustomPhone != "" {
+		user.Phone = normalizePhone(props.CustomPhone)
+	}
+}
+
+// determineUserName determines the final user name
+func determineUserName(user *UserInfo, props CustomProperties) {
 	switch {
-	case name != "" && contactDetals != "":
-		return fmt.Sprintf("%s<%s>", name, contactDetals)
-	case name != "":
-		return name
-	case contactDetals != "":
-		return contactDetals
-	default:
-		return unknown
+	case props.GithubName != "":
+		user.Name = props.GithubName
+	case props.CustomName != "":
+		user.Name = props.CustomName + props.EmployeeNumber
+	case user.Name == "":
+		user.Name = user.Phone
 	}
+}
+
+// normalizePhone normalizes phone number format
+func normalizePhone(phone string) string {
+	return strings.ReplaceAll(phone, "+86", "")
 }
 
 // ExtractLoginFromToken parses JWT token to extract login type.
-func ExtractLoginFromToken(tokenString string) string {
-	claims, err := parseJwt(tokenString)
-	if err != nil {
-		logger.Error("error parsing JWT",
-			zap.Error(err),
-			zap.String("method", "ExtractLoginFromToken"))
-		return unknown
-	}
-
-	if n, ok := claims["github"].(string); ok && n != "" {
+func (u *UserInfo) ExtractLoginFromToken() string {
+	if u.GithubName != "" {
 		return "github"
 	}
 
-	if n, ok := claims["email"].(string); ok && n != "" {
-		if strings.Contains(n, "@sangfor.com") {
-			return "sangfor"
-		}
+	if u.EmployeeNumber != "" {
+		return "sangfor"
 	}
 
-	if n, ok := claims["phone"].(string); ok && n != "" {
-		return "phone"
-	}
-	if n, ok := claims["phone_number"].(string); ok && n != "" {
+	if u.Phone != "" {
 		return "phone"
 	}
 
-	return unknown
+	return "unknown"
 }

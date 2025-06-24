@@ -28,15 +28,19 @@ func getIndentityFromHeaders(c *gin.Context) *types.Identity {
 		projectPath = decodedPath
 	}
 
+	jwtToken := c.GetHeader("authorization")
+	userInfo := utils.NewUserInfo(jwtToken)
+	logger.Info("User info:", zap.Any("userInfo", userInfo))
+
 	return &types.Identity{
 		RequestID:   c.GetHeader("x-request-id"),
 		TaskID:      c.GetHeader("zgsm-task-id"),
 		ClientID:    c.GetHeader("zgsm-client-id"),
 		ClientIDE:   clientIDE,
 		ProjectPath: projectPath,
-		AuthToken:   c.GetHeader("authorization"),
-		UserName:    utils.ExtractUserNameFromToken(c.GetHeader("authorization")),
-		LoginFrom:   utils.ExtractLoginFromToken(c.GetHeader("authorization")),
+		AuthToken:   jwtToken,
+		UserName:    userInfo.Name,
+		LoginFrom:   userInfo.ExtractLoginFromToken(),
 	}
 }
 
