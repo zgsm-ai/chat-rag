@@ -1,6 +1,7 @@
 package processor
 
 import (
+	"github.com/zgsm-ai/chat-rag/internal/logger"
 	"github.com/zgsm-ai/chat-rag/internal/types"
 	"github.com/zgsm-ai/chat-rag/internal/utils"
 )
@@ -45,4 +46,17 @@ func (p *PromptMsg) AssemblePrompt() []types.Message {
 type Processor interface {
 	Execute(promptMsg *PromptMsg)
 	SetNext(processor Processor)
+}
+
+type End struct{}
+
+func NewEndpoint() *End {
+	return &End{}
+}
+
+func (e *End) Execute(promptMsg *PromptMsg) {
+	logger.Info("In end of processor chain")
+}
+
+func (e *End) SetNext(processor Processor) {
 }

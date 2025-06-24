@@ -23,6 +23,7 @@ type RagProcessor struct {
 	systemCompressor *processor.SystemCompressor
 	semanticSearch   *processor.SemanticSearch
 	userCompressor   *processor.UserCompressor
+	end              *processor.End
 }
 
 // NewRagProcessor creates a new RAG compression processor
@@ -88,10 +89,12 @@ func (p *RagProcessor) buildProcessorChain() error {
 		p.llmClient,
 		p.tokenCounter,
 	)
+	p.end = processor.NewEndpoint()
 
 	// chain order: system -> semantic -> user
 	p.systemCompressor.SetNext(p.semanticSearch)
 	p.semanticSearch.SetNext(p.userCompressor)
+	p.userCompressor.SetNext(p.end)
 
 	return nil
 }
