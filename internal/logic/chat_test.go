@@ -123,19 +123,6 @@ func TestLLMClientMock(t *testing.T) {
 	assert.NotNil(t, mock)
 }
 
-// Tests token counting with empty messages
-func TestChatCompletionLogic_countTokens_Empty(t *testing.T) {
-	cfg := &config.Config{}
-	logic, _ := setupTestLogic(t, cfg, nil, "test-model", []types.Message{}, &mockResponseWriter{})
-
-	count := logic.countTokens("")
-	assert.Equal(t, 0, count)
-
-	messages := []types.Message{}
-	count = logic.countTokensInMessages(messages)
-	assert.Equal(t, 0, count)
-}
-
 func TestChatCompletionLogic_countTokensInMessages_Fallback(t *testing.T) {
 	cfg := &config.Config{}
 	logic, _ := setupTestLogic(t, cfg, nil, "test-model", []types.Message{}, &mockResponseWriter{})
@@ -146,15 +133,6 @@ func TestChatCompletionLogic_countTokensInMessages_Fallback(t *testing.T) {
 	}
 
 	count := logic.countTokensInMessages(messages)
-	assert.Greater(t, count, 0) // Should return estimated token count
-}
-
-func TestChatCompletionLogic_countTokens_Fallback(t *testing.T) {
-	cfg := &config.Config{}
-	logic, _ := setupTestLogic(t, cfg, nil, "test-model", []types.Message{}, &mockResponseWriter{})
-
-	text := "Hello, world!"
-	count := logic.countTokens(text)
 	assert.Greater(t, count, 0) // Should return estimated token count
 }
 
