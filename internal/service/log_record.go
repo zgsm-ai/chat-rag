@@ -74,6 +74,7 @@ type LoggerRecordService struct {
 	llmEndpoint     string
 	classifyModel   string
 	llmClient       client.LLMInterface
+	instanceID      string
 
 	logChan  chan *model.ChatLog
 	stopChan chan struct{}
@@ -83,34 +84,15 @@ type LoggerRecordService struct {
 	processorStarted bool
 }
 
-// sanitizeFilename cleans a string to make it safe for use in file/folder names
-func (ls *LoggerRecordService) sanitizeFilename(name string, defaultName string) string {
-	if name == "" {
-		return defaultName
-	}
-
-	// Remove invalid characters for both Windows and Linux
-	invalidChars := []string{"\\", "/", ":", "*", "?", "\"", "<", ">", "|", "\x00", "\n", "\r", "\t"}
-	// Also replace any non-printable ASCII characters
-	for i := 0; i < 32; i++ {
-		invalidChars = append(invalidChars, string(rune(i)))
-	}
-	for _, c := range invalidChars {
-		name = strings.ReplaceAll(name, c, "")
-	}
-
-	// Limit length to 255 bytes for Linux compatibility
-	if len(name) > 255 {
-		name = name[:255]
-	}
-
-	return name
-}
-
 // NewLogRecordService creates a new logger service
 func NewLogRecordService(config config.Config) LogRecordInterface {
 	// Create temp directory under logFilePath for temporary log files
 	tempLogDir := filepath.Join(config.LogFilePath, "temp")
+
+	instanceID := os.Getenv("HOSTNAME")
+	if instanceID == "" {
+		instanceID = fmt.Sprintf("instance-%d", rand.Intn(10000))
+	}
 
 	return &LoggerRecordService{
 		logFilePath:     config.LogFilePath, // Permanent storage directory
@@ -121,6 +103,7 @@ func NewLogRecordService(config config.Config) LogRecordInterface {
 		classifyModel:   config.ClassifyModel,
 		logChan:         make(chan *model.ChatLog, 1000),
 		stopChan:        make(chan struct{}),
+		instanceID:      instanceID,
 	}
 }
 
@@ -250,7 +233,7 @@ func (ls *LoggerRecordService) logSync(logs *model.ChatLog) {
 	timePart := logs.Timestamp.Format("150405")
 	username := ls.sanitizeFilename(logs.Identity.UserName, "unknown")
 	randNum := ls.generateRandomNumber()
-	filename := fmt.Sprintf("%s-%s-%s-%d.log", datePart, timePart, username, randNum)
+	filename := fmt.Sprintf("%s-%s-%s-%d-%s.log", datePart, timePart, username, randNum, ls.instanceID)
 	filePath := filepath.Join(ls.tempLogFilePath, filename)
 
 	logJSON, err := logs.ToCompressedJSON()
@@ -288,102 +271,140 @@ func (ls *LoggerRecordService) logProcessor() {
 	}
 }
 
-// processLogs reads logs from files one by one, processes each, and uploads to Loki
 func (ls *LoggerRecordService) processLogs() {
-	// Get list of log files
+	files, err := ls.getLogFiles()
+	if err != nil || len(files) == 0 {
+		return
+	}
+
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, 2) // Limit concurrent goroutines
+
+	for _, file := range files {
+		wg.Add(1)
+		sem <- struct{}{}
+
+		go func(f os.DirEntry) {
+			defer wg.Done()
+			defer func() { <-sem }()
+
+			ls.processSingleFile(f)
+		}(file)
+	}
+
+	wg.Wait()
+}
+
+// getLogFiles retrieves log files from the temporary log directory
+func (ls *LoggerRecordService) getLogFiles() ([]os.DirEntry, error) {
 	files, err := os.ReadDir(ls.tempLogFilePath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return
+			return nil, nil
 		}
-		logger.Error("Failed to list log files",
+		logger.Error("Failed to list log files", zap.Error(err))
+		return nil, err
+	}
+
+	// Filter out non-log files
+	var validFiles []os.DirEntry
+	for _, file := range files {
+		name := file.Name()
+		if (strings.HasSuffix(name, ".log") || strings.HasSuffix(name, ".json")) &&
+			strings.Contains(name, ls.instanceID) {
+			validFiles = append(validFiles, file)
+		}
+	}
+
+	return validFiles, nil
+}
+
+// processSingleFile processes a single log file
+func (ls *LoggerRecordService) processSingleFile(file os.DirEntry) {
+	filePath := filepath.Join(ls.tempLogFilePath, file.Name())
+
+	// 1. Read log file content
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			logger.Warn("Log file not found",
+				zap.String("filename", file.Name()),
+				zap.Error(err),
+			)
+		} else {
+			logger.Error("Failed to read log file",
+				zap.String("filename", file.Name()),
+				zap.Error(err),
+			)
+		}
+		return
+	}
+
+	// 2. Parse log content
+	chatLog, err := model.FromJSON(string(content))
+	if err != nil {
+		logger.Error("Failed to parse log file",
+			zap.String("filename", file.Name()),
 			zap.Error(err),
 		)
 		return
 	}
 
-	if len(files) == 0 {
+	// 3. Process classification
+	if err := ls.processClassification(chatLog, filePath); err != nil {
+		logger.Error("Failed to process classification",
+			zap.String("filename", file.Name()),
+			zap.Error(err),
+		)
 		return
 	}
 
-	// Process each file one by one
-	for _, file := range files {
-		// Skip files that don't end with .log or .json
-		name := file.Name()
-		if !strings.HasSuffix(name, ".log") && !strings.HasSuffix(name, ".json") {
-			continue
-		}
-		filePath := filepath.Join(ls.tempLogFilePath, name)
-		if _, err := os.Stat(filePath); os.IsNotExist(err) {
-			logger.Warn("Log file not found",
-				zap.String("filename", file.Name()),
-				zap.Error(err),
-			)
-			continue
-		}
-
-		fileContent, err := os.ReadFile(filePath)
-		if err != nil {
-			logger.Error("Failed to read log file",
-				zap.String("filename", file.Name()),
-				zap.Error(err),
-			)
-			continue
-		}
-
-		chatLog, err := model.FromJSON(string(fileContent))
-		if err != nil {
-			logger.Error("Failed to parse log file",
-				zap.String("filename", file.Name()),
-				zap.Error(err),
-			)
-			continue
-		}
-
-		// Classify log
-		if chatLog.Category == "" {
-			// Ensure headers are set before classification
-			chatLog.Category = ls.classifyLog(chatLog)
-
-			// Update temp log file with category info
-			logJSON, err := chatLog.ToCompressedJSON()
-			if err != nil {
-				logger.Error("Failed to marshal updated log",
-					zap.Error(err),
-				)
-				continue
-			}
-			if err := ls.writeLogToFile(filePath, logJSON, os.O_WRONLY|os.O_TRUNC); err != nil {
-				logger.Error("Failed to update temp log file",
-					zap.Error(err),
-				)
-				continue
-			}
-		}
-
-		// Upload single log to Loki
-		if success := ls.uploadToLoki(chatLog); !success {
-			logger.Error("Loki upload failed, keeping log file",
-				zap.String("filename", file.Name()),
-			)
-			continue
-		}
-
-		logger.Info("Log uploaded to Loki",
+	// 4. Upload and process log
+	if err := ls.uploadAndProcessLog(chatLog, file); err != nil {
+		logger.Error("Failed to upload and process log",
 			zap.String("filename", file.Name()),
+			zap.Error(err),
 		)
-
-		// Record metrics if metrics service is available
-		if ls.metricsService != nil {
-			ls.metricsService.RecordChatLog(chatLog)
-		}
-
-		// Save to permanent storage
-		ls.saveLogToPermanentStorage(chatLog)
-
-		// Delete processed temp file
-		ls.deleteTempLogFile(filepath.Join(ls.tempLogFilePath, file.Name()))
 	}
+}
+
+// processClassification processes the classification of a single log entry
+func (ls *LoggerRecordService) processClassification(chatLog *model.ChatLog, filePath string) error {
+	if chatLog.Category != "" {
+		return nil
+	}
+
+	chatLog.Category = ls.classifyLog(chatLog)
+	logJSON, err := chatLog.ToCompressedJSON()
+	if err != nil {
+		return fmt.Errorf("marshal updated log: %w", err)
+	}
+
+	if err := ls.writeLogToFile(filePath, logJSON, os.O_WRONLY|os.O_TRUNC); err != nil {
+		return fmt.Errorf("update temp log file: %w", err)
+	}
+
+	return nil
+}
+
+// uploadAndProcessLog uploads a single log to Loki and saves it to permanent storage
+func (ls *LoggerRecordService) uploadAndProcessLog(chatLog *model.ChatLog, file os.DirEntry) error {
+	if !ls.uploadToLoki(chatLog) {
+		return fmt.Errorf("failed to upload to Loki")
+	}
+
+	logger.Info("Log uploaded to Loki",
+		zap.String("filename", file.Name()),
+	)
+
+	if ls.metricsService != nil {
+		ls.metricsService.RecordChatLog(chatLog)
+	}
+
+	ls.saveLogToPermanentStorage(chatLog)
+	ls.deleteTempLogFile(filepath.Join(ls.tempLogFilePath, file.Name()))
+
+	return nil
 }
 
 // classifyLog classifies a single log entry
@@ -539,4 +560,28 @@ func (ls *LoggerRecordService) deleteTempLogFile(filePath string) {
 			zap.Error(err),
 		)
 	}
+}
+
+// sanitizeFilename cleans a string to make it safe for use in file/folder names
+func (ls *LoggerRecordService) sanitizeFilename(name string, defaultName string) string {
+	if name == "" {
+		return defaultName
+	}
+
+	// Remove invalid characters for both Windows and Linux
+	invalidChars := []string{"\\", "/", ":", "*", "?", "\"", "<", ">", "|", "\x00", "\n", "\r", "\t"}
+	// Also replace any non-printable ASCII characters
+	for i := 0; i < 32; i++ {
+		invalidChars = append(invalidChars, string(rune(i)))
+	}
+	for _, c := range invalidChars {
+		name = strings.ReplaceAll(name, c, "")
+	}
+
+	// Limit length to 255 bytes for Linux compatibility
+	if len(name) > 255 {
+		name = name[:255]
+	}
+
+	return name
 }
