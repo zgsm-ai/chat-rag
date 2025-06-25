@@ -10,7 +10,7 @@ data:
     Port: 8888
 
     # Model endpoints configuration
-    LLMEndpoint: "http://zgsm-backend-shenma-oneapi.shenma.svc.cluster.local:3000/v1/chat/completions"
+    LLMEndpoint: "http://higress-gateway.shenma.svc.cluster.local/v1/chat/completions"
 
     # Token processing configuration
     TokenThreshold: 32_000
@@ -19,9 +19,6 @@ data:
     SemanticApiEndpoint: "http://codebase-indexer-svc.shenma:8888/codebase-indexer/api/v1/search/semantic"
     TopK: 5
     SemanticScoreThreshold: 0.75
-
-    # Feature flags
-    EnableCompression: true
 
     # Logging configuration
     LogFilePath: "/data/logs/"
@@ -38,9 +35,6 @@ data:
 
     # used recent user prompt messages nums
     RecentUserMsgUsedNums: 10
-
-    # oneapi Authorization
-    OneApiAuthorization: sk-tQ5599ZxVKePZtN69a3d1eC9748944DbA4CcBc5a60C2F085
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim

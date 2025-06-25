@@ -24,9 +24,6 @@ func ChatCompletionHandler(svcCtx *bootstrap.ServiceContext) gin.HandlerFunc {
 		// 2. Process identity from headers
 		identity := getIdentityFromHeaders(c)
 
-		// TODO oneapi's key, it will be removed if not use oneapi
-		c.Request.Header.Set("Authorization", svcCtx.Config.OneApiAuthorization)
-
 		// 3. Prepare request context
 		reqCtx := &bootstrap.RequestContext{
 			Request: &req,

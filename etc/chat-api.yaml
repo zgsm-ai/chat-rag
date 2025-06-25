@@ -28,6 +28,3 @@ SystemPromptSplitStr: "====\n\nRULES"
 
 # used recent user prompt messages nums
 RecentUserMsgUsedNums: 3
-
-# oneapi Authorization
-OneApiAuthorization: Bearer 92fb7a5bd85b49e5bf433bb42ede38c0

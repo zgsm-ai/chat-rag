@@ -32,7 +32,4 @@ type Config struct {
 
 	// used recent user prompt messages nums
 	RecentUserMsgUsedNums int
-
-	// oneapi Authorization
-	OneApiAuthorization string
 }
