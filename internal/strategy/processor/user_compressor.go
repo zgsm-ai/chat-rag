@@ -183,6 +183,10 @@ func (u *UserCompressor) trimMessagesToTokenThreshold(messages []types.Message) 
 	const method = "UserCompressor.trimMessagesToTokenThreshold"
 
 	if len(messages) <= u.config.RecentUserMsgUsedNums {
+		logger.Warn("no enough messages to trim",
+			zap.Int("messages length", len(messages)),
+			zap.Int("RecentUserMsgUsedNums", u.config.RecentUserMsgUsedNums),
+		)
 		return []types.Message{}, messages
 	}
 
