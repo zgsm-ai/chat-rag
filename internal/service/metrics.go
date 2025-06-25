@@ -5,141 +5,127 @@ import (
 	"github.com/zgsm-ai/chat-rag/internal/model"
 )
 
-// metricsBaseLabels are the base labels for metrics
-var metricsBaseLabels = []string{"client_id", "client_ide", "model", "user", "login_from"}
+const (
+	// Base labels
+	metricsBaseLabelClientID  = "client_id"
+	metricsBaseLabelClientIDE = "client_ide"
+	metricsBaseLabelModel     = "model"
+	metricsBaseLabelUser      = "user"
+	metricsBaseLabelLoginFrom = "login_from"
+	metricsBaseLabelCaller    = "caller"
+	metricsLabelCategory      = "category"
+	metricsLabelTokenScope    = "token_scope"
+	metricsLabelErrorType     = "error_type"
+
+	// Metric names
+	metricRequestsTotal         = "chat_rag_requests_total"
+	metricOriginalTokensTotal   = "chat_rag_original_tokens_total"
+	metricCompressedTokensTotal = "chat_rag_compressed_tokens_total"
+	metricCompressionRatio      = "chat_rag_compression_ratio"
+	metricSemanticLatency       = "chat_rag_semantic_latency_ms"
+	metricSummaryLatency        = "chat_rag_summary_latency_ms"
+	metricMainModelLatency      = "chat_rag_main_model_latency_ms"
+	metricTotalLatency          = "chat_rag_total_latency_ms"
+	metricUserPromptCompressed  = "chat_rag_user_prompt_compressed_total"
+	metricResponseTokens        = "chat_rag_response_tokens_total"
+	metricErrorsTotal           = "chat_rag_errors_total"
+
+	// Default values
+	defaultCategory = "unknown"
+)
+
+// Bucket definitions
+var (
+	compressionRatioBuckets = []float64{0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0}
+	fastLatencyBuckets      = []float64{10, 50, 100, 200, 500, 1000, 2000, 5000}
+	mainModelLatencyBuckets = []float64{100, 500, 1000, 2000, 5000, 10000, 20000}
+	totalLatencyBuckets     = []float64{100, 500, 1000, 2000, 5000, 10000, 20000, 30000}
+)
+
+// Base label list
+var metricsBaseLabels = []string{
+	metricsBaseLabelClientID,
+	metricsBaseLabelClientIDE,
+	metricsBaseLabelModel,
+	metricsBaseLabelUser,
+	metricsBaseLabelLoginFrom,
+	metricsBaseLabelCaller,
+}
 
 // MetricsInterface defines the interface for metrics service
 type MetricsInterface interface {
-	// RecordChatLog records metrics from a ChatLog entry
 	RecordChatLog(log *model.ChatLog)
-	// GetRegistry returns the Prometheus registry
 	GetRegistry() *prometheus.Registry
 }
 
 // MetricsService handles Prometheus metrics collection
 type MetricsService struct {
-	// Request metrics
-	requestsTotal *prometheus.CounterVec
-
-	// Token metrics
+	requestsTotal         *prometheus.CounterVec
 	originalTokensTotal   *prometheus.CounterVec
 	compressedTokensTotal *prometheus.CounterVec
 	compressionRatio      *prometheus.HistogramVec
-
-	// Latency metrics
-	semanticLatency  *prometheus.HistogramVec
-	summaryLatency   *prometheus.HistogramVec
-	mainModelLatency *prometheus.HistogramVec
-	totalLatency     *prometheus.HistogramVec
-
-	// Compression metrics
-	userPromptCompressed *prometheus.CounterVec
-
-	// Response metrics
-	responseTokens *prometheus.CounterVec
-
-	// Error metrics
-	errorsTotal *prometheus.CounterVec
+	semanticLatency       *prometheus.HistogramVec
+	summaryLatency        *prometheus.HistogramVec
+	mainModelLatency      *prometheus.HistogramVec
+	totalLatency          *prometheus.HistogramVec
+	userPromptCompressed  *prometheus.CounterVec
+	responseTokens        *prometheus.CounterVec
+	errorsTotal           *prometheus.CounterVec
 }
 
 // NewMetricsService creates a new metrics service
 func NewMetricsService() MetricsInterface {
-	ms := &MetricsService{
-		requestsTotal: prometheus.NewCounterVec(
-			prometheus.CounterOpts{
-				Name: "chat_rag_requests_total",
-				Help: "Total number of chat completion requests",
-			},
-			append(metricsBaseLabels, "category"),
-		),
+	ms := &MetricsService{}
 
-		originalTokensTotal: prometheus.NewCounterVec(
-			prometheus.CounterOpts{
-				Name: "chat_rag_original_tokens_total",
-				Help: "Total number of original tokens processed",
-			},
-			append(metricsBaseLabels, "token_scope"),
-		),
+	ms.requestsTotal = ms.createCounterVec(metricRequestsTotal, "Total number of chat completion requests", metricsLabelCategory)
+	ms.originalTokensTotal = ms.createCounterVec(metricOriginalTokensTotal, "Total number of original tokens processed", metricsLabelTokenScope)
+	ms.compressedTokensTotal = ms.createCounterVec(metricCompressedTokensTotal, "Total number of compressed tokens processed", metricsLabelTokenScope)
+	ms.compressionRatio = ms.createHistogramVec(metricCompressionRatio, "Distribution of compression ratios", nil, compressionRatioBuckets)
+	ms.semanticLatency = ms.createHistogramVec(metricSemanticLatency, "Semantic processing latency in milliseconds", nil, fastLatencyBuckets)
+	ms.summaryLatency = ms.createHistogramVec(metricSummaryLatency, "Summary processing latency in milliseconds", nil, fastLatencyBuckets)
+	ms.mainModelLatency = ms.createHistogramVec(metricMainModelLatency, "Main model processing latency in milliseconds", nil, mainModelLatencyBuckets)
+	ms.totalLatency = ms.createHistogramVec(metricTotalLatency, "Total processing latency in milliseconds", nil, totalLatencyBuckets)
+	ms.userPromptCompressed = ms.createCounterVec(metricUserPromptCompressed, "Total number of requests where user prompt was compressed")
+	ms.responseTokens = ms.createCounterVec(metricResponseTokens, "Total number of response tokens generated")
+	ms.errorsTotal = ms.createCounterVec(metricErrorsTotal, "Total number of errors encountered", metricsLabelErrorType)
 
-		compressedTokensTotal: prometheus.NewCounterVec(
-			prometheus.CounterOpts{
-				Name: "chat_rag_compressed_tokens_total",
-				Help: "Total number of compressed tokens processed",
-			},
-			append(metricsBaseLabels, "token_scope"),
-		),
+	ms.registerMetrics()
+	return ms
+}
 
-		compressionRatio: prometheus.NewHistogramVec(
-			prometheus.HistogramOpts{
-				Name:    "chat_rag_compression_ratio",
-				Help:    "Distribution of compression ratios",
-				Buckets: []float64{0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0},
-			},
-			metricsBaseLabels,
-		),
-
-		semanticLatency: prometheus.NewHistogramVec(
-			prometheus.HistogramOpts{
-				Name:    "chat_rag_semantic_latency_ms",
-				Help:    "Semantic processing latency in milliseconds",
-				Buckets: []float64{10, 50, 100, 200, 500, 1000, 2000, 5000},
-			},
-			metricsBaseLabels,
-		),
-
-		summaryLatency: prometheus.NewHistogramVec(
-			prometheus.HistogramOpts{
-				Name:    "chat_rag_summary_latency_ms",
-				Help:    "Summary processing latency in milliseconds",
-				Buckets: []float64{10, 50, 100, 200, 500, 1000, 2000, 5000},
-			},
-			metricsBaseLabels,
-		),
-
-		mainModelLatency: prometheus.NewHistogramVec(
-			prometheus.HistogramOpts{
-				Name:    "chat_rag_main_model_latency_ms",
-				Help:    "Main model processing latency in milliseconds",
-				Buckets: []float64{100, 500, 1000, 2000, 5000, 10000, 20000},
-			},
-			metricsBaseLabels,
-		),
-
-		totalLatency: prometheus.NewHistogramVec(
-			prometheus.HistogramOpts{
-				Name:    "chat_rag_total_latency_ms",
-				Help:    "Total processing latency in milliseconds",
-				Buckets: []float64{100, 500, 1000, 2000, 5000, 10000, 20000, 30000},
-			},
-			metricsBaseLabels,
-		),
-
-		userPromptCompressed: prometheus.NewCounterVec(
-			prometheus.CounterOpts{
-				Name: "chat_rag_user_prompt_compressed_total",
-				Help: "Total number of requests where user prompt was compressed",
-			},
-			metricsBaseLabels,
-		),
-
-		responseTokens: prometheus.NewCounterVec(
-			prometheus.CounterOpts{
-				Name: "chat_rag_response_tokens_total",
-				Help: "Total number of response tokens generated",
-			},
-			metricsBaseLabels,
-		),
-
-		errorsTotal: prometheus.NewCounterVec(
-			prometheus.CounterOpts{
-				Name: "chat_rag_errors_total",
-				Help: "Total number of errors encountered",
-			},
-			append(metricsBaseLabels, "error_type"),
-		),
+// createCounterVec creates a CounterVec with base labels
+func (ms *MetricsService) createCounterVec(name, help string, extraLabels ...string) *prometheus.CounterVec {
+	labels := metricsBaseLabels
+	if len(extraLabels) > 0 {
+		labels = append(labels, extraLabels...)
 	}
+	return prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: name,
+			Help: help,
+		},
+		labels,
+	)
+}
 
-	// Register all metrics
+// createHistogramVec creates a HistogramVec with base labels
+func (ms *MetricsService) createHistogramVec(name, help string, extraLabels []string, buckets []float64) *prometheus.HistogramVec {
+	labels := metricsBaseLabels
+	if extraLabels != nil {
+		labels = append(labels, extraLabels...)
+	}
+	return prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    name,
+			Help:    help,
+			Buckets: buckets,
+		},
+		labels,
+	)
+}
+
+// registerMetrics registers all metrics
+func (ms *MetricsService) registerMetrics() {
 	prometheus.MustRegister(
 		ms.requestsTotal,
 		ms.originalTokensTotal,
@@ -153,92 +139,114 @@ func NewMetricsService() MetricsInterface {
 		ms.responseTokens,
 		ms.errorsTotal,
 	)
-
-	return ms
 }
 
 // RecordChatLog records metrics from a ChatLog entry
 func (ms *MetricsService) RecordChatLog(log *model.ChatLog) {
-	// Get base labels
-	labels := ms.getBaseLabels(log)
-
-	// Add category if available
-	category := log.Category
-	if category == "" {
-		category = "unknown"
+	if log == nil {
+		return
 	}
 
-	// Record request
-	ms.requestsTotal.With(ms.addLabels(labels, "category", category)).Inc()
+	labels := ms.getBaseLabels(log)
+	ms.recordRequestMetrics(log, labels)
+	ms.recordTokenMetrics(log, labels)
+	ms.recordLatencyMetrics(log, labels)
+	ms.recordCompressionMetrics(log, labels)
+	ms.recordResponseMetrics(log, labels)
+	ms.recordErrorMetrics(log, labels)
+}
 
+// recordRequestMetrics records request related metrics
+func (ms *MetricsService) recordRequestMetrics(log *model.ChatLog, labels prometheus.Labels) {
+	category := log.Category
+	if category == "" {
+		category = defaultCategory
+	}
+	ms.requestsTotal.With(ms.addLabel(labels, metricsLabelCategory, category)).Inc()
+}
+
+// recordTokenMetrics records token related metrics
+func (ms *MetricsService) recordTokenMetrics(log *model.ChatLog, labels prometheus.Labels) {
 	// Record original tokens
-	ms.originalTokensTotal.With(ms.addLabels(labels, "token_scope", "system")).Add(float64(log.OriginalTokens.SystemTokens))
-	ms.originalTokensTotal.With(ms.addLabels(labels, "token_scope", "user")).Add(float64(log.OriginalTokens.UserTokens))
-	ms.originalTokensTotal.With(ms.addLabels(labels, "token_scope", "all")).Add(float64(log.OriginalTokens.All))
+	ms.recordTokenCount(ms.originalTokensTotal, log.OriginalTokens, labels)
 
 	// Record compressed tokens
-	ms.compressedTokensTotal.With(ms.addLabels(labels, "token_scope", "system")).Add(float64(log.CompressedTokens.SystemTokens))
-	ms.compressedTokensTotal.With(ms.addLabels(labels, "token_scope", "user")).Add(float64(log.CompressedTokens.UserTokens))
-	ms.compressedTokensTotal.With(ms.addLabels(labels, "token_scope", "all")).Add(float64(log.CompressedTokens.All))
+	ms.recordTokenCount(ms.compressedTokensTotal, log.CompressedTokens, labels)
 
 	// Record compression ratio
 	if log.CompressionRatio > 0 {
 		ms.compressionRatio.With(labels).Observe(log.CompressionRatio)
 	}
+}
 
-	// Record latencies
+// recordTokenCount records token count
+func (ms *MetricsService) recordTokenCount(metric *prometheus.CounterVec, tokens model.TokenStats, labels prometheus.Labels) {
+	metric.With(ms.addLabel(labels, metricsLabelTokenScope, "system")).Add(float64(tokens.SystemTokens))
+	metric.With(ms.addLabel(labels, metricsLabelTokenScope, "user")).Add(float64(tokens.UserTokens))
+	metric.With(ms.addLabel(labels, metricsLabelTokenScope, "all")).Add(float64(tokens.All))
+}
+
+// recordLatencyMetrics records latency related metrics
+func (ms *MetricsService) recordLatencyMetrics(log *model.ChatLog, labels prometheus.Labels) {
 	if log.SemanticLatency > 0 {
 		ms.semanticLatency.With(labels).Observe(float64(log.SemanticLatency))
 	}
-
 	if log.SummaryLatency > 0 {
 		ms.summaryLatency.With(labels).Observe(float64(log.SummaryLatency))
 	}
-
 	if log.MainModelLatency > 0 {
 		ms.mainModelLatency.With(labels).Observe(float64(log.MainModelLatency))
 	}
-
 	if log.TotalLatency > 0 {
 		ms.totalLatency.With(labels).Observe(float64(log.TotalLatency))
 	}
+}
 
+// recordCompressionMetrics records compression related metrics
+func (ms *MetricsService) recordCompressionMetrics(log *model.ChatLog, labels prometheus.Labels) {
 	if log.IsUserPromptCompressed {
 		ms.userPromptCompressed.With(labels).Inc()
 	}
+}
 
-	// Record response tokens
+// recordResponseMetrics records response related metrics
+func (ms *MetricsService) recordResponseMetrics(log *model.ChatLog, labels prometheus.Labels) {
 	if log.Usage.CompletionTokens > 0 {
 		ms.responseTokens.With(labels).Add(float64(log.Usage.CompletionTokens))
 	}
+}
 
-	// Record errors
+// recordErrorMetrics records error related metrics
+func (ms *MetricsService) recordErrorMetrics(log *model.ChatLog, labels prometheus.Labels) {
 	for _, errorMap := range log.Error {
 		for errorType, errorMessage := range errorMap {
 			if errorMessage != "" {
-				ms.errorsTotal.With(ms.addLabels(labels, "error_type", string(errorType))).Inc()
+				ms.errorsTotal.With(ms.addLabel(labels, metricsLabelErrorType, string(errorType))).Inc()
 			}
 		}
 	}
 }
 
-// getBaseLabels creates the base labels map with common fields
+// getBaseLabels creates base labels map
 func (ms *MetricsService) getBaseLabels(log *model.ChatLog) prometheus.Labels {
 	return prometheus.Labels{
-		"client_id":  log.Identity.ClientID,
-		"client_ide": log.Identity.ClientIDE,
-		"model":      log.Model,
-		"user":       log.Identity.UserName,
-		"login_from": log.Identity.LoginFrom,
+		metricsBaseLabelClientID:  log.Identity.ClientID,
+		metricsBaseLabelClientIDE: log.Identity.ClientIDE,
+		metricsBaseLabelModel:     log.Model,
+		metricsBaseLabelUser:      log.Identity.UserName,
+		metricsBaseLabelLoginFrom: log.Identity.LoginFrom,
+		metricsBaseLabelCaller:    log.Identity.Caller,
 	}
 }
 
-// addLabels adds additional key-value pairs to existing labels
-func (ms *MetricsService) addLabels(baseLabels prometheus.Labels, key, value string) prometheus.Labels {
-	newLabels := make(prometheus.Labels)
+// addLabel adds a new label to existing labels
+func (ms *MetricsService) addLabel(baseLabels prometheus.Labels, key, value string) prometheus.Labels {
+	// Copy original labels
+	newLabels := make(prometheus.Labels, len(baseLabels)+1)
 	for k, v := range baseLabels {
 		newLabels[k] = v
 	}
+	// Add new label
 	newLabels[key] = value
 	return newLabels
 }

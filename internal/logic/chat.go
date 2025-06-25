@@ -79,9 +79,10 @@ func (l *ChatCompletionLogic) newChatLog(startTime time.Time) *model.ChatLog {
 	allTokens := l.countTokensInMessages(l.request().Messages)
 
 	return &model.ChatLog{
-		Identity:  *l.identity,
-		Timestamp: startTime,
-		Model:     l.request().Model,
+		Identity:   *l.identity,
+		Timestamp:  startTime,
+		Model:      l.request().Model,
+		PromptMode: string(l.request().ExtraBody.PromptMode),
 		OriginalTokens: model.TokenStats{
 			SystemTokens: allTokens - userTokens,
 			UserTokens:   userTokens,

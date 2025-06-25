@@ -1,11 +1,11 @@
 package handler
 
 import (
-	"github.com/zgsm-ai/chat-rag/internal/model"
 	"net/url"
 
 	"github.com/gin-gonic/gin"
 	"github.com/zgsm-ai/chat-rag/internal/logger"
+	"github.com/zgsm-ai/chat-rag/internal/model"
 	"go.uber.org/zap"
 )
 
@@ -14,6 +14,11 @@ func getIdentityFromHeaders(c *gin.Context) *model.Identity {
 	clientIDE := c.GetHeader("zgsm-client-ide")
 	if clientIDE == "" {
 		clientIDE = "vscode"
+	}
+
+	caller := c.GetHeader("x-caller")
+	if caller == "" {
+		caller = "chat"
 	}
 
 	projectPath := c.GetHeader("zgsm-project-path")
@@ -40,6 +45,7 @@ func getIdentityFromHeaders(c *gin.Context) *model.Identity {
 		AuthToken:   jwtToken,
 		UserName:    userInfo.Name,
 		LoginFrom:   userInfo.ExtractLoginFromToken(),
+		Caller:      caller,
 		UserInfo:    userInfo,
 	}
 }

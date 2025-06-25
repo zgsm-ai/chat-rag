@@ -19,6 +19,7 @@ type Identity struct {
 	ProjectPath string    `json:"project_path"`
 	AuthToken   string    `json:"auth_token"`
 	LoginFrom   string    `json:"login_from"`
+	Caller      string    `json:"caller"`
 	UserInfo    *UserInfo `json:"user_info"`
 }
 
