@@ -6,6 +6,7 @@ import (
 	"github.com/zgsm-ai/chat-rag/internal/bootstrap"
 	"github.com/zgsm-ai/chat-rag/internal/client"
 	"github.com/zgsm-ai/chat-rag/internal/logger"
+	"github.com/zgsm-ai/chat-rag/internal/model"
 	"github.com/zgsm-ai/chat-rag/internal/types"
 	"go.uber.org/zap"
 )
@@ -43,7 +44,7 @@ func NewPromptProcessor(
 	ctx context.Context,
 	svcCtx *bootstrap.ServiceContext,
 	promptMode types.PromptMode,
-	identity *types.Identity,
+	identity *model.Identity,
 ) PromptProcessor {
 	switch promptMode {
 	case types.Raw:

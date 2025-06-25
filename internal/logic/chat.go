@@ -23,14 +23,14 @@ import (
 type ChatCompletionLogic struct {
 	ctx             context.Context
 	svcCtx          *bootstrap.ServiceContext
-	identity        *types.Identity
+	identity        *model.Identity
 	responseHandler *ResponseHandler
 }
 
 func NewChatCompletionLogic(
 	ctx context.Context,
 	svcCtx *bootstrap.ServiceContext,
-	identity *types.Identity,
+	identity *model.Identity,
 ) *ChatCompletionLogic {
 	return &ChatCompletionLogic{
 		ctx:             ctx,

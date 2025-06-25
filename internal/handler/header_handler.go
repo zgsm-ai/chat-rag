@@ -1,17 +1,16 @@
 package handler
 
 import (
+	"github.com/zgsm-ai/chat-rag/internal/model"
 	"net/url"
 
 	"github.com/gin-gonic/gin"
 	"github.com/zgsm-ai/chat-rag/internal/logger"
-	"github.com/zgsm-ai/chat-rag/internal/types"
-	"github.com/zgsm-ai/chat-rag/internal/utils"
 	"go.uber.org/zap"
 )
 
-// getIndentityFromHeaders extracts request headers and creates Identity struct
-func getIndentityFromHeaders(c *gin.Context) *types.Identity {
+// getIdentityFromHeaders extracts request headers and creates Identity struct
+func getIdentityFromHeaders(c *gin.Context) *model.Identity {
 	clientIDE := c.GetHeader("zgsm-client-ide")
 	if clientIDE == "" {
 		clientIDE = "vscode"
@@ -29,10 +28,10 @@ func getIndentityFromHeaders(c *gin.Context) *types.Identity {
 	}
 
 	jwtToken := c.GetHeader("authorization")
-	userInfo := utils.NewUserInfo(jwtToken)
+	userInfo := model.NewUserInfo(jwtToken)
 	logger.Info("User info:", zap.Any("userInfo", userInfo))
 
-	return &types.Identity{
+	return &model.Identity{
 		RequestID:   c.GetHeader("x-request-id"),
 		TaskID:      c.GetHeader("zgsm-task-id"),
 		ClientID:    c.GetHeader("zgsm-client-id"),
@@ -41,6 +40,7 @@ func getIndentityFromHeaders(c *gin.Context) *types.Identity {
 		AuthToken:   jwtToken,
 		UserName:    userInfo.Name,
 		LoginFrom:   userInfo.ExtractLoginFromToken(),
+		UserInfo:    userInfo,
 	}
 }
 

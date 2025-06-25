@@ -19,9 +19,9 @@ type TokenStats struct {
 
 // ChatLog represents a single chat completion log entry
 type ChatLog struct {
-	Identity  types.Identity `json:"identity"`
-	Timestamp time.Time      `json:"timestamp"`
-	Model     string         `json:"model"`
+	Identity  Identity  `json:"identity"`
+	Timestamp time.Time `json:"timestamp"`
+	Model     string    `json:"model"`
 
 	// Token statistics
 	OriginalTokens   TokenStats `json:"original_tokens"`

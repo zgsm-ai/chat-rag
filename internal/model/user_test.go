@@ -1,4 +1,4 @@
-package utils
+package model
 
 import (
 	"testing"
@@ -23,7 +23,7 @@ func TestNewUserInfo(t *testing.T) {
 				"email":        "john@example.com",
 			}),
 			want: &UserInfo{
-				ID:    "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+				UUID:  "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
 				Phone: "13800138000",
 				Email: "john@example.com",
 				Name:  "John Doe",
@@ -42,7 +42,7 @@ func TestNewUserInfo(t *testing.T) {
 				},
 			}),
 			want: &UserInfo{
-				ID:         "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+				UUID:       "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
 				Phone:      "13800138000",
 				Name:       "johndoe",
 				GithubID:   "12345",
@@ -61,7 +61,7 @@ func TestNewUserInfo(t *testing.T) {
 				},
 			}),
 			want: &UserInfo{
-				ID:             "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+				UUID:           "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
 				Phone:          "13800138001",
 				Name:           "john1001",
 				EmployeeNumber: "1001",

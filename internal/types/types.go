@@ -1,13 +1,13 @@
 package types
 
 const (
-	// System role message
+	// RoleSystem System role message
 	RoleSystem = "system"
 
-	// User role message
+	// RoleUser User role message
 	RoleUser = "user"
 
-	// AI assistant role message
+	// RoleAssistant AI assistant role message
 	RoleAssistant = "assistant"
 )
 
@@ -36,10 +36,10 @@ const (
 	// including rag and prompt compression
 	Balanced PromptMode = "balanced"
 
-	// Cost-first mode: Minimizing LLM calls and context size to save cost
+	// Cost Cost-first mode: Minimizing LLM calls and context size to save cost
 	Cost PromptMode = "cost"
 
-	// Performance-first mode: Maximizing output quality without considering cost
+	// Performance Performance-first mode: Maximizing output quality without considering cost
 	Performance PromptMode = "performance"
 
 	// Auto select mode: Default is balanced mode
@@ -102,15 +102,4 @@ type Usage struct {
 	PromptTokens     int `json:"prompt_tokens"`
 	CompletionTokens int `json:"completion_tokens"`
 	TotalTokens      int `json:"total_tokens"`
-}
-
-type Identity struct {
-	TaskID      string `json:"task_id"`
-	RequestID   string `json:"request_id"`
-	ClientID    string `json:"client_id"`
-	ClientIDE   string `json:"client_ide"`
-	UserName    string `json:"user_name"`
-	ProjectPath string `json:"project_path"`
-	AuthToken   string `json:"auth_token"`
-	LoginFrom   string `json:"login_from"`
 }

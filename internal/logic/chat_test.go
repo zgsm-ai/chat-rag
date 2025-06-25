@@ -11,6 +11,7 @@ import (
 	"github.com/zgsm-ai/chat-rag/internal/bootstrap"
 	"github.com/zgsm-ai/chat-rag/internal/client"
 	"github.com/zgsm-ai/chat-rag/internal/config"
+	"github.com/zgsm-ai/chat-rag/internal/model"
 	"github.com/zgsm-ai/chat-rag/internal/service/mocks"
 	"github.com/zgsm-ai/chat-rag/internal/tokenizer"
 	"github.com/zgsm-ai/chat-rag/internal/types"
@@ -67,8 +68,8 @@ func createTestRequest(model string, messages []types.Message, stream bool) *typ
 }
 
 // createTestIdentity creates a test Identity
-func createTestIdentity() *types.Identity {
-	return &types.Identity{
+func createTestIdentity() *model.Identity {
+	return &model.Identity{
 		ClientID:    "test-client",
 		ProjectPath: "/test/path",
 	}

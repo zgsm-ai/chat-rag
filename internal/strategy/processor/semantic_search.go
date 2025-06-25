@@ -20,7 +20,7 @@ type SemanticSearch struct {
 	ctx            context.Context
 	semanticClient client.SemanticInterface
 	config         config.Config
-	identity       *types.Identity
+	identity       *model.Identity
 
 	next Processor
 
@@ -32,7 +32,7 @@ func NewSemanticSearch(
 	ctx context.Context,
 	config config.Config,
 	semanticClient client.SemanticInterface,
-	identity *types.Identity,
+	identity *model.Identity,
 ) *SemanticSearch {
 	return &SemanticSearch{
 		ctx:            ctx,

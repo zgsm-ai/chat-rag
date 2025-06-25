@@ -1,4 +1,4 @@
-package utils
+package model
 
 import (
 	"fmt"
@@ -10,9 +10,21 @@ import (
 	"go.uber.org/zap"
 )
 
+type Identity struct {
+	TaskID      string    `json:"task_id"`
+	RequestID   string    `json:"request_id"`
+	ClientID    string    `json:"client_id"`
+	ClientIDE   string    `json:"client_ide"`
+	UserName    string    `json:"user_name"`
+	ProjectPath string    `json:"project_path"`
+	AuthToken   string    `json:"auth_token"`
+	LoginFrom   string    `json:"login_from"`
+	UserInfo    *UserInfo `json:"user_info"`
+}
+
 // UserInfo defines the user information structure
 type UserInfo struct {
-	ID             string `json:"id"`
+	UUID           string `json:"uuid"`
 	Phone          string `json:"phone"`
 	GithubID       string `json:"github_id"`
 	Email          string `json:"email"`
@@ -135,7 +147,7 @@ func parseCustomProperties(properties map[string]interface{}) CustomProperties {
 // buildUserInfo constructs user info from claims and properties
 func buildUserInfo(claims *JWTClaims, props CustomProperties, id string) *UserInfo {
 	user := &UserInfo{
-		ID:             id,
+		UUID:           id,
 		Phone:          normalizePhone(claims.Phone),
 		GithubID:       props.GithubID,
 		Email:          claims.Email,

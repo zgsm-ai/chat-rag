@@ -7,6 +7,7 @@ import (
 	"github.com/zgsm-ai/chat-rag/internal/bootstrap"
 	"github.com/zgsm-ai/chat-rag/internal/client"
 	"github.com/zgsm-ai/chat-rag/internal/config"
+	"github.com/zgsm-ai/chat-rag/internal/model"
 	"github.com/zgsm-ai/chat-rag/internal/strategy/processor"
 	"github.com/zgsm-ai/chat-rag/internal/tokenizer"
 	"github.com/zgsm-ai/chat-rag/internal/types"
@@ -18,7 +19,7 @@ type RagProcessor struct {
 	llmClient      client.LLMInterface
 	tokenCounter   *tokenizer.TokenCounter
 	config         config.Config
-	identity       *types.Identity
+	identity       *model.Identity
 
 	systemCompressor *processor.SystemCompressor
 	semanticSearch   *processor.SemanticSearch
@@ -30,7 +31,7 @@ type RagProcessor struct {
 func NewRagProcessor(
 	ctx context.Context,
 	svcCtx *bootstrap.ServiceContext,
-	identity *types.Identity,
+	identity *model.Identity,
 ) (*RagProcessor, error) {
 	llmClient, err := client.NewLLMClient(
 		svcCtx.Config.LLMEndpoint,
