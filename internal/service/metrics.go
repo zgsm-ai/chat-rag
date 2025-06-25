@@ -191,6 +191,11 @@ func (ms *MetricsService) recordTokenCount(metric *prometheus.CounterVec, tokens
 			)
 			return
 		}
+
+		if count == 0 {
+			return
+		}
+
 		metric.With(ms.addLabel(labels, metricsLabelTokenScope, scope)).Add(float64(count))
 	}
 
