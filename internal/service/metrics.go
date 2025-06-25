@@ -2,7 +2,9 @@ package service
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/zgsm-ai/chat-rag/internal/logger"
 	"github.com/zgsm-ai/chat-rag/internal/model"
+	"go.uber.org/zap"
 )
 
 const (
@@ -181,9 +183,20 @@ func (ms *MetricsService) recordTokenMetrics(log *model.ChatLog, labels promethe
 
 // recordTokenCount records token count
 func (ms *MetricsService) recordTokenCount(metric *prometheus.CounterVec, tokens model.TokenStats, labels prometheus.Labels) {
-	metric.With(ms.addLabel(labels, metricsLabelTokenScope, "system")).Add(float64(tokens.SystemTokens))
-	metric.With(ms.addLabel(labels, metricsLabelTokenScope, "user")).Add(float64(tokens.UserTokens))
-	metric.With(ms.addLabel(labels, metricsLabelTokenScope, "all")).Add(float64(tokens.All))
+	record := func(scope string, count int) {
+		if count < 0 {
+			logger.Warn("WARNING: negative token count",
+				zap.String("scope", scope),
+				zap.Int("count", count),
+			)
+			return
+		}
+		metric.With(ms.addLabel(labels, metricsLabelTokenScope, scope)).Add(float64(count))
+	}
+
+	record("system", tokens.SystemTokens)
+	record("user", tokens.UserTokens)
+	record("all", tokens.All)
 }
 
 // recordLatencyMetrics records latency related metrics
