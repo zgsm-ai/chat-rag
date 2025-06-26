@@ -180,7 +180,7 @@ func (ls *LoggerRecordService) logWriter() {
 				ls.logSync(log)
 			}
 		case <-ls.stopChan:
-			// Process remaining logs
+			// Arrange remaining logs
 			for len(ls.logChan) > 0 {
 				log := <-ls.logChan
 				if log != nil {
@@ -264,7 +264,7 @@ func (ls *LoggerRecordService) logProcessor() {
 		case <-ticker.C:
 			ls.processLogs()
 		case <-ls.stopChan:
-			// Process logs one last time before stopping
+			// Arrange logs one last time before stopping
 			ls.processLogs()
 			return
 		}
@@ -350,7 +350,7 @@ func (ls *LoggerRecordService) processSingleFile(file os.DirEntry) {
 		return
 	}
 
-	// 3. Process classification
+	// 3. Arrange classification
 	if err := ls.processClassification(chatLog, filePath); err != nil {
 		logger.Error("Failed to process classification",
 			zap.String("filename", file.Name()),
@@ -370,6 +370,10 @@ func (ls *LoggerRecordService) processSingleFile(file os.DirEntry) {
 
 // processClassification processes the classification of a single log entry
 func (ls *LoggerRecordService) processClassification(chatLog *model.ChatLog, filePath string) error {
+	if chatLog.Identity.Caller == "review-checker" {
+		chatLog.Category = "CodeReview"
+	}
+
 	if chatLog.Category != "" {
 		return nil
 	}
@@ -412,7 +416,8 @@ func (ls *LoggerRecordService) classifyLog(logs *model.ChatLog) string {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	userMessages := utils.GetUserMsgs(logs.CompressedPrompt)
+	// classify uses the recent 2 user messages
+	userMessages := utils.GetRecentUserMsgsWithNum(logs.CompressedPrompt, 2)
 	userMessages = append(userMessages, types.Message{
 		Role:    types.RoleUser,
 		Content: userClassificationPrompt,

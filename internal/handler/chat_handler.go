@@ -21,7 +21,7 @@ func ChatCompletionHandler(svcCtx *bootstrap.ServiceContext) gin.HandlerFunc {
 			return
 		}
 
-		// 2. Process identity from headers
+		// 2. Arrange identity from headers
 		identity := getIdentityFromHeaders(c)
 
 		// 3. Prepare request context

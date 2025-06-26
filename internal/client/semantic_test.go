@@ -630,7 +630,7 @@ func ExampleSemanticClient_Search() {
 		return
 	}
 
-	// Process results
+	// Arrange results
 	for _, result := range resp.Results {
 		_ = result.Content  // Use the content
 		_ = result.Score    // Use the score

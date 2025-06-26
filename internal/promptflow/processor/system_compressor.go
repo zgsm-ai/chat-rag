@@ -146,7 +146,7 @@ func (p *SystemCompressor) processSystemMessageWithCache(msg *types.Message) *ty
 	}
 
 	systemContent := contents[0].Text
-	// Process system content with caching
+	// Arrange system content with caching
 	return p.processContentWithCache(contents, systemContent)
 }
 

@@ -14,7 +14,8 @@ import (
 	"github.com/zgsm-ai/chat-rag/internal/client"
 	"github.com/zgsm-ai/chat-rag/internal/logger"
 	"github.com/zgsm-ai/chat-rag/internal/model"
-	"github.com/zgsm-ai/chat-rag/internal/strategy"
+	"github.com/zgsm-ai/chat-rag/internal/promptflow"
+	"github.com/zgsm-ai/chat-rag/internal/promptflow/ds"
 	"github.com/zgsm-ai/chat-rag/internal/tokenizer"
 	"github.com/zgsm-ai/chat-rag/internal/types"
 	"github.com/zgsm-ai/chat-rag/internal/utils"
@@ -53,15 +54,15 @@ func (l *ChatCompletionLogic) writer() http.ResponseWriter {
 }
 
 // processRequest handles common request processing logic
-func (l *ChatCompletionLogic) processRequest() (*model.ChatLog, *strategy.ProcessedPrompt, error) {
+func (l *ChatCompletionLogic) processRequest() (*model.ChatLog, *ds.ProcessedPrompt, error) {
 	logger.Info("start to process request", zap.String("user", l.identity.UserName))
 	startTime := time.Now()
 
 	// Initialize chat log
 	chatLog := l.newChatLog(startTime)
 
-	promptProcessor := strategy.NewPromptProcessor(l.ctx, l.svcCtx, l.request().ExtraBody.PromptMode, l.identity)
-	processedPrompt, err := promptProcessor.Process(l.request().Messages)
+	promptArranger := promptflow.NewPromptProcessor(l.ctx, l.svcCtx, l.request().ExtraBody.PromptMode, l.identity)
+	processedPrompt, err := promptArranger.Arrange(l.request().Messages)
 	if err != nil {
 		err := fmt.Errorf("failed to process prompt:\n %w", err)
 		chatLog.AddError(types.ErrExtra, err)
@@ -93,7 +94,7 @@ func (l *ChatCompletionLogic) newChatLog(startTime time.Time) *model.ChatLog {
 }
 
 // updateChatLog updates the chat log with information from the processed prompt
-func (l *ChatCompletionLogic) updateChatLog(chatLog *model.ChatLog, processedPrompt *strategy.ProcessedPrompt) {
+func (l *ChatCompletionLogic) updateChatLog(chatLog *model.ChatLog, processedPrompt *ds.ProcessedPrompt) {
 	// Record timing information from processed prompt
 	chatLog.SemanticLatency = processedPrompt.SemanticLatency
 	chatLog.SummaryLatency = processedPrompt.SummaryLatency

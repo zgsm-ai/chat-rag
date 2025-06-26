@@ -1,4 +1,4 @@
-package strategy
+package strategies
 
 import (
 	"context"
@@ -8,12 +8,13 @@ import (
 	"github.com/zgsm-ai/chat-rag/internal/client"
 	"github.com/zgsm-ai/chat-rag/internal/config"
 	"github.com/zgsm-ai/chat-rag/internal/model"
-	"github.com/zgsm-ai/chat-rag/internal/strategy/processor"
+	"github.com/zgsm-ai/chat-rag/internal/promptflow/ds"
+	"github.com/zgsm-ai/chat-rag/internal/promptflow/processor"
 	"github.com/zgsm-ai/chat-rag/internal/tokenizer"
 	"github.com/zgsm-ai/chat-rag/internal/types"
 )
 
-type RagProcessor struct {
+type RagOnlyProcessor struct {
 	ctx            context.Context
 	semanticClient client.SemanticInterface
 	llmClient      client.LLMInterface
@@ -27,12 +28,12 @@ type RagProcessor struct {
 	end              *processor.End
 }
 
-// NewRagProcessor creates a new RAG compression processor
-func NewRagProcessor(
+// NewRagOnlyProcessor creates a new RAG compression processor
+func NewRagOnlyProcessor(
 	ctx context.Context,
 	svcCtx *bootstrap.ServiceContext,
 	identity *model.Identity,
-) (*RagProcessor, error) {
+) (*RagOnlyProcessor, error) {
 	llmClient, err := client.NewLLMClient(
 		svcCtx.Config.LLMEndpoint,
 		svcCtx.Config.SummaryModel,
@@ -42,7 +43,7 @@ func NewRagProcessor(
 		return nil, fmt.Errorf("create LLM client: %w", err)
 	}
 
-	return &RagProcessor{
+	return &RagOnlyProcessor{
 		ctx:            ctx,
 		semanticClient: client.NewSemanticClient(svcCtx.Config.SemanticApiEndpoint),
 		llmClient:      llmClient,
@@ -52,17 +53,17 @@ func NewRagProcessor(
 	}, nil
 }
 
-// Process processes the prompt with RAG compression
-func (p *RagProcessor) Process(messages []types.Message) (*ProcessedPrompt, error) {
+// Arrange processes the prompt with RAG compression
+func (p *RagOnlyProcessor) Arrange(messages []types.Message) (*ds.ProcessedPrompt, error) {
 	promptMsg, err := processor.NewPromptMsg(messages)
 	if err != nil {
-		return &ProcessedPrompt{
+		return &ds.ProcessedPrompt{
 			Messages: messages,
 		}, fmt.Errorf("create prompt message: %w", err)
 	}
 
 	if err := p.buildProcessorChain(); err != nil {
-		return &ProcessedPrompt{
+		return &ds.ProcessedPrompt{
 			Messages: messages,
 		}, fmt.Errorf("build processor chain: %w", err)
 	}
@@ -73,7 +74,7 @@ func (p *RagProcessor) Process(messages []types.Message) (*ProcessedPrompt, erro
 }
 
 // buildProcessorChain constructs and connects the processor chain
-func (p *RagProcessor) buildProcessorChain() error {
+func (p *RagOnlyProcessor) buildProcessorChain() error {
 	p.systemCompressor = processor.NewSystemCompressor(
 		p.config.SystemPromptSplitStr,
 		p.llmClient,
@@ -101,10 +102,10 @@ func (p *RagProcessor) buildProcessorChain() error {
 }
 
 // createProcessedPrompt creates the final processed prompt result
-func (p *RagProcessor) createProcessedPrompt(
+func (p *RagOnlyProcessor) createProcessedPrompt(
 	promptMsg *processor.PromptMsg,
-) *ProcessedPrompt {
-	return &ProcessedPrompt{
+) *ds.ProcessedPrompt {
+	return &ds.ProcessedPrompt{
 		Messages:        promptMsg.AssemblePrompt(),
 		SemanticLatency: p.semanticSearch.Latency,
 		SemanticContext: p.semanticSearch.SemanticResult,
