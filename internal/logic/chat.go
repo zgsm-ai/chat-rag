@@ -24,6 +24,9 @@ import (
 type ChatCompletionLogic struct {
 	ctx             context.Context
 	svcCtx          *bootstrap.ServiceContext
+	request         *types.ChatCompletionRequest
+	writer          http.ResponseWriter
+	headers         *http.Header
 	identity        *model.Identity
 	responseHandler *ResponseHandler
 }
@@ -31,6 +34,9 @@ type ChatCompletionLogic struct {
 func NewChatCompletionLogic(
 	ctx context.Context,
 	svcCtx *bootstrap.ServiceContext,
+	request *types.ChatCompletionRequest,
+	writer http.ResponseWriter,
+	headers *http.Header,
 	identity *model.Identity,
 ) *ChatCompletionLogic {
 	return &ChatCompletionLogic{
@@ -38,19 +44,10 @@ func NewChatCompletionLogic(
 		svcCtx:          svcCtx,
 		identity:        identity,
 		responseHandler: NewResponseHandler(ctx, svcCtx),
+		request:         request,
+		writer:          writer,
+		headers:         headers,
 	}
-}
-
-func (l *ChatCompletionLogic) headers() *http.Header {
-	return l.svcCtx.ReqCtx.Headers
-}
-
-func (l *ChatCompletionLogic) request() *types.ChatCompletionRequest {
-	return l.svcCtx.ReqCtx.Request
-}
-
-func (l *ChatCompletionLogic) writer() http.ResponseWriter {
-	return l.svcCtx.ReqCtx.Writer
 }
 
 // processRequest handles common request processing logic
@@ -61,8 +58,14 @@ func (l *ChatCompletionLogic) processRequest() (*model.ChatLog, *ds.ProcessedPro
 	// Initialize chat log
 	chatLog := l.newChatLog(startTime)
 
-	promptArranger := promptflow.NewPromptProcessor(l.ctx, l.svcCtx, l.request().ExtraBody.PromptMode, l.identity)
-	processedPrompt, err := promptArranger.Arrange(l.request().Messages)
+	promptArranger := promptflow.NewPromptProcessor(
+		l.ctx,
+		l.svcCtx,
+		l.request.ExtraBody.PromptMode,
+		l.headers,
+		l.identity,
+	)
+	processedPrompt, err := promptArranger.Arrange(l.request.Messages)
 	if err != nil {
 		return chatLog, nil, fmt.Errorf("failed to process prompt:\n %w", err)
 	}
@@ -73,20 +76,20 @@ func (l *ChatCompletionLogic) processRequest() (*model.ChatLog, *ds.ProcessedPro
 }
 
 func (l *ChatCompletionLogic) newChatLog(startTime time.Time) *model.ChatLog {
-	userTokens := l.countTokensInMessages(utils.GetUserMsgs(l.request().Messages))
-	allTokens := l.countTokensInMessages(l.request().Messages)
+	userTokens := l.countTokensInMessages(utils.GetUserMsgs(l.request.Messages))
+	allTokens := l.countTokensInMessages(l.request.Messages)
 
 	return &model.ChatLog{
 		Identity:   *l.identity,
 		Timestamp:  startTime,
-		Model:      l.request().Model,
-		PromptMode: string(l.request().ExtraBody.PromptMode),
+		Model:      l.request.Model,
+		PromptMode: string(l.request.ExtraBody.PromptMode),
 		OriginalTokens: model.TokenStats{
 			SystemTokens: allTokens - userTokens,
 			UserTokens:   userTokens,
 			All:          allTokens,
 		},
-		OriginalPrompt: l.request().Messages,
+		OriginalPrompt: l.request.Messages,
 	}
 }
 
@@ -127,14 +130,14 @@ func (l *ChatCompletionLogic) updateChatLog(chatLog *model.ChatLog, processedPro
 func (l *ChatCompletionLogic) logCompletion(chatLog *model.ChatLog) {
 	chatLog.TotalLatency = time.Since(chatLog.Timestamp).Milliseconds()
 	if l.svcCtx.LoggerService != nil {
-		l.svcCtx.LoggerService.LogAsync(chatLog, l.svcCtx.ReqCtx.Headers)
+		l.svcCtx.LoggerService.LogAsync(chatLog, l.headers)
 	}
 }
 
 // ChatCompletion handles chat completion requests
 func (l *ChatCompletionLogic) ChatCompletion() (resp *types.ChatCompletionResponse, err error) {
 	chatLog, processedPrompt, err := l.processRequest()
-	msgs := l.request().Messages
+	msgs := l.request.Messages
 
 	defer l.logCompletion(chatLog)
 
@@ -149,7 +152,7 @@ func (l *ChatCompletionLogic) ChatCompletion() (resp *types.ChatCompletionRespon
 	}
 
 	// Create LLM client for main model
-	llmClient, err := client.NewLLMClient(l.svcCtx.Config.LLMEndpoint, l.request().Model, l.headers())
+	llmClient, err := client.NewLLMClient(l.svcCtx.Config.LLMEndpoint, l.request.Model, l.headers)
 	if err != nil {
 		chatLog.AddError(types.ErrServerError, err)
 		return nil, fmt.Errorf("failed to create LLM client: %w", err)
@@ -173,7 +176,7 @@ func (l *ChatCompletionLogic) ChatCompletion() (resp *types.ChatCompletionRespon
 // ChatCompletionStream handles streaming chat completion with SSE
 func (l *ChatCompletionLogic) ChatCompletionStream() error {
 	chatLog, processedPrompt, err := l.processRequest()
-	msgs := l.request().Messages
+	msgs := l.request.Messages
 
 	defer l.logCompletion(chatLog)
 
@@ -188,15 +191,15 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 	}
 
 	// Create LLM client for main model
-	llmClient, err := client.NewLLMClient(l.svcCtx.Config.LLMEndpoint, l.request().Model, l.headers())
+	llmClient, err := client.NewLLMClient(l.svcCtx.Config.LLMEndpoint, l.request.Model, l.headers)
 	if err != nil {
-		l.responseHandler.sendSSEError(l.writer(), err)
+		l.responseHandler.sendSSEError(l.writer, err)
 		chatLog.AddError(types.ErrServerError, err)
 		return fmt.Errorf("LLM client creation failed: %w", err)
 	}
 
 	// Get flusher for immediate response sending
-	flusher, ok := l.writer().(http.Flusher)
+	flusher, ok := l.writer.(http.Flusher)
 	if !ok {
 		return fmt.Errorf("streaming not supported")
 	}
@@ -216,7 +219,7 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 			rawLine = "data: " + rawLine
 		}
 
-		if _, err := fmt.Fprintf(l.writer(), "%s\n\n", rawLine); err != nil {
+		if _, err := fmt.Fprintf(l.writer, "%s\n\n", rawLine); err != nil {
 			logger.Error("SSE write failed", zap.Error(err))
 			chatLog.AddError(types.ErrServerError, err)
 			return err
@@ -226,7 +229,7 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 	})
 
 	if err != nil {
-		l.responseHandler.sendSSEError(l.writer(), err)
+		l.responseHandler.sendSSEError(l.writer, err)
 		chatLog.AddError(types.ErrApiError, err)
 		return err
 	}

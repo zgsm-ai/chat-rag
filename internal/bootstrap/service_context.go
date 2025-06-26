@@ -1,20 +1,11 @@
 package bootstrap
 
 import (
-	"net/http"
-
 	"github.com/zgsm-ai/chat-rag/internal/client"
 	"github.com/zgsm-ai/chat-rag/internal/config"
 	"github.com/zgsm-ai/chat-rag/internal/service"
 	"github.com/zgsm-ai/chat-rag/internal/tokenizer"
-	"github.com/zgsm-ai/chat-rag/internal/types"
 )
-
-type RequestContext struct {
-	Request *types.ChatCompletionRequest
-	Writer  http.ResponseWriter
-	Headers *http.Header
-}
 
 // ServiceContext holds all service dependencies
 type ServiceContext struct {
@@ -29,9 +20,6 @@ type ServiceContext struct {
 
 	// Utilities
 	TokenCounter *tokenizer.TokenCounter
-
-	// Request context
-	ReqCtx *RequestContext
 }
 
 // NewServiceContext creates a new service context with all dependencies
@@ -67,10 +55,6 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		MetricsService: metricsService,
 		TokenCounter:   tokenCounter,
 	}
-}
-
-func (svc *ServiceContext) SetRequestContext(reqCtx *RequestContext) {
-	svc.ReqCtx = reqCtx
 }
 
 // Stop gracefully stops all services

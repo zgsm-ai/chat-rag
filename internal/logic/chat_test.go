@@ -75,32 +75,21 @@ func createTestIdentity() *model.Identity {
 	}
 }
 
-// createTestRequestContext creates a test RequestContext
-func createTestRequestContext(req *types.ChatCompletionRequest, writer http.ResponseWriter) *bootstrap.RequestContext {
-	headers := make(http.Header)
-	return &bootstrap.RequestContext{
-		Request: req,
-		Writer:  writer,
-		Headers: &headers,
-	}
-}
-
 // setupTestLogic combines all helper functions to create complete test logic
 func setupTestLogic(t *testing.T, cfg *config.Config, tokenCounter interface{},
 	model string, messages []types.Message, writer http.ResponseWriter) (*ChatCompletionLogic, *bootstrap.ServiceContext) {
 	ctx := createTestContext()
 	svcCtx := createTestServiceContext(t, cfg, tokenCounter)
 	req := createTestRequest(model, messages, false)
-	reqCtx := createTestRequestContext(req, writer)
-	svcCtx.SetRequestContext(reqCtx)
 	identity := createTestIdentity()
+	headers := make(http.Header)
 
 	// Set mock expectations
 	if logger, ok := svcCtx.LoggerService.(*mocks.MockLoggerInterface); ok {
 		logger.EXPECT().LogAsync(gomock.Any(), gomock.Any()).AnyTimes()
 	}
 
-	return NewChatCompletionLogic(ctx, svcCtx, identity), svcCtx
+	return NewChatCompletionLogic(ctx, svcCtx, req, writer, &headers, identity), svcCtx
 }
 
 func TestChatCompletionLogic_NewChatCompletionLogic(t *testing.T) {
@@ -113,9 +102,6 @@ func TestChatCompletionLogic_NewChatCompletionLogic(t *testing.T) {
 	assert.NotNil(t, logic)
 	assert.Equal(t, createTestContext(), logic.ctx)
 	assert.Equal(t, svcCtx, logic.svcCtx)
-	// Verify ReqCtx is set correctly
-	assert.NotNil(t, svcCtx.ReqCtx)
-	assert.Equal(t, mockWriter, svcCtx.ReqCtx.Writer)
 }
 
 // TestLLMClientMock tests LLMClient mock
@@ -268,17 +254,15 @@ func TestChatCompletionLogic_ChatCompletion_StreamingRequest(t *testing.T) {
 		TokenCounter:   tokenCounter,
 	}
 
-	// Set request context
-	reqCtx := createTestRequestContext(
-		createTestRequest(testModel, testMessages, true),
-		testWriter,
-	)
-	svcCtx.SetRequestContext(reqCtx)
+	headers := make(http.Header)
 
 	// Create logic instance
 	logic := NewChatCompletionLogic(
 		createTestContext(),
 		svcCtx,
+		createTestRequest(testModel, testMessages, true),
+		testWriter,
+		&headers,
 		createTestIdentity(),
 	)
 

@@ -85,6 +85,10 @@ func (c *LLMClient) GenerateContent(ctx context.Context, systemPrompt string, us
 
 // ChatLLMWithMessagesStreamRaw directly calls the API using HTTP client to get raw streaming response
 func (c *LLMClient) ChatLLMWithMessagesStreamRaw(ctx context.Context, messages []types.Message, callback func(string) error) error {
+	if callback == nil {
+		return fmt.Errorf("callback function cannot be nil")
+	}
+
 	// Prepare request data structure
 	requestPayload := types.ChatLLMRequestStream{
 		Model:    c.modelName,

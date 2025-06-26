@@ -24,18 +24,17 @@ func ChatCompletionHandler(svcCtx *bootstrap.ServiceContext) gin.HandlerFunc {
 		// 2. Arrange identity from headers
 		identity := getIdentityFromHeaders(c)
 
-		// 3. Prepare request context
-		reqCtx := &bootstrap.RequestContext{
-			Request: &req,
-			Writer:  c.Writer,
-			Headers: &c.Request.Header,
-		}
-		svcCtx.SetRequestContext(reqCtx)
+		// 3. Initialize logic
+		l := logic.NewChatCompletionLogic(
+			c.Request.Context(),
+			svcCtx,
+			&req,
+			c.Writer,
+			&c.Request.Header,
+			identity,
+		)
 
-		// 4. Initialize logic
-		l := logic.NewChatCompletionLogic(c.Request.Context(), svcCtx, identity)
-
-		// 5. Handle stream and non-stream cases separately
+		// 4. Handle stream and non-stream cases separately
 		if req.Stream {
 			handleStreamResponse(c, l)
 		} else {

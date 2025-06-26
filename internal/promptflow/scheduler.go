@@ -2,6 +2,7 @@ package promptflow
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/zgsm-ai/chat-rag/internal/bootstrap"
 	"github.com/zgsm-ai/chat-rag/internal/logger"
@@ -22,6 +23,7 @@ func NewPromptProcessor(
 	ctx context.Context,
 	svcCtx *bootstrap.ServiceContext,
 	promptMode types.PromptMode,
+	headers *http.Header,
 	identity *model.Identity,
 ) PromptArranger {
 	const fallbackMsg = "falling back to DirectProcessor"
@@ -49,7 +51,7 @@ func NewPromptProcessor(
 	default:
 		modeName = "RagCompressProcessor processing mode"
 		creator = func() (PromptArranger, error) {
-			return strategies.NewRagCompressProcessor(ctx, svcCtx, identity)
+			return strategies.NewRagCompressProcessor(ctx, svcCtx, headers, identity)
 		}
 	}
 

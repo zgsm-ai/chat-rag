@@ -3,6 +3,7 @@ package strategies
 import (
 	"context"
 	"fmt"
+	"net/http"
 
 	"github.com/zgsm-ai/chat-rag/internal/bootstrap"
 	"github.com/zgsm-ai/chat-rag/internal/client"
@@ -32,12 +33,13 @@ type RagCompressProcessor struct {
 func NewRagCompressProcessor(
 	ctx context.Context,
 	svcCtx *bootstrap.ServiceContext,
+	headers *http.Header,
 	identity *model.Identity,
 ) (*RagCompressProcessor, error) {
 	llmClient, err := client.NewLLMClient(
 		svcCtx.Config.LLMEndpoint,
 		svcCtx.Config.SummaryModel,
-		svcCtx.ReqCtx.Headers,
+		headers,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create LLM client: %w", err)
