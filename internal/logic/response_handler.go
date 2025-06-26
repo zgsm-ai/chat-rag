@@ -129,15 +129,13 @@ func (h *ResponseHandler) extractStreamingData(rawLine string, responseContent *
 }
 
 // sendSSEError sends an error message in SSE format
-func (h *ResponseHandler) sendSSEError(w http.ResponseWriter, message string, err error) {
-	logger.Error(message,
-		zap.Error(err),
-	)
+func (h *ResponseHandler) sendSSEError(w http.ResponseWriter, err error) {
+	logger.Warn("sending SSE error response", zap.Error(err))
 
 	// Create error response in OpenAI format
 	errorResponse := map[string]interface{}{
 		"error": map[string]interface{}{
-			"message": fmt.Sprintf("%s: %v", message, err),
+			"message": fmt.Sprintf("%v", err),
 			"type":    "server_error",
 			"code":    "internal_error",
 		},

@@ -127,7 +127,9 @@ func (c *LLMClient) ChatLLMWithMessagesStreamRaw(ctx context.Context, messages [
 	if resp.StatusCode != 200 {
 		body, _ := io.ReadAll(resp.Body)
 		bodyStr := string(body)
-		return fmt.Errorf("API request failed with status %d, response body: %s", resp.StatusCode, bodyStr)
+		// TODO refactor
+		// return fmt.Errorf("API request failed with status %d, response body: %s", resp.StatusCode, bodyStr)
+		return fmt.Errorf("%s", bodyStr)
 	}
 
 	// Read streaming response line by line
@@ -198,7 +200,9 @@ func (c *LLMClient) ChatLLMWithMessagesRaw(ctx context.Context, messages []types
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		bodyStr := string(body)
-		return nil_resp, fmt.Errorf("API request failed with status %d, response body: %s", resp.StatusCode, bodyStr)
+		// TODDO refactor
+		// return nil_resp, fmt.Errorf("API request failed with status %d, response body: %s", resp.StatusCode, bodyStr)
+		return nil_resp, fmt.Errorf("%s", bodyStr)
 	}
 
 	// Read response body

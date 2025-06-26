@@ -127,10 +127,7 @@ func (s *SemanticSearch) searchSemanticContext(query string) (string, error) {
 	const method = "SemanticSearch.searchSemanticContext"
 	filteredQuery := s.filterQuery(query)
 
-	logger.Info("executing semantic search",
-		zap.String("query", filteredQuery),
-		zap.String("method", method),
-	)
+	logger.Info("executing semantic search", zap.String("method", method))
 
 	req := s.buildSemanticRequest(filteredQuery)
 	resp, err := s.semanticClient.Search(s.ctx, req)

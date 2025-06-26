@@ -193,7 +193,7 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 	// Create LLM client for main model
 	llmClient, err := client.NewLLMClient(l.svcCtx.Config.LLMEndpoint, l.request().Model, l.headers())
 	if err != nil {
-		l.responseHandler.sendSSEError(l.writer(), "LLM client creation failed", err)
+		l.responseHandler.sendSSEError(l.writer(), err)
 		return fmt.Errorf("LLM client creation failed: %w", err)
 	}
 
@@ -227,9 +227,9 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 	})
 
 	if err != nil {
-		l.responseHandler.sendSSEError(l.writer(), "Streaming completion failed", err)
+		l.responseHandler.sendSSEError(l.writer(), err)
 		chatLog.AddError(types.ErrExtra, err)
-		return fmt.Errorf("streaming completion failed: %w", err)
+		return err
 	}
 
 	// Update chat log with completion info
