@@ -21,6 +21,12 @@ const (
 	// ErrSummary represents summary generation errors
 	ErrSummary ErrorType = "SummaryError"
 
+	// ErrApi represents dependent API errors
+	ErrApiError ErrorType = "ApiError"
+
+	// ErrServer represents internal server errors
+	ErrServerError ErrorType = "ServerError"
+
 	// ErrExtra represents extra operation errors
 	ErrExtra ErrorType = "ExtraError"
 )

@@ -64,10 +64,7 @@ func (l *ChatCompletionLogic) processRequest() (*model.ChatLog, *ds.ProcessedPro
 	promptArranger := promptflow.NewPromptProcessor(l.ctx, l.svcCtx, l.request().ExtraBody.PromptMode, l.identity)
 	processedPrompt, err := promptArranger.Arrange(l.request().Messages)
 	if err != nil {
-		err := fmt.Errorf("failed to process prompt:\n %w", err)
-		chatLog.AddError(types.ErrExtra, err)
-		logger.Error("failed to process prompt", zap.Error(err))
-		return chatLog, nil, err
+		return chatLog, nil, fmt.Errorf("failed to process prompt:\n %w", err)
 	}
 
 	// Update chat log with processed prompt info
@@ -122,7 +119,6 @@ func (l *ChatCompletionLogic) updateChatLog(chatLog *model.ChatLog, processedPro
 	if processedPrompt.SemanticErr != nil {
 		chatLog.AddError(types.ErrSemantic, processedPrompt.SemanticErr)
 	}
-
 	if processedPrompt.SummaryErr != nil {
 		chatLog.AddError(types.ErrSummary, processedPrompt.SummaryErr)
 	}
@@ -148,13 +144,14 @@ func (l *ChatCompletionLogic) ChatCompletion() (resp *types.ChatCompletionRespon
 	} else {
 		err := fmt.Errorf("ChatCompletion failed to process request:\n%w", err)
 		logger.Error("failed to process request", zap.Error(err))
-		chatLog.AddError(types.ErrExtra, err)
+		chatLog.AddError(types.ErrServerError, err)
 		chatLog.IsPromptProceed = false
 	}
 
 	// Create LLM client for main model
 	llmClient, err := client.NewLLMClient(l.svcCtx.Config.LLMEndpoint, l.request().Model, l.headers())
 	if err != nil {
+		chatLog.AddError(types.ErrServerError, err)
 		return nil, fmt.Errorf("failed to create LLM client: %w", err)
 	}
 
@@ -162,7 +159,7 @@ func (l *ChatCompletionLogic) ChatCompletion() (resp *types.ChatCompletionRespon
 	// Generate completion using structured messages
 	response, err := llmClient.ChatLLMWithMessagesRaw(l.ctx, msgs)
 	if err != nil {
-		chatLog.AddError(types.ErrExtra, err)
+		chatLog.AddError(types.ErrApiError, err)
 		return nil, fmt.Errorf("failed to generate completion: %w", err)
 	}
 
@@ -186,7 +183,7 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 	} else {
 		err := fmt.Errorf("ChatCompletionStream failed to process request: %w", err)
 		logger.Error("failed to process request in streaming", zap.Error(err))
-		chatLog.AddError(types.ErrExtra, err)
+		chatLog.AddError(types.ErrServerError, err)
 		chatLog.IsPromptProceed = false
 	}
 
@@ -194,6 +191,7 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 	llmClient, err := client.NewLLMClient(l.svcCtx.Config.LLMEndpoint, l.request().Model, l.headers())
 	if err != nil {
 		l.responseHandler.sendSSEError(l.writer(), err)
+		chatLog.AddError(types.ErrServerError, err)
 		return fmt.Errorf("LLM client creation failed: %w", err)
 	}
 
@@ -220,6 +218,7 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 
 		if _, err := fmt.Fprintf(l.writer(), "%s\n\n", rawLine); err != nil {
 			logger.Error("SSE write failed", zap.Error(err))
+			chatLog.AddError(types.ErrServerError, err)
 			return err
 		}
 		flusher.Flush()
@@ -228,7 +227,7 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 
 	if err != nil {
 		l.responseHandler.sendSSEError(l.writer(), err)
-		chatLog.AddError(types.ErrExtra, err)
+		chatLog.AddError(types.ErrApiError, err)
 		return err
 	}
 
