@@ -14,7 +14,7 @@ import (
 	"github.com/zgsm-ai/chat-rag/internal/types"
 )
 
-type RagProcessor struct {
+type RagCompressProcessor struct {
 	ctx            context.Context
 	semanticClient client.SemanticInterface
 	llmClient      client.LLMInterface
@@ -28,12 +28,12 @@ type RagProcessor struct {
 	end              *processor.End
 }
 
-// NewRagProcessor creates a new RAG compression processor
-func NewRagProcessor(
+// NewRagCompressProcessor creates a new RAG compression processor
+func NewRagCompressProcessor(
 	ctx context.Context,
 	svcCtx *bootstrap.ServiceContext,
 	identity *model.Identity,
-) (*RagProcessor, error) {
+) (*RagCompressProcessor, error) {
 	llmClient, err := client.NewLLMClient(
 		svcCtx.Config.LLMEndpoint,
 		svcCtx.Config.SummaryModel,
@@ -43,7 +43,7 @@ func NewRagProcessor(
 		return nil, fmt.Errorf("create LLM client: %w", err)
 	}
 
-	return &RagProcessor{
+	return &RagCompressProcessor{
 		ctx:            ctx,
 		semanticClient: client.NewSemanticClient(svcCtx.Config.SemanticApiEndpoint),
 		llmClient:      llmClient,
@@ -54,7 +54,7 @@ func NewRagProcessor(
 }
 
 // Arrange processes the prompt with RAG compression
-func (p *RagProcessor) Arrange(messages []types.Message) (*ds.ProcessedPrompt, error) {
+func (p *RagCompressProcessor) Arrange(messages []types.Message) (*ds.ProcessedPrompt, error) {
 	promptMsg, err := processor.NewPromptMsg(messages)
 	if err != nil {
 		return &ds.ProcessedPrompt{
@@ -74,7 +74,7 @@ func (p *RagProcessor) Arrange(messages []types.Message) (*ds.ProcessedPrompt, e
 }
 
 // buildProcessorChain constructs and connects the processor chain
-func (p *RagProcessor) buildProcessorChain() error {
+func (p *RagCompressProcessor) buildProcessorChain() error {
 	p.systemCompressor = processor.NewSystemCompressor(
 		p.config.SystemPromptSplitStr,
 		p.llmClient,
@@ -102,16 +102,16 @@ func (p *RagProcessor) buildProcessorChain() error {
 }
 
 // createProcessedPrompt creates the final processed prompt result
-func (p *RagProcessor) createProcessedPrompt(
+func (p *RagCompressProcessor) createProcessedPrompt(
 	promptMsg *processor.PromptMsg,
 ) *ds.ProcessedPrompt {
 	return &ds.ProcessedPrompt{
-		Messages:        promptMsg.AssemblePrompt(),
-		SemanticLatency: p.semanticSearch.Latency,
-		SemanticContext: p.semanticSearch.SemanticResult,
-		SemanticErr:     p.semanticSearch.Err,
-		SummaryLatency:  p.userCompressor.Latency,
-		SummaryErr:      p.userCompressor.Err,
-		IsCompressed:    p.userCompressor.Handled,
+		Messages:               promptMsg.AssemblePrompt(),
+		SemanticLatency:        p.semanticSearch.Latency,
+		SemanticContext:        p.semanticSearch.SemanticResult,
+		SemanticErr:            p.semanticSearch.Err,
+		SummaryLatency:         p.userCompressor.Latency,
+		SummaryErr:             p.userCompressor.Err,
+		IsUserPromptCompressed: p.userCompressor.Handled,
 	}
 }

@@ -17,15 +17,12 @@ import (
 type RagOnlyProcessor struct {
 	ctx            context.Context
 	semanticClient client.SemanticInterface
-	llmClient      client.LLMInterface
 	tokenCounter   *tokenizer.TokenCounter
 	config         config.Config
 	identity       *model.Identity
 
-	systemCompressor *processor.SystemCompressor
-	semanticSearch   *processor.SemanticSearch
-	userCompressor   *processor.UserCompressor
-	end              *processor.End
+	semanticSearch *processor.SemanticSearch
+	end            *processor.End
 }
 
 // NewRagOnlyProcessor creates a new RAG compression processor
@@ -34,19 +31,9 @@ func NewRagOnlyProcessor(
 	svcCtx *bootstrap.ServiceContext,
 	identity *model.Identity,
 ) (*RagOnlyProcessor, error) {
-	llmClient, err := client.NewLLMClient(
-		svcCtx.Config.LLMEndpoint,
-		svcCtx.Config.SummaryModel,
-		svcCtx.ReqCtx.Headers,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create LLM client: %w", err)
-	}
-
 	return &RagOnlyProcessor{
 		ctx:            ctx,
 		semanticClient: client.NewSemanticClient(svcCtx.Config.SemanticApiEndpoint),
-		llmClient:      llmClient,
 		config:         svcCtx.Config,
 		tokenCounter:   svcCtx.TokenCounter,
 		identity:       identity,
@@ -68,35 +55,23 @@ func (p *RagOnlyProcessor) Arrange(messages []types.Message) (*ds.ProcessedPromp
 		}, fmt.Errorf("build processor chain: %w", err)
 	}
 
-	p.systemCompressor.Execute(promptMsg)
+	p.semanticSearch.Execute(promptMsg)
 
 	return p.createProcessedPrompt(promptMsg), nil
 }
 
 // buildProcessorChain constructs and connects the processor chain
 func (p *RagOnlyProcessor) buildProcessorChain() error {
-	p.systemCompressor = processor.NewSystemCompressor(
-		p.config.SystemPromptSplitStr,
-		p.llmClient,
-	)
 	p.semanticSearch = processor.NewSemanticSearch(
 		p.ctx,
 		p.config,
 		p.semanticClient,
 		p.identity,
 	)
-	p.userCompressor = processor.NewUserCompressor(
-		p.ctx,
-		p.config,
-		p.llmClient,
-		p.tokenCounter,
-	)
 	p.end = processor.NewEndpoint()
 
-	// chain order: system -> semantic -> user
-	p.systemCompressor.SetNext(p.semanticSearch)
-	p.semanticSearch.SetNext(p.userCompressor)
-	p.userCompressor.SetNext(p.end)
+	// chain order: semantic -> end
+	p.semanticSearch.SetNext(p.end)
 
 	return nil
 }
@@ -110,8 +85,5 @@ func (p *RagOnlyProcessor) createProcessedPrompt(
 		SemanticLatency: p.semanticSearch.Latency,
 		SemanticContext: p.semanticSearch.SemanticResult,
 		SemanticErr:     p.semanticSearch.Err,
-		SummaryLatency:  p.userCompressor.Latency,
-		SummaryErr:      p.userCompressor.Err,
-		IsCompressed:    p.userCompressor.Handled,
 	}
 }

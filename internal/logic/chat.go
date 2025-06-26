@@ -101,7 +101,7 @@ func (l *ChatCompletionLogic) updateChatLog(chatLog *model.ChatLog, processedPro
 	chatLog.SemanticContext = processedPrompt.SemanticContext
 
 	// Update log with processed prompt info
-	chatLog.IsUserPromptCompressed = processedPrompt.IsCompressed
+	chatLog.IsUserPromptCompressed = processedPrompt.IsUserPromptCompressed
 	allTokens := l.countTokensInMessages(processedPrompt.Messages)
 	userTokens := l.countTokensInMessages(utils.GetUserMsgs(processedPrompt.Messages))
 

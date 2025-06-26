@@ -24,24 +24,47 @@ func NewPromptProcessor(
 	promptMode types.PromptMode,
 	identity *model.Identity,
 ) PromptArranger {
+	const fallbackMsg = "falling back to DirectProcessor"
+
+	type processorCreator func() (PromptArranger, error)
+
+	var creator processorCreator
+	var modeName string
+
 	switch promptMode {
 	case types.Raw:
-		logger.Info("Direct chat mode detected, using DirectProcessor")
-		return &strategies.DirectProcessor{}
+		modeName = "Direct chat mode"
+		creator = func() (PromptArranger, error) {
+			return &strategies.DirectProcessor{}, nil
+		}
 
-	case types.Cost, types.Performance, types.Balanced, types.Auto:
+	case types.Performance:
+		modeName = "RagOnlyProcessor mode"
+		creator = func() (PromptArranger, error) {
+			return strategies.NewRagOnlyProcessor(ctx, svcCtx, identity)
+		}
+
+	case types.Cost, types.Balanced, types.Auto:
 		fallthrough
 	default:
-		logger.Info("RAG processing mode activated",
-			zap.String("mode", string(promptMode)),
-		)
-		ragProcessor, err := strategies.NewRagProcessor(ctx, svcCtx, identity)
-		if err != nil {
-			logger.Error("Failed new RAG processor, falling back to DirectProcessor",
-				zap.Error(err),
-			)
-			return &strategies.DirectProcessor{}
+		modeName = "RagCompressProcessor processing mode"
+		creator = func() (PromptArranger, error) {
+			return strategies.NewRagCompressProcessor(ctx, svcCtx, identity)
 		}
-		return ragProcessor
 	}
+
+	logger.Info(modeName+" activated",
+		zap.String("mode", string(promptMode)),
+	)
+
+	processor, err := creator()
+	if err != nil {
+		logger.Error("Failed to create processor: "+modeName,
+			zap.Error(err),
+			zap.String("fallback", fallbackMsg),
+		)
+		return &strategies.DirectProcessor{}
+	}
+
+	return processor
 }
