@@ -9,8 +9,10 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/zgsm-ai/chat-rag/internal/logger"
 	"github.com/zgsm-ai/chat-rag/internal/types"
 	"github.com/zgsm-ai/chat-rag/internal/utils"
+	"go.uber.org/zap"
 )
 
 // LLMInterface defines the interface for LLM clients
@@ -128,9 +130,13 @@ func (c *LLMClient) ChatLLMWithMessagesStreamRaw(ctx context.Context, messages [
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		bodyStr := string(body)
+		logger.Warn("LLMClient get straming error response",
+			zap.Int("status code", resp.StatusCode),
+			zap.String("body", bodyStr),
+		)
 		return fmt.Errorf("%s", bodyStr)
 	}
 
@@ -202,6 +208,10 @@ func (c *LLMClient) ChatLLMWithMessagesRaw(ctx context.Context, messages []types
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		bodyStr := string(body)
+		logger.Warn("LLMClient get error response",
+			zap.Int("status code", resp.StatusCode),
+			zap.String("body", bodyStr),
+		)
 		return nil_resp, fmt.Errorf("%s", bodyStr)
 	}
 
