@@ -139,9 +139,19 @@ func (ls *LoggerRecordService) Stop() {
 	ls.wg.Wait()
 }
 
+// copyAndSetQuotaIdentity
+func copyAndSetQuotaIdentity(headers *http.Header) *http.Header {
+	headersCopy := make(http.Header)
+	for k, v := range *headers {
+		headersCopy[k] = v
+	}
+	headersCopy.Set("x-quota-identity", "system")
+	return &headersCopy
+}
+
 // LogAsync logs a chat completion asynchronously
 func (ls *LoggerRecordService) LogAsync(logs *model.ChatLog, headers *http.Header) {
-	llmClient, err := client.NewLLMClient(ls.llmEndpoint, ls.classifyModel, headers)
+	llmClient, err := client.NewLLMClient(ls.llmEndpoint, ls.classifyModel, copyAndSetQuotaIdentity(headers))
 	if err != nil {
 		logger.Error("Failed to create LLM client",
 			zap.String("operation", "LogAsync"),
@@ -394,12 +404,15 @@ func (ls *LoggerRecordService) processClassification(chatLog *model.ChatLog, fil
 // uploadAndProcessLog uploads a single log to Loki and saves it to permanent storage
 func (ls *LoggerRecordService) uploadAndProcessLog(chatLog *model.ChatLog, file os.DirEntry) error {
 	if !ls.uploadToLoki(chatLog) {
-		return fmt.Errorf("failed to upload to Loki")
+		// return fmt.Errorf("failed to upload to Loki")
+		logger.Warn("Failed to upload to Loki",
+			zap.String("filename", file.Name()),
+		)
 	}
 
-	logger.Info("Log uploaded to Loki",
-		zap.String("filename", file.Name()),
-	)
+	// logger.Info("Log uploaded to Loki",
+	// 	zap.String("filename", file.Name()),
+	// )
 
 	if ls.metricsService != nil {
 		ls.metricsService.RecordChatLog(chatLog)
@@ -481,10 +494,10 @@ func (ls *LoggerRecordService) uploadToLoki(chatLog *model.ChatLog) bool {
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		logger.Error("Failed to upload to Loki",
-			zap.String("operation", "uploadToLoki"),
-			zap.Error(err),
-		)
+		// logger.Error("Failed to upload to Loki",
+		// 	zap.String("operation", "uploadToLoki"),
+		// 	zap.Error(err),
+		// )
 		return false
 	}
 	defer resp.Body.Close()
