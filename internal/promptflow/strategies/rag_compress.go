@@ -29,6 +29,16 @@ type RagCompressProcessor struct {
 	end            *processor.End
 }
 
+// copyAndSetQuotaIdentity
+func copyAndSetQuotaIdentity(headers *http.Header) *http.Header {
+	headersCopy := make(http.Header)
+	for k, v := range *headers {
+		headersCopy[k] = v
+	}
+	headersCopy.Set("x-quota-identity", "system")
+	return &headersCopy
+}
+
 // NewRagCompressProcessor creates a new RAG compression processor
 func NewRagCompressProcessor(
 	ctx context.Context,
@@ -39,7 +49,7 @@ func NewRagCompressProcessor(
 	llmClient, err := client.NewLLMClient(
 		svcCtx.Config.LLMEndpoint,
 		svcCtx.Config.SummaryModel,
-		headers,
+		copyAndSetQuotaIdentity(headers),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create LLM client: %w", err)
