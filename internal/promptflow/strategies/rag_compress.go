@@ -23,10 +23,10 @@ type RagCompressProcessor struct {
 	config         config.Config
 	identity       *model.Identity
 
-	systemCompressor *processor.SystemCompressor
-	semanticSearch   *processor.SemanticSearch
-	userCompressor   *processor.UserCompressor
-	end              *processor.End
+	// systemCompressor *processor.SystemCompressor
+	semanticSearch *processor.SemanticSearch
+	userCompressor *processor.UserCompressor
+	end            *processor.End
 }
 
 // NewRagCompressProcessor creates a new RAG compression processor
@@ -70,17 +70,18 @@ func (p *RagCompressProcessor) Arrange(messages []types.Message) (*ds.ProcessedP
 		}, fmt.Errorf("build processor chain: %w", err)
 	}
 
-	p.systemCompressor.Execute(promptMsg)
+	// p.systemCompressor.Execute(promptMsg)
+	p.semanticSearch.Execute(promptMsg)
 
 	return p.createProcessedPrompt(promptMsg), nil
 }
 
 // buildProcessorChain constructs and connects the processor chain
 func (p *RagCompressProcessor) buildProcessorChain() error {
-	p.systemCompressor = processor.NewSystemCompressor(
-		p.config.SystemPromptSplitStr,
-		p.llmClient,
-	)
+	// p.systemCompressor = processor.NewSystemCompressor(
+	// 	p.config.SystemPromptSplitStr,
+	// 	p.llmClient,
+	// )
 	p.semanticSearch = processor.NewSemanticSearch(
 		p.ctx,
 		p.config,
@@ -96,7 +97,7 @@ func (p *RagCompressProcessor) buildProcessorChain() error {
 	p.end = processor.NewEndpoint()
 
 	// chain order: system -> semantic -> user
-	p.systemCompressor.SetNext(p.semanticSearch)
+	// p.systemCompressor.SetNext(p.semanticSearch)
 	p.semanticSearch.SetNext(p.userCompressor)
 	p.userCompressor.SetNext(p.end)
 

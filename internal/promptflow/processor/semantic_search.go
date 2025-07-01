@@ -44,7 +44,7 @@ func NewSemanticSearch(
 
 func (s *SemanticSearch) Execute(promptMsg *PromptMsg) {
 	const method = "SemanticSearch.Execute"
-	logger.Info("starting system prompt compression", zap.String("method", method))
+	logger.Info("starting semantic search", zap.String("method", method))
 
 	if promptMsg == nil {
 		logger.Error("nil prompt message received", zap.String("method", method))
