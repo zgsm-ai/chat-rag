@@ -11,26 +11,6 @@ const (
 	RoleAssistant = "assistant"
 )
 
-// ErrorType defines different types of errors
-type ErrorType string
-
-const (
-	// ErrSemantic represents semantic processing errors
-	ErrSemantic ErrorType = "SemanticError"
-
-	// ErrSummary represents summary generation errors
-	ErrSummary ErrorType = "SummaryError"
-
-	// ErrApi represents dependent API errors
-	ErrApiError ErrorType = "ApiError"
-
-	// ErrServer represents internal server errors
-	ErrServerError ErrorType = "ServerError"
-
-	// ErrExtra represents extra operation errors
-	ErrExtra ErrorType = "ExtraError"
-)
-
 // PromptMode defines different types of chat
 type PromptMode string
 

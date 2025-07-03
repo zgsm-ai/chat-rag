@@ -162,6 +162,14 @@ func (l *ChatCompletionLogic) ChatCompletion() (resp *types.ChatCompletionRespon
 	// Generate completion using structured messages
 	response, err := llmClient.ChatLLMWithMessagesRaw(l.ctx, msgs)
 	if err != nil {
+		if l.isContextLengthError(err) {
+			logger.Error("Input context too long, exceeded limit.", zap.Error(err))
+			lengthErr := types.NewContextTooLongError()
+			l.responseHandler.sendSSEError(l.writer, lengthErr)
+			chatLog.AddError(types.ErrContextExceeded, lengthErr)
+			return nil, lengthErr
+		}
+
 		chatLog.AddError(types.ErrApiError, err)
 		return nil, fmt.Errorf("failed to generate completion: %w", err)
 	}
@@ -229,9 +237,17 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 	})
 
 	if err != nil {
+		if l.isContextLengthError(err) {
+			logger.Error("Input context too long, exceeded limit.", zap.Error(err))
+			lengthErr := types.NewContextTooLongError()
+			l.responseHandler.sendSSEError(l.writer, lengthErr)
+			chatLog.AddError(types.ErrContextExceeded, lengthErr)
+			return nil
+		}
+
 		l.responseHandler.sendSSEError(l.writer, err)
 		chatLog.AddError(types.ErrApiError, err)
-		return err
+		return nil
 	}
 
 	// Update chat log with completion info
@@ -257,6 +273,13 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 }
 
 // Helper methods
+
+// isContextLengthError checks if the error is due to context length exceeded
+func (l *ChatCompletionLogic) isContextLengthError(err error) bool {
+	errMsg := err.Error()
+	return strings.Contains(errMsg, "This model's maximum context length") ||
+		strings.Contains(errMsg, "Input text is too long")
+}
 
 func (l *ChatCompletionLogic) countTokensInMessages(messages []types.Message) int {
 	if l.svcCtx.TokenCounter != nil {
