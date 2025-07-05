@@ -108,7 +108,7 @@ func (c *LLMClient) ChatLLMWithMessagesStreamRaw(ctx context.Context, messages [
 	}
 
 	reader := strings.NewReader(string(jsonData))
-	req, err := http.NewRequestWithContext(ctx, "POST", c.endpoint, reader)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint, reader)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}

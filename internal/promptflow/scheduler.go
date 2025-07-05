@@ -37,7 +37,7 @@ func NewPromptProcessor(
 	case types.Raw:
 		modeName = "Direct chat mode"
 		creator = func() (PromptArranger, error) {
-			return &strategies.DirectProcessor{}, nil
+			return strategies.NewDirectProcessor(identity), nil
 		}
 
 	case types.Performance:
@@ -65,7 +65,7 @@ func NewPromptProcessor(
 			zap.Error(err),
 			zap.String("fallback", fallbackMsg),
 		)
-		return &strategies.DirectProcessor{}
+		return strategies.NewDirectProcessor(identity)
 	}
 
 	return processor

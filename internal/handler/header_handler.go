@@ -46,6 +46,7 @@ func getIdentityFromHeaders(c *gin.Context) *model.Identity {
 		UserName:    userInfo.Name,
 		LoginFrom:   userInfo.ExtractLoginFromToken(),
 		Caller:      caller,
+		Language:    c.GetHeader("Accept-Language"),
 		UserInfo:    userInfo,
 	}
 }

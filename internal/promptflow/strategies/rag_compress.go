@@ -118,8 +118,9 @@ func (p *RagCompressProcessor) buildProcessorChain() error {
 func (p *RagCompressProcessor) createProcessedPrompt(
 	promptMsg *processor.PromptMsg,
 ) *ds.ProcessedPrompt {
+	processedMsgs := processor.SetLanguage(p.identity.Language, promptMsg.AssemblePrompt())
 	return &ds.ProcessedPrompt{
-		Messages:               promptMsg.AssemblePrompt(),
+		Messages:               processedMsgs,
 		SemanticLatency:        p.semanticSearch.Latency,
 		SemanticContext:        p.semanticSearch.SemanticResult,
 		SemanticErr:            p.semanticSearch.Err,

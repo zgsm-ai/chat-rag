@@ -20,6 +20,7 @@ type Identity struct {
 	AuthToken   string    `json:"auth_token"`
 	LoginFrom   string    `json:"login_from"`
 	Caller      string    `json:"caller"`
+	Language    string    `json:"language"`
 	UserInfo    *UserInfo `json:"user_info"`
 }
 

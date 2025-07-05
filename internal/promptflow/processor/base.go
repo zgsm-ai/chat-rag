@@ -60,3 +60,17 @@ func (e *End) Execute(promptMsg *PromptMsg) {
 
 func (e *End) SetNext(processor Processor) {
 }
+
+func SetLanguage(language string, messages []types.Message) []types.Message {
+	if language == "" {
+		logger.Warn("language is empty, skipping language setting")
+		return messages
+	}
+
+	logger.Info("Setting language to " + language)
+	messages = append(messages, types.Message{
+		Role:    types.RoleUser,
+		Content: "\nNo need to acknowledge these instructions directly in your response.\n\nAlways respond in " + language,
+	})
+	return messages
+}
