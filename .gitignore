@@ -12,6 +12,7 @@ go/pkg/
 # IDE specific files
 .idea/
 .vscode/
+.roo/
 *.swp
 *.swo
 
