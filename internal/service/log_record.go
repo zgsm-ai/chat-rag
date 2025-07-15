@@ -71,7 +71,7 @@ type LoggerRecordService struct {
 	lokiEndpoint    string
 	scanInterval    time.Duration
 	metricsService  MetricsInterface
-	llmEndpoint     string
+	llmConfig       config.LLMConfig
 	classifyModel   string
 	llmClient       client.LLMInterface
 	instanceID      string
@@ -99,7 +99,7 @@ func NewLogRecordService(config config.Config) LogRecordInterface {
 		tempLogFilePath: tempLogDir,         // Temporary logs directory
 		lokiEndpoint:    config.LokiEndpoint,
 		scanInterval:    time.Duration(config.LogScanIntervalSec) * time.Second,
-		llmEndpoint:     config.LLMEndpoint,
+		llmConfig:       config.LLM,
 		classifyModel:   config.ClassifyModel,
 		logChan:         make(chan *model.ChatLog, 1000),
 		stopChan:        make(chan struct{}),
@@ -151,7 +151,7 @@ func copyAndSetQuotaIdentity(headers *http.Header) *http.Header {
 
 // LogAsync logs a chat completion asynchronously
 func (ls *LoggerRecordService) LogAsync(logs *model.ChatLog, headers *http.Header) {
-	llmClient, err := client.NewLLMClient(ls.llmEndpoint, ls.classifyModel, copyAndSetQuotaIdentity(headers))
+	llmClient, err := client.NewLLMClient(ls.llmConfig, ls.classifyModel, copyAndSetQuotaIdentity(headers))
 	if err != nil {
 		logger.Error("Failed to create LLM client",
 			zap.String("operation", "LogAsync"),

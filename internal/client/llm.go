@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/zgsm-ai/chat-rag/internal/config"
 	"github.com/zgsm-ai/chat-rag/internal/logger"
 	"github.com/zgsm-ai/chat-rag/internal/types"
 	"github.com/zgsm-ai/chat-rag/internal/utils"
@@ -31,14 +32,15 @@ type LLMInterface interface {
 type LLMClient struct {
 	modelName  string
 	endpoint   string
+	funcModels []string
 	headers    *http.Header
 	httpClient *http.Client
 }
 
 // NewLLMClient creates a new LLM client instance
-func NewLLMClient(endpoint string, modelName string, headers *http.Header) (LLMInterface, error) {
+func NewLLMClient(config config.LLMConfig, modelName string, headers *http.Header) (LLMInterface, error) {
 	// Check for empty endpoint
-	if endpoint == "" || headers == nil {
+	if config.Endpoint == "" || headers == nil {
 		return nil, fmt.Errorf("NewLLMClient llmEndpoint cannot be empty")
 	}
 
@@ -47,7 +49,8 @@ func NewLLMClient(endpoint string, modelName string, headers *http.Header) (LLMI
 
 	return &LLMClient{
 		modelName:  modelName,
-		endpoint:   endpoint,
+		endpoint:   config.Endpoint,
+		funcModels: config.FuncCallingModels,
 		httpClient: httpClient,
 		headers:    headers,
 	}, nil

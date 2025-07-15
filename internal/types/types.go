@@ -61,11 +61,13 @@ type ChatLLMRequest struct {
 }
 
 type ChatLLMRequestStream struct {
-	Model         string        `json:"model"`
-	Messages      []Message     `json:"messages"`
-	Stream        bool          `json:"stream,omitempty"`
-	Temperature   float64       `json:"temperature,omitempty"`
-	StreamOptions StreamOptions `json:"stream_options,omitempty"`
+	Model         string           `json:"model"`
+	Messages      []Message        `json:"messages"`
+	Stream        bool             `json:"stream,omitempty"`
+	Temperature   float64          `json:"temperature,omitempty"`
+	StreamOptions StreamOptions    `json:"stream_options,omitempty"`
+	Tools         []map[string]any `json:"tools,omitempty"`
+	ToolChoice    string           `json:"tool_choice,omitempty"`
 }
 
 type Choice struct {

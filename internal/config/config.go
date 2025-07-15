@@ -1,13 +1,16 @@
 package config
 
+// LLMConfig
+type LLMConfig struct {
+	Endpoint          string
+	FuncCallingModels []string
+}
+
 // Config holds all service configuration
 type Config struct {
 	// Server configuration
 	Host string
 	Port int
-
-	// Model endpoints configuration
-	LLMEndpoint string
 
 	// Token processing configuration
 	TokenThreshold int
@@ -32,4 +35,6 @@ type Config struct {
 
 	// used recent user prompt messages nums
 	RecentUserMsgUsedNums int
+
+	LLM LLMConfig
 }

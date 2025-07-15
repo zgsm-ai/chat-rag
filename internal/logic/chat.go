@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -152,7 +153,7 @@ func (l *ChatCompletionLogic) ChatCompletion() (resp *types.ChatCompletionRespon
 	}
 
 	// Create LLM client for main model
-	llmClient, err := client.NewLLMClient(l.svcCtx.Config.LLMEndpoint, l.request.Model, l.headers)
+	llmClient, err := client.NewLLMClient(l.svcCtx.Config.LLM, l.request.Model, l.headers)
 	if err != nil {
 		chatLog.AddError(types.ErrServerError, err)
 		return nil, fmt.Errorf("failed to create LLM client: %w", err)
@@ -199,7 +200,7 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 	}
 
 	// Create LLM client for main model
-	llmClient, err := client.NewLLMClient(l.svcCtx.Config.LLMEndpoint, l.request.Model, l.headers)
+	llmClient, err := client.NewLLMClient(l.svcCtx.Config.LLM, l.request.Model, l.headers)
 	if err != nil {
 		l.responseHandler.sendSSEError(l.writer, err)
 		chatLog.AddError(types.ErrServerError, err)
@@ -222,6 +223,13 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 	// Stream completion using structured messages with raw response
 	err = llmClient.ChatLLMWithMessagesStreamRaw(l.ctx, msgs, func(rawLine string) error {
 		l.responseHandler.extractStreamingData(rawLine, &responseContent, &finalUsage)
+
+		// Remove XML tags from rawLine
+		rawLine = regexp.MustCompile(`assistant`).ReplaceAllString(rawLine, "function")
+		rawLine = regexp.MustCompile(`<`).ReplaceAllString(rawLine, "")
+		rawLine = regexp.MustCompile(`>`).ReplaceAllString(rawLine, "")
+		rawLine = regexp.MustCompile(`</`).ReplaceAllString(rawLine, "")
+		fmt.Printf("==> %s", rawLine)
 
 		if !strings.HasPrefix(rawLine, "data: ") {
 			rawLine = "data: " + rawLine

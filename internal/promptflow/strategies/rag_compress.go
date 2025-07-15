@@ -47,7 +47,7 @@ func NewRagCompressProcessor(
 	identity *model.Identity,
 ) (*RagCompressProcessor, error) {
 	llmClient, err := client.NewLLMClient(
-		svcCtx.Config.LLMEndpoint,
+		svcCtx.Config.LLM,
 		svcCtx.Config.SummaryModel,
 		copyAndSetQuotaIdentity(headers),
 	)

@@ -44,7 +44,7 @@ func createTestServiceContext(t *testing.T, cfg *config.Config, tokenCounter int
 
 	svcCtx := &bootstrap.ServiceContext{
 		Config: config.Config{
-			LLMEndpoint: cfg.LLMEndpoint,
+			LLM: cfg.LLM,
 		},
 		LoggerService:  loggerMock,
 		MetricsService: metricsMock,
@@ -94,7 +94,7 @@ func setupTestLogic(t *testing.T, cfg *config.Config, tokenCounter interface{},
 
 func TestChatCompletionLogic_NewChatCompletionLogic(t *testing.T) {
 	mockWriter := &mockResponseWriter{}
-	cfg := &config.Config{LLMEndpoint: "http://localhost:8080"}
+	cfg := &config.Config{}
 	logic, svcCtx := setupTestLogic(t, cfg, nil, "test-model", []types.Message{
 		{Role: "user", Content: "Hello"},
 	}, mockWriter)
@@ -131,7 +131,7 @@ func TestChatCompletionLogic_ChatCompletion_ValidationErrors(t *testing.T) {
 	}{
 		{
 			name:     "empty endpoint",
-			config:   &config.Config{LLMEndpoint: ""},
+			config:   &config.Config{},
 			expected: "NewLLMClient llmEndpoint cannot be empty",
 		},
 	}
@@ -152,18 +152,20 @@ func TestChatCompletionLogic_ChatCompletion_ValidationErrors(t *testing.T) {
 	// Test valid configuration
 	t.Run("valid config", func(t *testing.T) {
 		cfg := &config.Config{
-			LLMEndpoint: "http://test-endpoint",
+			LLM: config.LLMConfig{
+				Endpoint: "http://test-endpoint",
+			},
 		}
 		_, svcCtx := setupTestLogic(t, cfg, nil, "test-model", []types.Message{}, &mockResponseWriter{})
 		assert.NotNil(t, svcCtx)
-		assert.Equal(t, "http://test-endpoint", svcCtx.Config.LLMEndpoint)
+		assert.Equal(t, "http://test-endpoint", svcCtx.Config.LLM.Endpoint)
 	})
 }
 
 // Tests TokenCounter setup correctly
 func TestChatCompletionLogic_WithTokenCounter(t *testing.T) {
 	mockWriter := &mockResponseWriter{}
-	cfg := &config.Config{LLMEndpoint: "http://localhost:8080"}
+	cfg := &config.Config{}
 	tokenCounter := &tokenizer.TokenCounter{}
 
 	logic, svcCtx := setupTestLogic(t, cfg, tokenCounter, "test-model",

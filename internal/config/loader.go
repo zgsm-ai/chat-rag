@@ -4,10 +4,12 @@ import (
 	"fmt"
 
 	"github.com/spf13/viper"
+	"github.com/zgsm-ai/chat-rag/internal/logger"
+	"go.uber.org/zap"
 )
 
-// LoadConfig loads configuration from the specified file path using viper
-func LoadConfig(configPath string) (Config, error) {
+// loadConfig loads configuration from the specified file path using viper
+func loadConfig(configPath string) (Config, error) {
 	var c Config
 
 	viper.SetConfigFile(configPath)
@@ -20,12 +22,14 @@ func LoadConfig(configPath string) (Config, error) {
 		return c, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
+	logger.Info("loaded config", zap.Any("config", c))
+
 	return c, nil
 }
 
 // MustLoadConfig loads configuration and panics if there's an error
 func MustLoadConfig(configPath string) Config {
-	c, err := LoadConfig(configPath)
+	c, err := loadConfig(configPath)
 	if err != nil {
 		panic("Failed to load config: " + err.Error())
 	}
