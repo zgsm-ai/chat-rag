@@ -27,13 +27,22 @@ type Identity struct {
 
 // UserInfo defines the user information structure
 type UserInfo struct {
-	UUID           string `json:"uuid"`
-	Phone          string `json:"phone"`
-	GithubID       string `json:"github_id"`
-	Email          string `json:"email"`
-	Name           string `json:"name"`
-	GithubName     string `json:"github_name"`
-	EmployeeNumber string `json:"employee_number"`
+	UUID           string          `json:"uuid"`
+	Phone          string          `json:"phone"`
+	GithubID       string          `json:"github_id"`
+	Email          string          `json:"email"`
+	Name           string          `json:"name"`
+	GithubName     string          `json:"github_name"`
+	EmployeeNumber string          `json:"employee_number"`
+	Department     *DepartmentInfo `json:"department"`
+}
+
+// DepartmentInfo department information structure
+type DepartmentInfo struct {
+	Level1Dept string `json:"dept_1"`
+	Level2Dept string `json:"dept_2"`
+	Level3Dept string `json:"dept_3"`
+	Level4Dept string `json:"dept_4"`
 }
 
 // JWTClaims defines the JWT claims structure
@@ -111,7 +120,7 @@ func mapClaimsToJWTClaims(claims jwt.MapClaims) (*JWTClaims, error) {
 func extractUserInfo(claims *JWTClaims) (*UserInfo, error) {
 	id, err := uuid.Parse(claims.UniversalID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid universal_id: %w", err)
+		logger.Warn("Failed to parse universal_id:", zap.Error(err))
 	}
 
 	customProps := parseCustomProperties(claims.Properties)
