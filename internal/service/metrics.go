@@ -15,9 +15,12 @@ const (
 	metricsBaseLabelUser      = "user"
 	metricsBaseLabelLoginFrom = "login_from"
 	metricsBaseLabelCaller    = "caller"
-	metricsLabelCategory      = "category"
-	metricsLabelTokenScope    = "token_scope"
-	metricsLabelErrorType     = "error_type"
+	metricsBaseLabelSender    = "sender"
+
+	// Label names
+	metricsLabelCategory   = "category"
+	metricsLabelTokenScope = "token_scope"
+	metricsLabelErrorType  = "error_type"
 
 	// Metric names
 	metricRequestsTotal         = "chat_rag_requests_total"
@@ -52,6 +55,7 @@ var metricsBaseLabels = []string{
 	metricsBaseLabelUser,
 	metricsBaseLabelLoginFrom,
 	metricsBaseLabelCaller,
+	metricsBaseLabelSender,
 }
 
 // MetricsInterface defines the interface for metrics service
@@ -254,6 +258,7 @@ func (ms *MetricsService) getBaseLabels(log *model.ChatLog) prometheus.Labels {
 		metricsBaseLabelUser:      log.Identity.UserName,
 		metricsBaseLabelLoginFrom: log.Identity.LoginFrom,
 		metricsBaseLabelCaller:    log.Identity.Caller,
+		metricsBaseLabelSender:    log.Identity.Sender,
 	}
 }
 

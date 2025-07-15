@@ -145,7 +145,7 @@ func copyAndSetQuotaIdentity(headers *http.Header) *http.Header {
 	for k, v := range *headers {
 		headersCopy[k] = v
 	}
-	headersCopy.Set("x-quota-identity", "system")
+	headersCopy.Set(types.HeaderQuotaIdentity, "system")
 	return &headersCopy
 }
 

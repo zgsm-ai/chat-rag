@@ -19,7 +19,8 @@ type Identity struct {
 	ProjectPath string    `json:"project_path"`
 	AuthToken   string    `json:"auth_token"`
 	LoginFrom   string    `json:"login_from"`
-	Caller      string    `json:"caller"`
+	Caller      string    `json:"caller"` // ide, code-review, ...
+	Sender      string    `json:"sender"` // user, system, ...
 	Language    string    `json:"language"`
 	UserInfo    *UserInfo `json:"user_info"`
 }
