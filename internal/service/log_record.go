@@ -92,6 +92,11 @@ func NewLogRecordService(config config.Config) LogRecordInterface {
 		instanceID = fmt.Sprintf("instance-%d", rand.Intn(10000))
 	}
 
+	var deptClient client.DepartmentInterface
+	if config.DepartmentApiEndpoint != "" {
+		deptClient = client.NewDepartmentClient(config.DepartmentApiEndpoint)
+	}
+
 	return &LoggerRecordService{
 		logFilePath:     config.LogFilePath, // Permanent storage directory
 		tempLogFilePath: tempLogDir,         // Temporary logs directory
@@ -102,7 +107,7 @@ func NewLogRecordService(config config.Config) LogRecordInterface {
 		logChan:         make(chan *model.ChatLog, 1000),
 		stopChan:        make(chan struct{}),
 		instanceID:      instanceID,
-		deptClient:      client.NewDepartmentClient(config.DepartmentApiEndpoint),
+		deptClient:      deptClient,
 	}
 }
 
@@ -382,6 +387,10 @@ func (ls *LoggerRecordService) processSingleFile(file os.DirEntry) {
 
 func (ls *LoggerRecordService) getDepartment(chatLog *model.ChatLog) {
 	if chatLog.Identity.UserInfo.EmployeeNumber == "" {
+		return
+	}
+
+	if ls.deptClient == nil {
 		return
 	}
 
