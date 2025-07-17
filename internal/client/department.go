@@ -8,9 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/zgsm-ai/chat-rag/internal/logger"
 	"github.com/zgsm-ai/chat-rag/internal/model"
-	"go.uber.org/zap"
 )
 
 type DepartmentInterface interface {
@@ -53,7 +51,6 @@ func (c *DepartmentClient) SetTimeout(timeout time.Duration) {
 func (c *DepartmentClient) GetDepartment(employeeNumber string) (*model.DepartmentInfo, error) {
 	// First try to get from cache
 	if item, ok := c.getFromCache(employeeNumber); ok {
-		logger.Info("Got department info from cache", zap.Any("info", item.data))
 		return &item.data, nil
 	}
 
@@ -95,7 +92,6 @@ func (c *DepartmentClient) GetDepartment(employeeNumber string) (*model.Departme
 	if !result.Success || result.Code != 200 {
 		return nil, fmt.Errorf("API returned error: %s", result.Message)
 	}
-	logger.Info("Got department info from API", zap.Any("info", result.Data))
 
 	c.setToCache(employeeNumber, result.Data, cacheExpiration)
 
