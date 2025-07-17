@@ -31,6 +31,7 @@ func (l *OfflineLoader) LoadTiktokenBpe(tiktokenBpeFile string) (map[string]int,
 
 	bpeRanks := make(map[string]int)
 	for _, line := range strings.Split(string(contents), "\n") {
+		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
 		}
@@ -39,7 +40,7 @@ func (l *OfflineLoader) LoadTiktokenBpe(tiktokenBpeFile string) (map[string]int,
 		if err != nil {
 			return nil, err
 		}
-		rank, err := strconv.Atoi(parts[1])
+		rank, err := strconv.Atoi(strings.TrimSpace(parts[1]))
 		if err != nil {
 			return nil, err
 		}
@@ -62,9 +63,10 @@ func NewTokenCounter() (*TokenCounter, error) {
 	if err != nil {
 		logger.Error("failed to initialize tiktoken encoder",
 			zap.Error(err),
-			zap.String("method", "NewTokenCounter"))
+			zap.String("method", "NewTokenCounter"),
+		)
 		// Return instance with nil encoder which will use fallback estimation
-		return &TokenCounter{encoder: nil}, nil
+		return nil, err
 	}
 
 	return &TokenCounter{

@@ -32,6 +32,18 @@ const (
 	Auto PromptMode = "auto"
 )
 
+const (
+	HeaderQuotaIdentity = "x-quota-identity"
+	HeaderRequestId     = "x-request-id"
+	HeaderCaller        = "x-caller"
+	HeaderTaskId        = "zgsm-task-id"
+	HeaderClientId      = "zgsm-client-id"
+	HeaderClientIde     = "zgsm-client-ide"
+	HeaderLanguage      = "Accept-Language"
+	HeaderAuthorization = "authorization"
+	HeaderProjectPath   = "zgsm-project-path"
+)
+
 type ChatCompletionRequest struct {
 	Model         string        `json:"model"`
 	Messages      []Message     `json:"messages"`

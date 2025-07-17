@@ -36,5 +36,8 @@ type Config struct {
 	// used recent user prompt messages nums
 	RecentUserMsgUsedNums int
 
+	//Department configuration
+	DepartmentApiEndpoint string
+
 	LLM LLMConfig
 }
