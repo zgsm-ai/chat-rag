@@ -35,6 +35,9 @@ data:
 
     # used recent user prompt messages nums
     RecentUserMsgUsedNums: 10
+
+    # Department configuration
+    DepartmentApiEndpoint: https://devops.sangfor.com/api/analysis/dam/work_id?work_id=
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim

@@ -6,24 +6,27 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/zgsm-ai/chat-rag/internal/logger"
 	"github.com/zgsm-ai/chat-rag/internal/model"
+	"github.com/zgsm-ai/chat-rag/internal/types"
 	"go.uber.org/zap"
 )
 
+// getHeaderWithDefault retrieves a header value from the request context,
+// or returns a default value if the header is not present.
+func getHeaderWithDefault(c *gin.Context, headerKey, defaultValue string) string {
+	if value := c.GetHeader(headerKey); value != "" {
+		return value
+	}
+	return defaultValue
+}
+
 // getIdentityFromHeaders extracts request headers and creates Identity struct
 func getIdentityFromHeaders(c *gin.Context) *model.Identity {
-	clientIDE := c.GetHeader("zgsm-client-ide")
-	if clientIDE == "" {
-		clientIDE = "vscode"
-	}
+	clientIDE := getHeaderWithDefault(c, types.HeaderClientIde, "vscode")
+	caller := getHeaderWithDefault(c, types.HeaderCaller, "chat")
+	sender := getHeaderWithDefault(c, types.HeaderQuotaIdentity, "system")
 
-	caller := c.GetHeader("x-caller")
-	if caller == "" {
-		caller = "chat"
-	}
-
-	projectPath := c.GetHeader("zgsm-project-path")
-	decodedPath, err := url.PathUnescape(projectPath)
-	if err != nil {
+	projectPath := c.GetHeader(types.HeaderProjectPath)
+	if decodedPath, err := url.PathUnescape(projectPath); err != nil {
 		logger.Error("Failed to PathUnescape project path",
 			zap.String("projectPath", projectPath),
 			zap.Error(err),
@@ -32,21 +35,22 @@ func getIdentityFromHeaders(c *gin.Context) *model.Identity {
 		projectPath = decodedPath
 	}
 
-	jwtToken := c.GetHeader("authorization")
+	jwtToken := c.GetHeader(types.HeaderAuthorization)
 	userInfo := model.NewUserInfo(jwtToken)
 	logger.Info("User info:", zap.Any("userInfo", userInfo))
 
 	return &model.Identity{
-		RequestID:   c.GetHeader("x-request-id"),
-		TaskID:      c.GetHeader("zgsm-task-id"),
-		ClientID:    c.GetHeader("zgsm-client-id"),
+		RequestID:   c.GetHeader(types.HeaderRequestId),
+		TaskID:      c.GetHeader(types.HeaderTaskId),
+		ClientID:    c.GetHeader(types.HeaderTaskId),
 		ClientIDE:   clientIDE,
 		ProjectPath: projectPath,
 		AuthToken:   jwtToken,
 		UserName:    userInfo.Name,
 		LoginFrom:   userInfo.ExtractLoginFromToken(),
 		Caller:      caller,
-		Language:    c.GetHeader("Accept-Language"),
+		Language:    c.GetHeader(types.HeaderLanguage),
+		Sender:      sender,
 		UserInfo:    userInfo,
 	}
 }

@@ -15,9 +15,16 @@ const (
 	metricsBaseLabelUser      = "user"
 	metricsBaseLabelLoginFrom = "login_from"
 	metricsBaseLabelCaller    = "caller"
-	metricsLabelCategory      = "category"
-	metricsLabelTokenScope    = "token_scope"
-	metricsLabelErrorType     = "error_type"
+	metricsBaseLabelSender    = "sender"
+	metricsBaseLabelDept1     = "dept_level1"
+	metricsBaseLabelDept2     = "dept_level2"
+	metricsBaseLabelDept3     = "dept_level3"
+	metricsBaseLabelDept4     = "dept_level4"
+
+	// Label names
+	metricsLabelCategory   = "category"
+	metricsLabelTokenScope = "token_scope"
+	metricsLabelErrorType  = "error_type"
 
 	// Metric names
 	metricRequestsTotal         = "chat_rag_requests_total"
@@ -52,6 +59,11 @@ var metricsBaseLabels = []string{
 	metricsBaseLabelUser,
 	metricsBaseLabelLoginFrom,
 	metricsBaseLabelCaller,
+	metricsBaseLabelSender,
+	metricsBaseLabelDept1,
+	metricsBaseLabelDept2,
+	metricsBaseLabelDept3,
+	metricsBaseLabelDept4,
 }
 
 // MetricsInterface defines the interface for metrics service
@@ -247,14 +259,31 @@ func (ms *MetricsService) recordErrorMetrics(log *model.ChatLog, labels promethe
 
 // getBaseLabels creates base labels map
 func (ms *MetricsService) getBaseLabels(log *model.ChatLog) prometheus.Labels {
-	return prometheus.Labels{
+	labels := prometheus.Labels{
 		metricsBaseLabelClientID:  log.Identity.ClientID,
 		metricsBaseLabelClientIDE: log.Identity.ClientIDE,
 		metricsBaseLabelModel:     log.Model,
 		metricsBaseLabelUser:      log.Identity.UserName,
 		metricsBaseLabelLoginFrom: log.Identity.LoginFrom,
 		metricsBaseLabelCaller:    log.Identity.Caller,
+		metricsBaseLabelSender:    log.Identity.Sender,
 	}
+
+	if log.Identity.UserInfo != nil &&
+		log.Identity.UserInfo.Department != nil &&
+		log.Identity.UserInfo.EmployeeNumber != "" {
+		labels[metricsBaseLabelDept1] = log.Identity.UserInfo.Department.Level1Dept
+		labels[metricsBaseLabelDept2] = log.Identity.UserInfo.Department.Level2Dept
+		labels[metricsBaseLabelDept3] = log.Identity.UserInfo.Department.Level3Dept
+		labels[metricsBaseLabelDept4] = log.Identity.UserInfo.Department.Level4Dept
+	} else {
+		labels[metricsBaseLabelDept1] = ""
+		labels[metricsBaseLabelDept2] = ""
+		labels[metricsBaseLabelDept3] = ""
+		labels[metricsBaseLabelDept4] = ""
+	}
+
+	return labels
 }
 
 // addLabel adds a new label to existing labels

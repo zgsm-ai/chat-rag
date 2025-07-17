@@ -1,11 +1,8 @@
 package service
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"math/rand"
 	"net/http"
 	"os"
@@ -74,6 +71,7 @@ type LoggerRecordService struct {
 	llmEndpoint     string
 	classifyModel   string
 	llmClient       client.LLMInterface
+	deptClient      client.DepartmentInterface
 	instanceID      string
 
 	logChan  chan *model.ChatLog
@@ -94,6 +92,11 @@ func NewLogRecordService(config config.Config) LogRecordInterface {
 		instanceID = fmt.Sprintf("instance-%d", rand.Intn(10000))
 	}
 
+	var deptClient client.DepartmentInterface
+	if config.DepartmentApiEndpoint != "" {
+		deptClient = client.NewDepartmentClient(config.DepartmentApiEndpoint)
+	}
+
 	return &LoggerRecordService{
 		logFilePath:     config.LogFilePath, // Permanent storage directory
 		tempLogFilePath: tempLogDir,         // Temporary logs directory
@@ -104,6 +107,7 @@ func NewLogRecordService(config config.Config) LogRecordInterface {
 		logChan:         make(chan *model.ChatLog, 1000),
 		stopChan:        make(chan struct{}),
 		instanceID:      instanceID,
+		deptClient:      deptClient,
 	}
 }
 
@@ -145,7 +149,7 @@ func copyAndSetQuotaIdentity(headers *http.Header) *http.Header {
 	for k, v := range *headers {
 		headersCopy[k] = v
 	}
-	headersCopy.Set("x-quota-identity", "system")
+	headersCopy.Set(types.HeaderQuotaIdentity, "system")
 	return &headersCopy
 }
 
@@ -369,13 +373,38 @@ func (ls *LoggerRecordService) processSingleFile(file os.DirEntry) {
 		return
 	}
 
-	// 4. Upload and process log
+	// 4. Get department info
+	ls.getDepartment(chatLog)
+
+	// 5. Upload and process log
 	if err := ls.uploadAndProcessLog(chatLog, file); err != nil {
 		logger.Error("Failed to upload and process log",
 			zap.String("filename", file.Name()),
 			zap.Error(err),
 		)
 	}
+}
+
+func (ls *LoggerRecordService) getDepartment(chatLog *model.ChatLog) {
+	if chatLog.Identity.UserInfo.EmployeeNumber == "" {
+		return
+	}
+
+	if ls.deptClient == nil {
+		return
+	}
+
+	deptInfo, err := ls.deptClient.GetDepartment(chatLog.Identity.UserInfo.EmployeeNumber)
+	if err != nil {
+		logger.Error("Failed to get department info",
+			zap.String("employeeNumber", chatLog.Identity.UserInfo.EmployeeNumber),
+			zap.Error(err),
+		)
+
+		return
+	}
+
+	chatLog.Identity.UserInfo.Department = deptInfo
 }
 
 // processClassification processes the classification of a single log entry
@@ -403,17 +432,6 @@ func (ls *LoggerRecordService) processClassification(chatLog *model.ChatLog, fil
 
 // uploadAndProcessLog uploads a single log to Loki and saves it to permanent storage
 func (ls *LoggerRecordService) uploadAndProcessLog(chatLog *model.ChatLog, file os.DirEntry) error {
-	if !ls.uploadToLoki(chatLog) {
-		// return fmt.Errorf("failed to upload to Loki")
-		logger.Warn("Failed to upload to Loki",
-			zap.String("filename", file.Name()),
-		)
-	}
-
-	// logger.Info("Log uploaded to Loki",
-	// 	zap.String("filename", file.Name()),
-	// )
-
 	if ls.metricsService != nil {
 		ls.metricsService.RecordChatLog(chatLog)
 	}
@@ -465,62 +483,6 @@ func (ls *LoggerRecordService) validateCategory(category string) string {
 		zap.String("category", category),
 	)
 	return "extra"
-}
-
-// uploadSingleLog uploads a single log to Loki
-func (ls *LoggerRecordService) uploadToLoki(chatLog *model.ChatLog) bool {
-	lokiStream := model.CreateLokiStream(chatLog)
-	lokiBatch := model.LogBatch{Streams: []model.LogStream{*lokiStream}}
-	jsonData, err := json.Marshal(lokiBatch)
-	if err != nil {
-		logger.Error("Failed to marshal Loki data",
-			zap.String("operation", "uploadToLoki"),
-			zap.Error(err),
-		)
-		return false
-	}
-
-	req, err := http.NewRequest(http.MethodPost, ls.lokiEndpoint, bytes.NewBuffer(jsonData))
-	if err != nil {
-		logger.Error("Failed to create Loki request",
-			zap.String("operation", "uploadToLoki"),
-			zap.Error(err),
-		)
-		return false
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		// logger.Error("Failed to upload to Loki",
-		// 	zap.String("operation", "uploadToLoki"),
-		// 	zap.Error(err),
-		// )
-		return false
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusNoContent {
-		body, err := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		if err != nil {
-			logger.Error("Loki upload failed",
-				zap.String("operation", "uploadToLoki"),
-				zap.Int("status", resp.StatusCode),
-				zap.Error(err),
-			)
-		} else {
-			logger.Error("Loki upload failed",
-				zap.String("operation", "uploadToLoki"),
-				zap.Int("status", resp.StatusCode),
-				zap.String("response", string(body)),
-			)
-		}
-		return false
-	}
-
-	return true
 }
 
 // saveLogToPermanentStorage saves a single log to permanent storage

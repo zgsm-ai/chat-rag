@@ -28,3 +28,6 @@ SystemPromptSplitStr: "====\n\nRULES"
 
 # used recent user prompt messages nums
 RecentUserMsgUsedNums: 3
+
+# Department configuration
+DepartmentApiEndpoint: "http://localhost:1234/work_id?work_id="
