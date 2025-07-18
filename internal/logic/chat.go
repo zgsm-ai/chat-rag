@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -223,13 +222,6 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 	// Stream completion using structured messages with raw response
 	err = llmClient.ChatLLMWithMessagesStreamRaw(l.ctx, msgs, func(rawLine string) error {
 		l.responseHandler.extractStreamingData(rawLine, &responseContent, &finalUsage)
-
-		// Remove XML tags from rawLine
-		rawLine = regexp.MustCompile(`assistant`).ReplaceAllString(rawLine, "function")
-		rawLine = regexp.MustCompile(`<`).ReplaceAllString(rawLine, "")
-		rawLine = regexp.MustCompile(`>`).ReplaceAllString(rawLine, "")
-		rawLine = regexp.MustCompile(`</`).ReplaceAllString(rawLine, "")
-		fmt.Printf("==> %s", rawLine)
 
 		if !strings.HasPrefix(rawLine, "data: ") {
 			rawLine = "data: " + rawLine

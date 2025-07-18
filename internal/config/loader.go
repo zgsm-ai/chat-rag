@@ -8,30 +8,31 @@ import (
 	"go.uber.org/zap"
 )
 
-// loadConfig loads configuration from the specified file path using viper
-func loadConfig(configPath string) (Config, error) {
-	var c Config
+// LoadYAML loads yaml from the specified file path using viper
+func LoadYAML[T any](path string) (*T, error) {
+	var yaml T
 
-	viper.SetConfigFile(configPath)
+	viper.SetConfigFile(path)
 	viper.SetConfigType("yaml")
+
 	if err := viper.ReadInConfig(); err != nil {
-		return c, fmt.Errorf("failed to read config file: %w", err)
+		return nil, fmt.Errorf("failed to read YAML: %w", err)
 	}
 
-	if err := viper.Unmarshal(&c); err != nil {
-		return c, fmt.Errorf("failed to unmarshal config: %w", err)
+	if err := viper.Unmarshal(&yaml); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal YAML: %w", err)
 	}
 
-	logger.Info("loaded config", zap.Any("config", c))
-
-	return c, nil
+	return &yaml, nil
 }
 
 // MustLoadConfig loads configuration and panics if there's an error
 func MustLoadConfig(configPath string) Config {
-	c, err := loadConfig(configPath)
+	c, err := LoadYAML[Config](configPath)
 	if err != nil {
 		panic("Failed to load config: " + err.Error())
 	}
-	return c
+
+	logger.Info("loaded config", zap.Any("config", c))
+	return *c
 }

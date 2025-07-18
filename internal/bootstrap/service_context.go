@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"github.com/zgsm-ai/chat-rag/internal/client"
 	"github.com/zgsm-ai/chat-rag/internal/config"
+	"github.com/zgsm-ai/chat-rag/internal/functions"
 	"github.com/zgsm-ai/chat-rag/internal/service"
 	"github.com/zgsm-ai/chat-rag/internal/tokenizer"
 )
@@ -12,7 +13,8 @@ type ServiceContext struct {
 	Config config.Config
 
 	// Clients
-	SemanticClient client.SemanticInterface
+	SemanticClient   client.SemanticInterface
+	FunctionsManager *functions.ToolManager
 
 	// Services
 	LoggerService  service.LogRecordInterface
@@ -26,6 +28,7 @@ type ServiceContext struct {
 func NewServiceContext(c config.Config) *ServiceContext {
 	// Initialize semantic client
 	semanticClient := client.NewSemanticClient(c.SemanticApiEndpoint)
+	functionManager := functions.NewToolManager("etc/functions.yaml")
 
 	// Initialize token counter
 	tokenCounter, err := tokenizer.NewTokenCounter()
@@ -49,11 +52,12 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	}
 
 	return &ServiceContext{
-		Config:         c,
-		SemanticClient: semanticClient,
-		LoggerService:  loggerService,
-		MetricsService: metricsService,
-		TokenCounter:   tokenCounter,
+		Config:           c,
+		SemanticClient:   semanticClient,
+		FunctionsManager: functionManager,
+		LoggerService:    loggerService,
+		MetricsService:   metricsService,
+		TokenCounter:     tokenCounter,
 	}
 }
 
