@@ -12,12 +12,10 @@ import (
 )
 
 type FunctionAdapter struct {
-	Recorder
+	BaseProcessor
 	modelName         string
 	funcCallingModels []string
 	functionsManager  *functions.ToolManager
-
-	next Processor
 }
 
 func NewFunctionAdapter(modelName string, funcCallingModels []string, functionsManager *functions.ToolManager) *FunctionAdapter {
@@ -135,17 +133,6 @@ func (f *FunctionAdapter) cleanToolDescriptions(content string) string {
 		"4. Formulate your tool use using the XML format specified for each tool.", "")
 }
 
-// passToNext passes message to next processor
-func (f *FunctionAdapter) passToNext(promptMsg *PromptMsg) {
-	if f.next == nil {
-		logger.Warn(" no next processor configured",
-			zap.String("method", "FunctionAdapter.Execute"),
-		)
-		return
-	}
-	f.next.Execute(promptMsg)
-}
-
 // isModelSupported checks if current model is in the list of function-calling supported models
 // Supports wildcard matching, e.g. "qwen3*" matches models starting with "qwen3"
 func (f *FunctionAdapter) isModelSupported() bool {
@@ -177,8 +164,4 @@ func (f *FunctionAdapter) matchModel(modelName, pattern string) bool {
 	}
 
 	return false
-}
-
-func (f *FunctionAdapter) SetNext(next Processor) {
-	f.next = next
 }

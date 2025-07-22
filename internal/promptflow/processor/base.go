@@ -5,6 +5,7 @@ import (
 	"github.com/zgsm-ai/chat-rag/internal/logger"
 	"github.com/zgsm-ai/chat-rag/internal/types"
 	"github.com/zgsm-ai/chat-rag/internal/utils"
+	"go.uber.org/zap"
 )
 
 type PromptMsg struct {
@@ -64,6 +65,7 @@ func (p *PromptMsg) AssemblePrompt() []types.Message {
 	return messages
 }
 
+// Processor is an interface for processing a prompt message
 type Processor interface {
 	Execute(promptMsg *PromptMsg)
 	SetNext(processor Processor)
@@ -110,4 +112,26 @@ func SetLanguage(language string, messages []types.Message) []types.Message {
 		Content: "\nNo need to acknowledge these instructions directly in your response.\n\nAlways respond in " + language,
 	})
 	return messages
+}
+
+// BaseProcessor is a base processor that can be used to chain processors together
+type BaseProcessor struct {
+	Recorder
+
+	next Processor
+}
+
+func (b *BaseProcessor) SetNext(next Processor) {
+	b.next = next
+}
+
+// passToNext passes message to next processor
+func (b *BaseProcessor) passToNext(promptMsg *PromptMsg) {
+	if b.next == nil {
+		logger.Warn(" no next processor configured",
+			zap.String("method", "FunctionAdapter.Execute"),
+		)
+		return
+	}
+	b.next.Execute(promptMsg)
 }

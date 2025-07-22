@@ -27,6 +27,7 @@ type RagCompressProcessor struct {
 	modelName        string
 
 	// systemCompressor *processor.SystemCompressor
+	userMsgFilter   *processor.UserMsgFilter
 	functionAdapter *processor.FunctionAdapter
 	semanticSearch  *processor.SemanticSearch
 	userCompressor  *processor.UserCompressor
@@ -101,6 +102,7 @@ func (p *RagCompressProcessor) buildProcessorChain() error {
 	// 	p.config.SystemPromptSplitStr,
 	// 	p.llmClient,
 	// )
+	p.userMsgFilter = processor.NewUserMsgFilter()
 	p.functionAdapter = processor.NewFunctionAdapter(
 		p.modelName,
 		p.config.LLM.FuncCallingModels,
@@ -121,9 +123,9 @@ func (p *RagCompressProcessor) buildProcessorChain() error {
 
 	// chain order: system -> semantic -> user
 	// p.systemCompressor.SetNext(p.semanticSearch)
-	p.start.SetNext(p.functionAdapter)
-	p.functionAdapter.SetNext(p.semanticSearch)
-	p.semanticSearch.SetNext(p.userCompressor)
+	p.start.SetNext(p.userMsgFilter)
+	p.userMsgFilter.SetNext(p.functionAdapter)
+	p.functionAdapter.SetNext(p.userCompressor)
 	p.userCompressor.SetNext(p.end)
 
 	return nil
