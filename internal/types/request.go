@@ -73,13 +73,13 @@ type ChatLLMRequest struct {
 }
 
 type ChatLLMRequestStream struct {
-	Model         string           `json:"model"`
-	Messages      []Message        `json:"messages"`
-	Stream        bool             `json:"stream,omitempty"`
-	Temperature   float64          `json:"temperature,omitempty"`
-	StreamOptions StreamOptions    `json:"stream_options,omitempty"`
-	Tools         []map[string]any `json:"tools,omitempty"`
-	ToolChoice    string           `json:"tool_choice,omitempty"`
+	Model         string        `json:"model"`
+	Temperature   float64       `json:"temperature"`
+	Messages      []Message     `json:"messages"`
+	Tools         []Function    `json:"tools,omitempty"`
+	ToolChoice    string        `json:"tool_choice,omitempty"`
+	Stream        bool          `json:"stream,omitempty"`
+	StreamOptions StreamOptions `json:"stream_options,omitempty"`
 }
 
 type Choice struct {
@@ -102,4 +102,33 @@ type Usage struct {
 	PromptTokens     int `json:"prompt_tokens"`
 	CompletionTokens int `json:"completion_tokens"`
 	TotalTokens      int `json:"total_tokens"`
+}
+
+// FunctionCall is the structure of the function called by the LLM.
+type Function struct {
+	Type     string             `json:"type"`
+	Function FunctionDefinition `json:"function"`
+}
+
+type FunctionDefinition struct {
+	Name        string             `json:"name"`
+	Description string             `json:"description"`
+	Parameters  FunctionParameters `json:"parameters"`
+}
+
+type FunctionParameters struct {
+	Type       string                     `json:"type"`
+	Properties map[string]PropertyDetails `json:"properties"`
+	Required   []string                   `json:"required"`
+}
+
+type PropertyDetails struct {
+	Type        string      `json:"type"`
+	Description string      `json:"description"`
+	Default     interface{} `json:"default,omitempty"`
+	Items       *Items      `json:"items,omitempty"` // 用于array类型
+}
+
+type Items struct {
+	Type string `json:"type"`
 }

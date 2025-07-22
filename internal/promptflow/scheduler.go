@@ -25,6 +25,7 @@ func NewPromptProcessor(
 	promptMode types.PromptMode,
 	headers *http.Header,
 	identity *model.Identity,
+	modelName string,
 ) PromptArranger {
 	const fallbackMsg = "falling back to DirectProcessor"
 
@@ -51,7 +52,7 @@ func NewPromptProcessor(
 	default:
 		modeName = "RagCompressProcessor processing mode"
 		creator = func() (PromptArranger, error) {
-			return strategies.NewRagCompressProcessor(ctx, svcCtx, headers, identity)
+			return strategies.NewRagCompressProcessor(ctx, svcCtx, headers, identity, modelName)
 		}
 	}
 

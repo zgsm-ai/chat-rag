@@ -1,6 +1,7 @@
 package processor
 
 import (
+	"github.com/zgsm-ai/chat-rag/internal/functions"
 	"github.com/zgsm-ai/chat-rag/internal/logger"
 	"github.com/zgsm-ai/chat-rag/internal/types"
 	"github.com/zgsm-ai/chat-rag/internal/utils"
@@ -10,6 +11,7 @@ type PromptMsg struct {
 	systemMsg        *types.Message
 	olderUserMsgList []types.Message
 	lastUserMsg      *types.Message
+	tools            []types.Function
 }
 
 type Recorder struct {
@@ -36,6 +38,25 @@ func NewPromptMsg(messages []types.Message) (*PromptMsg, error) {
 	}, nil
 }
 
+func (p *PromptMsg) AddTool(tool *functions.Tool) {
+	if p.tools == nil {
+		p.tools = make([]types.Function, 0)
+	}
+	fnDef := tool.ToFunctionDefinition()
+	p.tools = append(p.tools, fnDef)
+}
+
+func (p *PromptMsg) GetTools() []types.Function {
+	return p.tools
+}
+
+func (p *PromptMsg) SetSystemMsg(content string) {
+	p.systemMsg = &types.Message{
+		Role:    types.RoleSystem,
+		Content: content,
+	}
+}
+
 func (p *PromptMsg) AssemblePrompt() []types.Message {
 	messages := []types.Message{*p.systemMsg}
 	messages = append(messages, p.olderUserMsgList...)
@@ -49,13 +70,29 @@ type Processor interface {
 }
 
 type End struct{}
+type Start struct {
+	next Processor
+}
 
 func NewEndpoint() *End {
 	return &End{}
 }
 
+func NewStartPoint() *Start {
+	return &Start{}
+}
+
+func (e *Start) Execute(promptMsg *PromptMsg) {
+	logger.Info("Strat of processor chain")
+	e.next.Execute(promptMsg)
+}
+
 func (e *End) Execute(promptMsg *PromptMsg) {
 	logger.Info("In end of processor chain")
+}
+
+func (e *Start) SetNext(processor Processor) {
+	e.next = processor
 }
 
 func (e *End) SetNext(processor Processor) {

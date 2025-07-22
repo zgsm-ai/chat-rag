@@ -1,5 +1,7 @@
 package functions
 
+import "github.com/zgsm-ai/chat-rag/internal/types"
+
 type ToolType string
 
 const (
@@ -15,6 +17,7 @@ type Parameter struct {
 	Default     interface{} `yaml:"default" json:"default"`
 	In          string      `yaml:"in" json:"in"`       // query/path/header
 	Items       *Parameter  `yaml:"items" json:"items"` // for array type
+	Enum        []string    `yaml:"enum" json:"enum"`
 }
 
 type Tool struct {
@@ -32,43 +35,19 @@ type AuthConfig struct {
 	Location string `yaml:"location" json:"location"`
 }
 
-// FunctionCall is the structure of the function called by the LLM.
-type FunctionDefinition struct {
-	Name        string             `json:"name"`
-	Description string             `json:"description"`
-	Parameters  FunctionParameters `json:"parameters"`
-}
-
-type FunctionParameters struct {
-	Type       string                     `json:"type"`
-	Properties map[string]PropertyDetails `json:"properties"`
-	Required   []string                   `json:"required"`
-}
-
-type PropertyDetails struct {
-	Type        string      `json:"type"`
-	Description string      `json:"description"`
-	Default     interface{} `json:"default,omitempty"`
-	Items       *Items      `json:"items,omitempty"` // 用于array类型
-}
-
-type Items struct {
-	Type string `json:"type"`
-}
-
-func (t *Tool) ToFunctionDefinition() FunctionDefinition {
-	props := make(map[string]PropertyDetails)
+func (t *Tool) ToFunctionDefinition() types.Function {
+	props := make(map[string]types.PropertyDetails)
 	var required []string
 
 	for _, param := range t.Parameters {
-		prop := PropertyDetails{
+		prop := types.PropertyDetails{
 			Type:        param.Type,
 			Description: param.Description,
 			Default:     param.Default,
 		}
 
 		if param.Type == "array" && param.Items != nil {
-			prop.Items = &Items{Type: param.Items.Type}
+			prop.Items = &types.Items{Type: param.Items.Type}
 		}
 
 		props[param.Name] = prop
@@ -78,13 +57,16 @@ func (t *Tool) ToFunctionDefinition() FunctionDefinition {
 		}
 	}
 
-	return FunctionDefinition{
-		Name:        t.Name,
-		Description: t.Description,
-		Parameters: FunctionParameters{
-			Type:       "object",
-			Properties: props,
-			Required:   required,
+	return types.Function{
+		Type: "function",
+		Function: types.FunctionDefinition{
+			Name:        t.Name,
+			Description: t.Description,
+			Parameters: types.FunctionParameters{
+				Type:       "object",
+				Properties: props,
+				Required:   required,
+			},
 		},
 	}
 }

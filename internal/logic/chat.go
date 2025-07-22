@@ -64,6 +64,7 @@ func (l *ChatCompletionLogic) processRequest() (*model.ChatLog, *ds.ProcessedPro
 		l.request.ExtraBody.PromptMode,
 		l.headers,
 		l.identity,
+		l.request.Model,
 	)
 	processedPrompt, err := promptArranger.Arrange(l.request.Messages)
 	if err != nil {
@@ -200,6 +201,7 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 
 	// Create LLM client for main model
 	llmClient, err := client.NewLLMClient(l.svcCtx.Config.LLM, l.request.Model, l.headers)
+	llmClient.SetTools(processedPrompt.Tools)
 	if err != nil {
 		l.responseHandler.sendSSEError(l.writer, err)
 		chatLog.AddError(types.ErrServerError, err)

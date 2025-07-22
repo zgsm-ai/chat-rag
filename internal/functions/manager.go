@@ -11,15 +11,19 @@ import (
 
 // ToolManager manages tools
 type ToolManager struct {
-	tools    map[string]*Tool
-	executor *ToolExecutor
+	tools       map[string]*Tool
+	ideTools    []string
+	serverTools []string
+	executor    *ToolExecutor
 }
 
 // NewToolManager creates a tool manager and loads tools
 func NewToolManager(toolsPath string) *ToolManager {
 	tm := &ToolManager{
-		tools:    make(map[string]*Tool),
-		executor: NewToolExecutor(),
+		tools:       make(map[string]*Tool),
+		executor:    NewToolExecutor(),
+		ideTools:    make([]string, 0),
+		serverTools: make([]string, 0),
 	}
 
 	// Load all tools during initialization
@@ -28,6 +32,17 @@ func NewToolManager(toolsPath string) *ToolManager {
 		return nil
 	}
 
+	for _, tool := range tm.tools {
+		if tool.Type == ToolTypeIDE {
+			tm.ideTools = append(tm.ideTools, tool.Name)
+		}
+		if tool.Type == ToolTypeServer {
+			tm.serverTools = append(tm.serverTools, tool.Name)
+		}
+	}
+
+	logger.Info("ideTools", zap.Any("tools", tm.ideTools), zap.Int("nums", len(tm.ideTools)))
+	logger.Info("serverTools", zap.Any("tools", tm.serverTools), zap.Int("nums", len(tm.serverTools)))
 	return tm
 }
 
@@ -51,6 +66,16 @@ func (m *ToolManager) LoadFromYAMLFile(path string) error {
 func (m *ToolManager) GetTool(name string) (*Tool, bool) {
 	tool, exists := m.tools[name]
 	return tool, exists
+}
+
+// GetClientTools 获取所有客户端工具名称列表
+func (m *ToolManager) GetClientTools() []string {
+	return m.ideTools
+}
+
+// GetServerTools 获取所有服务端工具名称列表
+func (m *ToolManager) GetServerTools() []string {
+	return m.serverTools
 }
 
 // GetAllTools gets all tools

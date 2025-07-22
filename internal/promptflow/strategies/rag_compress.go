@@ -8,6 +8,7 @@ import (
 	"github.com/zgsm-ai/chat-rag/internal/bootstrap"
 	"github.com/zgsm-ai/chat-rag/internal/client"
 	"github.com/zgsm-ai/chat-rag/internal/config"
+	"github.com/zgsm-ai/chat-rag/internal/functions"
 	"github.com/zgsm-ai/chat-rag/internal/model"
 	"github.com/zgsm-ai/chat-rag/internal/promptflow/ds"
 	"github.com/zgsm-ai/chat-rag/internal/promptflow/processor"
@@ -16,17 +17,21 @@ import (
 )
 
 type RagCompressProcessor struct {
-	ctx            context.Context
-	semanticClient client.SemanticInterface
-	llmClient      client.LLMInterface
-	tokenCounter   *tokenizer.TokenCounter
-	config         config.Config
-	identity       *model.Identity
+	ctx              context.Context
+	semanticClient   client.SemanticInterface
+	llmClient        client.LLMInterface
+	tokenCounter     *tokenizer.TokenCounter
+	config           config.Config
+	identity         *model.Identity
+	functionsManager *functions.ToolManager
+	modelName        string
 
 	// systemCompressor *processor.SystemCompressor
-	semanticSearch *processor.SemanticSearch
-	userCompressor *processor.UserCompressor
-	end            *processor.End
+	functionAdapter *processor.FunctionAdapter
+	semanticSearch  *processor.SemanticSearch
+	userCompressor  *processor.UserCompressor
+	start           *processor.Start
+	end             *processor.End
 }
 
 // copyAndSetQuotaIdentity
@@ -45,6 +50,7 @@ func NewRagCompressProcessor(
 	svcCtx *bootstrap.ServiceContext,
 	headers *http.Header,
 	identity *model.Identity,
+	modelName string,
 ) (*RagCompressProcessor, error) {
 	llmClient, err := client.NewLLMClient(
 		svcCtx.Config.LLM,
@@ -56,12 +62,16 @@ func NewRagCompressProcessor(
 	}
 
 	return &RagCompressProcessor{
-		ctx:            ctx,
-		semanticClient: client.NewSemanticClient(svcCtx.Config.SemanticApiEndpoint),
-		llmClient:      llmClient,
-		config:         svcCtx.Config,
-		tokenCounter:   svcCtx.TokenCounter,
-		identity:       identity,
+		ctx:              ctx,
+		semanticClient:   client.NewSemanticClient(svcCtx.Config.SemanticApiEndpoint),
+		modelName:        modelName,
+		llmClient:        llmClient,
+		config:           svcCtx.Config,
+		tokenCounter:     svcCtx.TokenCounter,
+		identity:         identity,
+		functionsManager: svcCtx.FunctionsManager,
+		start:            processor.NewStartPoint(),
+		end:              processor.NewEndpoint(),
 	}, nil
 }
 
@@ -80,8 +90,7 @@ func (p *RagCompressProcessor) Arrange(messages []types.Message) (*ds.ProcessedP
 		}, fmt.Errorf("build processor chain: %w", err)
 	}
 
-	// p.systemCompressor.Execute(promptMsg)
-	p.semanticSearch.Execute(promptMsg)
+	p.start.Execute(promptMsg)
 
 	return p.createProcessedPrompt(promptMsg), nil
 }
@@ -92,6 +101,11 @@ func (p *RagCompressProcessor) buildProcessorChain() error {
 	// 	p.config.SystemPromptSplitStr,
 	// 	p.llmClient,
 	// )
+	p.functionAdapter = processor.NewFunctionAdapter(
+		p.modelName,
+		p.config.LLM.FuncCallingModels,
+		p.functionsManager,
+	)
 	p.semanticSearch = processor.NewSemanticSearch(
 		p.ctx,
 		p.config,
@@ -104,10 +118,11 @@ func (p *RagCompressProcessor) buildProcessorChain() error {
 		p.llmClient,
 		p.tokenCounter,
 	)
-	p.end = processor.NewEndpoint()
 
 	// chain order: system -> semantic -> user
 	// p.systemCompressor.SetNext(p.semanticSearch)
+	p.start.SetNext(p.functionAdapter)
+	p.functionAdapter.SetNext(p.semanticSearch)
 	p.semanticSearch.SetNext(p.userCompressor)
 	p.userCompressor.SetNext(p.end)
 
@@ -127,5 +142,6 @@ func (p *RagCompressProcessor) createProcessedPrompt(
 		SummaryLatency:         p.userCompressor.Latency,
 		SummaryErr:             p.userCompressor.Err,
 		IsUserPromptCompressed: p.userCompressor.Handled,
+		Tools:                  promptMsg.GetTools(),
 	}
 }

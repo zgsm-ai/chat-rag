@@ -7,7 +7,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/zgsm-ai/chat-rag/internal/config"
 	"github.com/zgsm-ai/chat-rag/internal/logger"
@@ -26,13 +29,15 @@ type LLMInterface interface {
 	ChatLLMWithMessagesStreamRaw(ctx context.Context, messages []types.Message, callback func(string) error) error
 	//ChatLLMWithMessagesRaw directly calls the API using HTTP client to get raw non-streaming response
 	ChatLLMWithMessagesRaw(ctx context.Context, messages []types.Message) (types.ChatCompletionResponse, error)
+	// SetTools sets the tools for the LLM client
+	SetTools(tools []types.Function)
 }
 
 // LLMClient handles communication with language models
 type LLMClient struct {
 	modelName  string
 	endpoint   string
-	funcModels []string
+	tools      []types.Function
 	headers    *http.Header
 	httpClient *http.Client
 }
@@ -50,7 +55,6 @@ func NewLLMClient(config config.LLMConfig, modelName string, headers *http.Heade
 	return &LLMClient{
 		modelName:  modelName,
 		endpoint:   config.Endpoint,
-		funcModels: config.FuncCallingModels,
 		httpClient: httpClient,
 		headers:    headers,
 	}, nil
@@ -58,6 +62,10 @@ func NewLLMClient(config config.LLMConfig, modelName string, headers *http.Heade
 
 func (c *LLMClient) GetModelName() string {
 	return c.modelName
+}
+
+func (c *LLMClient) SetTools(tools []types.Function) {
+	c.tools = tools
 }
 
 // GenerateContent generate content using a structured message format
@@ -104,11 +112,24 @@ func (c *LLMClient) ChatLLMWithMessagesStreamRaw(ctx context.Context, messages [
 		},
 	}
 
+	if len(c.tools) > 0 {
+		requestPayload.Tools = c.tools
+		requestPayload.ToolChoice = "required"
+	}
+
 	// Create request
 	jsonData, err := json.Marshal(requestPayload)
 	if err != nil {
 		return fmt.Errorf("failed to marshal request payload: %w", err)
 	}
+
+	// Write to log file
+	logPath := filepath.Join("logs", fmt.Sprintf("request_%d.json", time.Now().Unix()))
+	if err := os.WriteFile(logPath, jsonData, 0644); err != nil {
+		return fmt.Errorf("failed to write request log: %w", err)
+	}
+
+	// fmt.Printf("==> json data: %s\n", jsonData)
 
 	reader := strings.NewReader(string(jsonData))
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint, reader)
@@ -150,6 +171,8 @@ func (c *LLMClient) ChatLLMWithMessagesStreamRaw(ctx context.Context, messages [
 
 	for scanner.Scan() {
 		line := scanner.Text()
+
+		fmt.Printf("==> %s\n", line)
 
 		// Arrange non-empty lines, including empty data lines
 		if line != "" || strings.HasPrefix(line, "data:") {
