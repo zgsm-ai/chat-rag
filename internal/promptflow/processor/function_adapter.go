@@ -11,8 +11,15 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	// ToolInstructionReminder this content will affect function call response.
+	ToolInstructionReminder      = "# Reminder: Instructions for Tool Use\n\nTool uses are formatted using XML-style tags. The tool name is enclosed in opening and closing tags, and each parameter is similarly enclosed within its own set of tags. Here's the structure:\n\n<tool_name>\n<parameter1_name>value1</parameter1_name>\n<parameter2_name>value2</parameter2_name>\n...\n</tool_name>\n\nFor example:\n\n<attempt_completion>\n<result>\nI have completed the task...\n</result>\n</attempt_completion>\n"
+	ToolInstructionReminderInErr = "# Reminder: Instructions for Tool Use\n\nTool uses are formatted using XML-style tags. The tool name itself becomes the XML tag name. Each parameter is enclosed within its own set of tags. Here's the structure:\n\n<actual_tool_name>\n<parameter1_name>value1</parameter1_name>\n<parameter2_name>value2</parameter2_name>\n...\n</actual_tool_name>\n\nFor example, to use the attempt_completion tool:\n\n<attempt_completion>\n<result>\nI have completed the task...\n</result>\n</attempt_completion>\n\nAlways use the actual tool name as the XML tag name for proper parsing and execution.\n"
+)
+
 type FunctionAdapter struct {
 	BaseProcessor
+
 	modelName         string
 	funcCallingModels []string
 	functionsManager  *functions.ToolManager
@@ -61,7 +68,14 @@ func (f *FunctionAdapter) Execute(promptMsg *PromptMsg) {
 	// 4. Process tool-related logic
 	f.processTools(promptMsg, systemContent)
 
-	// 5. Clean up tool descriptions in system message
+	// 5. Filter messages by content
+	filterStrings := []string{
+		ToolInstructionReminder,
+		ToolInstructionReminderInErr,
+	}
+	f.filterMessagesByContent(promptMsg, filterStrings)
+
+	// 6. Clean up tool descriptions in system message
 	cleanedContent := f.cleanToolDescriptions(systemContent)
 	promptMsg.SetSystemMsg(cleanedContent)
 
@@ -164,4 +178,65 @@ func (f *FunctionAdapter) matchModel(modelName, pattern string) bool {
 	}
 
 	return false
+}
+
+// filterMessagesByContent filters messages based on content strings
+func (f *FunctionAdapter) filterMessagesByContent(promptMsg *PromptMsg, filterStrings []string) {
+	if len(promptMsg.olderUserMsgList) == 0 || len(filterStrings) == 0 {
+		return
+	}
+
+	modifiedCount := 0
+
+	for i := range promptMsg.olderUserMsgList {
+		msg := &promptMsg.olderUserMsgList[i] // 获取指针以便修改
+		modified := false
+
+		switch v := msg.Content.(type) {
+		case string:
+			original := v
+			for _, filterStr := range filterStrings {
+				v = strings.ReplaceAll(v, filterStr, "")
+			}
+			if v != original {
+				msg.Content = v
+				modified = true
+			}
+
+		case []interface{}:
+			contentSlice := make([]model.Content, 0, len(v))
+			for _, item := range v {
+				if content, ok := item.(map[string]interface{}); ok {
+					c := model.Content{
+						Type: model.ContTypeText,
+						Text: content["text"].(string),
+					}
+					originalText := c.Text
+
+					for _, filterStr := range filterStrings {
+						c.Text = strings.ReplaceAll(c.Text, filterStr, "")
+					}
+
+					if c.Text != originalText {
+						modified = true
+					}
+					contentSlice = append(contentSlice, c)
+				}
+			}
+			if modified {
+				msg.Content = contentSlice
+			}
+
+		default:
+			continue
+		}
+
+		if modified {
+			modifiedCount++
+		}
+	}
+	if modifiedCount > 0 {
+		logger.Info("Filtered messages by content",
+			zap.Int("Filtered count", modifiedCount))
+	}
 }

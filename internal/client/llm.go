@@ -7,10 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/zgsm-ai/chat-rag/internal/config"
 	"github.com/zgsm-ai/chat-rag/internal/logger"
@@ -123,13 +120,11 @@ func (c *LLMClient) ChatLLMWithMessagesStreamRaw(ctx context.Context, messages [
 		return fmt.Errorf("failed to marshal request payload: %w", err)
 	}
 
-	// Write to log file
-	logPath := filepath.Join("logs", fmt.Sprintf("request_%d.json", time.Now().Unix()))
-	if err := os.WriteFile(logPath, jsonData, 0644); err != nil {
-		return fmt.Errorf("failed to write request log: %w", err)
-	}
-
-	// fmt.Printf("==> json data: %s\n", jsonData)
+	// DEBUG Write to log file
+	// logPath := filepath.Join("logs", fmt.Sprintf("request_%d.json", time.Now().Unix()))
+	// if err := os.WriteFile(logPath, jsonData, 0644); err != nil {
+	// 	return fmt.Errorf("failed to write request log: %w", err)
+	// }
 
 	reader := strings.NewReader(string(jsonData))
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint, reader)
