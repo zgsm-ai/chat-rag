@@ -31,6 +31,7 @@ type RagCompressProcessor struct {
 	functionAdapter *processor.FunctionAdapter
 	semanticSearch  *processor.SemanticSearch
 	userCompressor  *processor.UserCompressor
+	xmlToolAdapter  *processor.XmlToolAdapter
 	start           *processor.Start
 	end             *processor.End
 }
@@ -103,6 +104,7 @@ func (p *RagCompressProcessor) buildProcessorChain() error {
 	// 	p.llmClient,
 	// )
 	p.userMsgFilter = processor.NewUserMsgFilter()
+	p.xmlToolAdapter = processor.NewXmlToolAdapter()
 	p.functionAdapter = processor.NewFunctionAdapter(
 		p.modelName,
 		p.config.LLM.FuncCallingModels,
@@ -124,8 +126,9 @@ func (p *RagCompressProcessor) buildProcessorChain() error {
 	// chain order: system -> semantic -> user
 	// p.systemCompressor.SetNext(p.semanticSearch)
 	p.start.SetNext(p.userMsgFilter)
-	p.userMsgFilter.SetNext(p.functionAdapter)
-	p.functionAdapter.SetNext(p.userCompressor)
+	p.userMsgFilter.SetNext(p.xmlToolAdapter)
+	// p.userMsgFilter.SetNext(p.functionAdapter)
+	p.xmlToolAdapter.SetNext(p.userCompressor)
 	p.userCompressor.SetNext(p.end)
 
 	return nil

@@ -7,7 +7,6 @@ import (
 	"github.com/zgsm-ai/chat-rag/internal/functions"
 	"github.com/zgsm-ai/chat-rag/internal/logger"
 	"github.com/zgsm-ai/chat-rag/internal/model"
-	"github.com/zgsm-ai/chat-rag/internal/types"
 	"go.uber.org/zap"
 )
 
@@ -77,25 +76,10 @@ func (f *FunctionAdapter) Execute(promptMsg *PromptMsg) {
 
 	// 6. Clean up tool descriptions in system message
 	cleanedContent := f.cleanToolDescriptions(systemContent)
-	promptMsg.SetSystemMsg(cleanedContent)
+	promptMsg.UpdateSystemMsg(cleanedContent)
 
 	f.Handled = true
 	f.passToNext(promptMsg)
-}
-
-// extractSystemContent extracts content from system message
-func (f *FunctionAdapter) extractSystemContent(systemMsg *types.Message) (string, error) {
-	var content model.Content
-	contents, err := content.ExtractMsgContent(systemMsg)
-	if err != nil {
-		return "", fmt.Errorf("failed to extract message content: %w", err)
-	}
-
-	if len(contents) != 1 {
-		return "", fmt.Errorf("expected one system content, got %d", len(contents))
-	}
-
-	return contents[0].Text, nil
 }
 
 // processTools processes tool-related logic

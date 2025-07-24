@@ -1,8 +1,11 @@
 package processor
 
 import (
+	"fmt"
+
 	"github.com/zgsm-ai/chat-rag/internal/functions"
 	"github.com/zgsm-ai/chat-rag/internal/logger"
+	"github.com/zgsm-ai/chat-rag/internal/model"
 	"github.com/zgsm-ai/chat-rag/internal/types"
 	"github.com/zgsm-ai/chat-rag/internal/utils"
 	"go.uber.org/zap"
@@ -51,7 +54,7 @@ func (p *PromptMsg) GetTools() []types.Function {
 	return p.tools
 }
 
-func (p *PromptMsg) SetSystemMsg(content string) {
+func (p *PromptMsg) UpdateSystemMsg(content string) {
 	p.systemMsg = &types.Message{
 		Role:    types.RoleSystem,
 		Content: content,
@@ -134,4 +137,19 @@ func (b *BaseProcessor) passToNext(promptMsg *PromptMsg) {
 		return
 	}
 	b.next.Execute(promptMsg)
+}
+
+// extractSystemContent extracts content from system message
+func (b *BaseProcessor) extractSystemContent(systemMsg *types.Message) (string, error) {
+	var content model.Content
+	contents, err := content.ExtractMsgContent(systemMsg)
+	if err != nil {
+		return "", fmt.Errorf("failed to extract message content: %w", err)
+	}
+
+	if len(contents) != 1 {
+		return "", fmt.Errorf("expected one system content, got %d", len(contents))
+	}
+
+	return contents[0].Text, nil
 }
