@@ -167,8 +167,6 @@ func (c *LLMClient) ChatLLMWithMessagesStreamRaw(ctx context.Context, messages [
 	for scanner.Scan() {
 		line := scanner.Text()
 
-		fmt.Printf("==> %s\n", line)
-
 		// Arrange non-empty lines, including empty data lines
 		if line != "" || strings.HasPrefix(line, "data:") {
 			if err := callback(line); err != nil {

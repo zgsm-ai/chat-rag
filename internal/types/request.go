@@ -85,13 +85,20 @@ type ChatLLMRequestStream struct {
 type Choice struct {
 	Index        int     `json:"index"`
 	Message      Message `json:"message,omitempty"`
-	Delta        Message `json:"delta,omitempty"`
+	Delta        Delta   `json:"delta,omitempty"`
 	FinishReason string  `json:"finish_reason,omitempty"`
 }
 
 type Message struct {
 	Role    string `json:"role"`
 	Content any    `json:"content"`
+}
+
+type Delta struct {
+	Role             string `json:"role,omitempty"`
+	Content          string `json:"content"`
+	ReasoningContent string `json:"reasoning_content,omitempty"`
+	ToolCalls        []any  `json:"tool_calls,omitempty"`
 }
 
 type StreamOptions struct {

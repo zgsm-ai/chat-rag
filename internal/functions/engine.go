@@ -16,20 +16,20 @@ type ExecutionResult struct {
 	Error    string      `json:"error,omitempty"`
 }
 
-type ToolExecutor struct {
+type FuncToolExecutor struct {
 	httpClient *http.Client
 	authToken  string
 }
 
-func NewToolExecutor() *ToolExecutor {
-	return &ToolExecutor{
+func NewToolExecutor() *FuncToolExecutor {
+	return &FuncToolExecutor{
 		httpClient: &http.Client{
 			Timeout: 5 * time.Second,
 		},
 	}
 }
 
-func (e *ToolExecutor) Execute(ctx context.Context, tool *Tool, params map[string]interface{}) (*ExecutionResult, error) {
+func (e *FuncToolExecutor) Execute(ctx context.Context, tool *Tool, params map[string]interface{}) (*ExecutionResult, error) {
 	req, err := e.buildRequest(ctx, tool, params)
 	if err != nil {
 		return nil, err
@@ -61,7 +61,7 @@ func (e *ToolExecutor) Execute(ctx context.Context, tool *Tool, params map[strin
 	}, nil
 }
 
-func (e *ToolExecutor) buildRequest(ctx context.Context, tool *Tool, params map[string]interface{}) (*http.Request, error) {
+func (e *FuncToolExecutor) buildRequest(ctx context.Context, tool *Tool, params map[string]interface{}) (*http.Request, error) {
 	var req *http.Request
 	var err error
 
@@ -88,7 +88,7 @@ func (e *ToolExecutor) buildRequest(ctx context.Context, tool *Tool, params map[
 	return req, nil
 }
 
-func (e *ToolExecutor) buildGETRequest(ctx context.Context, tool *Tool, params map[string]interface{}) (*http.Request, error) {
+func (e *FuncToolExecutor) buildGETRequest(ctx context.Context, tool *Tool, params map[string]interface{}) (*http.Request, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", tool.Endpoint, nil)
 	if err != nil {
 		return nil, err
@@ -105,7 +105,7 @@ func (e *ToolExecutor) buildGETRequest(ctx context.Context, tool *Tool, params m
 	return req, nil
 }
 
-func (e *ToolExecutor) buildPOSTRequest(ctx context.Context, tool *Tool, params map[string]interface{}) (*http.Request, error) {
+func (e *FuncToolExecutor) buildPOSTRequest(ctx context.Context, tool *Tool, params map[string]interface{}) (*http.Request, error) {
 	body, err := json.Marshal(params)
 	if err != nil {
 		return nil, err

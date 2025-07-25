@@ -22,6 +22,8 @@ type ServiceContext struct {
 
 	// Utilities
 	TokenCounter *tokenizer.TokenCounter
+
+	ToolExecutor functions.ToolExecutor
 }
 
 // NewServiceContext creates a new service context with all dependencies
@@ -29,6 +31,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	// Initialize semantic client
 	semanticClient := client.NewSemanticClient(c.SemanticApiEndpoint)
 	functionManager := functions.NewToolManager("etc/functions.yaml")
+	xmlToolExecutor := functions.NewXmlToolExecutor()
 
 	// Initialize token counter
 	tokenCounter, err := tokenizer.NewTokenCounter()
@@ -58,6 +61,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		LoggerService:    loggerService,
 		MetricsService:   metricsService,
 		TokenCounter:     tokenCounter,
+		ToolExecutor:     xmlToolExecutor,
 	}
 }
 

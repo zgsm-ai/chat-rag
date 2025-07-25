@@ -14,7 +14,7 @@ type ToolManager struct {
 	tools       map[string]*Tool
 	ideTools    []string
 	serverTools []string
-	executor    *ToolExecutor
+	executor    *FuncToolExecutor
 }
 
 // NewToolManager creates a tool manager and loads tools

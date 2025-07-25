@@ -56,6 +56,7 @@ func (h *ResponseHandler) extractResponseInfo(chatLog *model.ChatLog, response *
 		)
 	}
 }
+
 func (h *ResponseHandler) countTokens(text string) int {
 	if h.svcCtx.TokenCounter != nil {
 		return h.svcCtx.TokenCounter.CountTokens(text)
@@ -74,7 +75,7 @@ func (h *ResponseHandler) calculateUsage(promptTokens int, responseContent strin
 }
 
 // extractStreamingData extracts content and usage from streaming response lines
-func (h *ResponseHandler) extractStreamingData(rawLine string, responseContent *strings.Builder, finalUsage **types.Usage) {
+func (h *ResponseHandler) extractStreamingData(rawLine string) (content string, usage *types.Usage, response *types.ChatCompletionResponse) {
 	// Skip non-data lines
 	if !strings.HasPrefix(rawLine, "data: ") {
 		return
@@ -83,6 +84,7 @@ func (h *ResponseHandler) extractStreamingData(rawLine string, responseContent *
 	// Extract JSON data
 	jsonData := strings.TrimPrefix(rawLine, "data: ")
 	if jsonData == "[DONE]" {
+		content = jsonData
 		return
 	}
 
@@ -96,36 +98,57 @@ func (h *ResponseHandler) extractStreamingData(rawLine string, responseContent *
 		return
 	}
 
-	// Extract content from choices
 	if choices, ok := chunk["choices"].([]interface{}); ok && len(choices) > 0 {
 		if choice, ok := choices[0].(map[string]interface{}); ok {
 			if delta, ok := choice["delta"].(map[string]interface{}); ok {
-				if content, ok := delta["content"].(string); ok && content != "" {
-					responseContent.WriteString(content)
+				if c, ok := delta["content"].(string); ok {
+					content = c
 				}
 			}
 		}
 	}
-
-	// Extract usage information (usually in the last chunk)
-	if usage, ok := chunk["usage"].(map[string]interface{}); ok {
-		logger.Debug("found usage information in streaming response")
-		*finalUsage = &types.Usage{}
-		if promptTokens, ok := usage["prompt_tokens"].(float64); ok {
-			(*finalUsage).PromptTokens = int(promptTokens)
-		}
-		if completionTokens, ok := usage["completion_tokens"].(float64); ok {
-			(*finalUsage).CompletionTokens = int(completionTokens)
-		}
-		if totalTokens, ok := usage["total_tokens"].(float64); ok {
-			(*finalUsage).TotalTokens = int(totalTokens)
-		}
-		logger.Debug("extracted usage",
-			zap.Int("promptTokens", (*finalUsage).PromptTokens),
-			zap.Int("completionTokens", (*finalUsage).CompletionTokens),
-			zap.Int("totalTokens", (*finalUsage).TotalTokens),
-		)
+	// 提取元数据
+	response = &types.ChatCompletionResponse{}
+	if id, ok := chunk["id"].(string); ok {
+		response.Id = id
 	}
+	if object, ok := chunk["object"].(string); ok {
+		response.Object = object
+	}
+	if created, ok := chunk["created"].(float64); ok {
+		response.Created = int64(created)
+	}
+	if model, ok := chunk["model"].(string); ok {
+		response.Model = model
+	}
+
+	// 提取用量信息
+	if usageData, ok := chunk["usage"].(map[string]interface{}); ok {
+		usage = &types.Usage{}
+		if promptTokens, ok := usageData["prompt_tokens"].(float64); ok {
+			usage.PromptTokens = int(promptTokens)
+		}
+		if completionTokens, ok := usageData["completion_tokens"].(float64); ok {
+			usage.CompletionTokens = int(completionTokens)
+		}
+		if totalTokens, ok := usageData["total_tokens"].(float64); ok {
+			usage.TotalTokens = int(totalTokens)
+		}
+	}
+
+	return
+}
+
+func (h *ResponseHandler) CreateSSEData(finalResponse *types.ChatCompletionResponse, content string) string {
+	finalResponse.Choices = []types.Choice{
+		{
+			Delta: types.Delta{
+				Content: content,
+			},
+		},
+	}
+	jsonData, _ := json.Marshal(finalResponse)
+	return string(jsonData)
 }
 
 // sendSSEError sends an error message in SSE format

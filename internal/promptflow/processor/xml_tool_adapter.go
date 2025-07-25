@@ -33,6 +33,8 @@ Example: Searching for functions related to user authentication
 <query>User login and password hashing</query>
 <path>/path/to/directory</path>
 </codebase_search>
+
+Importance: If use this tool, don't need to think, just give the tool directly
 `
 )
 
