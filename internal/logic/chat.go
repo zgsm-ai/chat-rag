@@ -58,7 +58,7 @@ const MaxToolCallDepth = 3
 
 // processRequest handles common request processing logic
 func (l *ChatCompletionLogic) processRequest() (*model.ChatLog, *ds.ProcessedPrompt, error) {
-	logger.Info("start to process request", zap.String("user", l.identity.UserName))
+	logger.Info("starting to process request", zap.String("user", l.identity.UserName))
 	startTime := time.Now()
 
 	// Initialize chat log
@@ -219,7 +219,7 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 	}
 
 	// 主处理逻辑
-	return l.handleStreamingWithTools(llmClient, flusher, msgs, chatLog, 3) // 最大递归深度3
+	return l.handleStreamingWithTools(llmClient, flusher, msgs, chatLog, MaxToolCallDepth) // 最大递归深度3
 }
 
 func (l *ChatCompletionLogic) handleStreamingWithTools(
@@ -229,41 +229,44 @@ func (l *ChatCompletionLogic) handleStreamingWithTools(
 	chatLog *model.ChatLog,
 	remainingDepth int,
 ) error {
-	logger.Info("start to handle streaming with tools",
+	logger.Info("starting to handle streaming with tools",
 		zap.Int("remainingDepth", remainingDepth),
 		zap.Int("MaxToolCallDepth", MaxToolCallDepth),
 	)
 	var (
-		window       []string // 滑动窗口缓冲区
-		windowSize   = 15     // 初始窗口大小
-		flushedIndex = -1     // 已发送的最后一个索引
-		toolDetected bool     // 是否检测到工具
-		toolName     string   // 工具名称
+		window       []string // sliding window buffer
+		windowSize   = 15     // initial window size
+		toolDetected bool     // whether tool is detected
+		toolName     string   // tool name
 		modelStart   = time.Now()
 		finalUsage   *types.Usage
 		response     *types.ChatCompletionResponse
-		fullContent  strings.Builder // 完整内容记录
+		fullContent  strings.Builder // complete content record
 		DONE         = "[DONE]"
 	)
 
-	// 阶段1：流式处理
+	// Phase 1: streaming processing
 	err := llmClient.ChatLLMWithMessagesStreamRaw(l.ctx, messages, func(rawLine string) error {
-		// 1. 解析内容
+		// 1. Parse content
 		content, usage, resp := l.responseHandler.extractStreamingData(rawLine)
 		finalUsage = usage
 		if resp != nil {
 			response = resp
 		}
-
 		if content == "" {
+			if err := l.sendRawLine(flusher, rawLine); err != nil {
+				return err
+			}
 			return nil
 		}
 
-		// 添加到窗口和完整内容
+		// Add to window and complete content
 		window = append(window, content)
-		fullContent.WriteString(content)
+		if content != DONE {
+			fullContent.WriteString(content)
+		}
 
-		// 3. 工具检测（仅在未检测到工具时）
+		// 3. Tool detection (only when tool not yet detected)
 		if !toolDetected && l.toolExecutor != nil && remainingDepth > 0 {
 			currentContent := strings.Join(window, "")
 			hasTool, name := l.toolExecutor.DetectTools(l.ctx, currentContent)
@@ -271,9 +274,9 @@ func (l *ChatCompletionLogic) handleStreamingWithTools(
 			if hasTool {
 				toolDetected = true
 				toolName = name
-				fmt.Printf("==> has detelcted tool: name: %s\n", name)
+				logger.Info("detected server xml tool", zap.String("name", name))
 
-				// 发送工具调用前的内容
+				// Send content before tool call
 				toolStartIndex := strings.Index(currentContent, "<"+toolName+">")
 				if toolStartIndex > 0 {
 					preToolContent := currentContent[:toolStartIndex]
@@ -284,18 +287,15 @@ func (l *ChatCompletionLogic) handleStreamingWithTools(
 					}
 				}
 
-				// TODO send tool call start event
 				window = []string{currentContent[toolStartIndex:]}
-				flushedIndex = -1
 			}
 		}
 
-		// 4. 发送超出窗口的内容
+		// 4. Send content beyond window
 		if !toolDetected && len(window) >= windowSize {
 			if err := l.sendStreamContent(flusher, response, window[0]); err != nil {
 				return err
 			}
-			flushedIndex = 0
 			window = window[1:]
 		}
 
@@ -317,11 +317,14 @@ func (l *ChatCompletionLogic) handleStreamingWithTools(
 		return nil
 	}
 
-	// 阶段2：处理工具调用（如果检测到）
+	// Phase 2: Handle tool call (if detected)
 	if toolDetected {
-		// 执行工具（使用收集到的所有内容）
+		// Execute tool (using all collected content)
 		toolContent := strings.Join(window, "")
-		fmt.Printf("==> 开始调用工具 tool: content: %s\n", toolContent)
+		logger.Info("starting to call tool", zap.String("name", toolName))
+		if err := l.sendStreamContent(flusher, response, "<tool>Starting to execute tool...\n</tool>"); err != nil {
+			return err
+		}
 		newMessages, err := l.toolExecutor.ExecuteTools(
 			l.ctx,
 			toolName,
@@ -332,13 +335,13 @@ func (l *ChatCompletionLogic) handleStreamingWithTools(
 			return err
 		}
 
-		jsonData, _ := json.Marshal(newMessages[1:])
-		fmt.Printf("==> newMessages: \n%s\n", string(jsonData))
-
-		// // 发送工具调用结束事件
+		// // Send tool call end event
 		// TODO send tool call end event
+		if err := l.sendStreamContent(flusher, response, "<tool>Tool call completed</tool>"); err != nil {
+			return err
+		}
 
-		// 递归处理
+		// Recursive processing
 		return l.handleStreamingWithTools(
 			llmClient,
 			flusher,
@@ -348,20 +351,23 @@ func (l *ChatCompletionLogic) handleStreamingWithTools(
 		)
 	}
 
-	// 阶段3：无工具调用时发送剩余内容
-	fmt.Printf("==> 无工具调用时发送剩余内容: %s\n", strings.Join(window[flushedIndex:], ""))
-	if window[len(window)-1] == DONE {
-		window = window[:len(window)-1]
-	}
-	endContent := strings.Join(window[flushedIndex:], "")
-	if err := l.sendStreamContent(flusher, response, endContent); err != nil {
-		return err
-	}
-	if err := l.sendRawLine(flusher, DONE); err != nil {
-		return err
+	// Phase 3: Send remaining content when no tool call
+	logger.Info("starting to send remaining content before ending.")
+	if len(window) > 0 {
+		if window[len(window)-1] == DONE {
+			window = window[:len(window)-1]
+		}
+
+		endContent := strings.Join(window, "")
+		if err := l.sendStreamContent(flusher, response, endContent); err != nil {
+			return err
+		}
+		if err := l.sendRawLine(flusher, DONE); err != nil {
+			return err
+		}
 	}
 
-	// 更新统计信息
+	// Update statistics
 	if remainingDepth == 3 {
 		chatLog.MainModelLatency = time.Since(modelStart).Milliseconds()
 		chatLog.ResponseContent = fullContent.String()
@@ -383,7 +389,10 @@ func (l *ChatCompletionLogic) handleStreamingWithTools(
 }
 
 func (l *ChatCompletionLogic) sendRawLine(flusher http.Flusher, raw string) error {
-	_, err := fmt.Fprintf(l.writer, "data: %s\n\n", raw)
+	if !strings.HasPrefix(raw, "data: ") {
+		raw = "data: " + raw
+	}
+	_, err := fmt.Fprintf(l.writer, "%s\n\n", raw)
 	flusher.Flush()
 	return err
 }
@@ -403,46 +412,6 @@ func (l *ChatCompletionLogic) sendStreamContent(flusher http.Flusher, response *
 	_, err := fmt.Fprintf(l.writer, "data: %s\n\n", jsonData)
 	flusher.Flush()
 	return err
-}
-
-func (l *ChatCompletionLogic) sendOriginalResponse(
-	flusher http.Flusher, finalResponse *types.ChatCompletionResponse, content string) error {
-	finalResponse.Choices = []types.Choice{
-		{
-			Delta: types.Delta{
-				Content: content,
-			},
-		},
-	}
-	jsonData, _ := json.Marshal(finalResponse)
-	if _, err := fmt.Fprintf(l.writer, "data: %s\n\n", string(jsonData)); err != nil {
-		return err
-	}
-	flusher.Flush()
-	return nil
-}
-
-// 工具调用事件生成（带工具名）
-func createToolCallStartEvent(toolName string) string {
-	event := map[string]interface{}{
-		"event":     "tool_call",
-		"status":    "started",
-		"tool_name": toolName,
-		"timestamp": time.Now().Unix(),
-	}
-	jsonData, _ := json.Marshal(event)
-	return string(jsonData)
-}
-
-func createToolCallEndEvent(toolName string) string {
-	event := map[string]interface{}{
-		"event":     "tool_call",
-		"status":    "completed",
-		"tool_name": toolName,
-		"timestamp": time.Now().Unix(),
-	}
-	jsonData, _ := json.Marshal(event)
-	return string(jsonData)
 }
 
 // Helper methods
