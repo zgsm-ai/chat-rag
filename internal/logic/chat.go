@@ -218,8 +218,27 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 		return fmt.Errorf("streaming not supported")
 	}
 
-	// 主处理逻辑
-	return l.handleStreamingWithTools(llmClient, flusher, msgs, chatLog, MaxToolCallDepth) // 最大递归深度3
+	logger.Info("start to handle streaming response ...")
+	return l.handleStreamingWithTools(llmClient, flusher, msgs, chatLog, MaxToolCallDepth)
+}
+
+// streamState holds the state for streaming processing
+type streamState struct {
+	window       []string // Window of streamed content used for detect tools
+	windowSize   int
+	toolDetected bool
+	toolName     string
+	fullContent  strings.Builder
+	finalUsage   *types.Usage
+	response     *types.ChatCompletionResponse
+	modelStart   time.Time
+}
+
+func newStreamState() *streamState {
+	return &streamState{
+		windowSize: 15,
+		modelStart: time.Now(),
+	}
 }
 
 func (l *ChatCompletionLogic) handleStreamingWithTools(
@@ -233,159 +252,211 @@ func (l *ChatCompletionLogic) handleStreamingWithTools(
 		zap.Int("remainingDepth", remainingDepth),
 		zap.Int("MaxToolCallDepth", MaxToolCallDepth),
 	)
-	var (
-		window       []string // sliding window buffer
-		windowSize   = 15     // initial window size
-		toolDetected bool     // whether tool is detected
-		toolName     string   // tool name
-		modelStart   = time.Now()
-		finalUsage   *types.Usage
-		response     *types.ChatCompletionResponse
-		fullContent  strings.Builder // complete content record
-		DONE         = "[DONE]"
-	)
 
-	// Phase 1: streaming processing
+	state := newStreamState()
+
+	// Phase 1: Process streaming response
+	toolDetected, err := l.processStream(llmClient, flusher, messages, state, remainingDepth)
+	if err != nil {
+		return l.handleStreamError(err, chatLog)
+	}
+
+	// Phase 2: Handle tool execution or complete response
+	if toolDetected {
+		return l.handleToolExecution(llmClient, flusher, messages, chatLog, state, remainingDepth)
+	}
+
+	return l.completeStreamResponse(flusher, chatLog, state, remainingDepth)
+}
+
+// processStream handles the streaming response processing
+func (l *ChatCompletionLogic) processStream(
+	llmClient client.LLMInterface,
+	flusher http.Flusher,
+	messages []types.Message,
+	state *streamState,
+	remainingDepth int,
+) (bool, error) {
 	err := llmClient.ChatLLMWithMessagesStreamRaw(l.ctx, messages, func(rawLine string) error {
-		// 1. Parse content
-		content, usage, resp := l.responseHandler.extractStreamingData(rawLine)
-		finalUsage = usage
-		if resp != nil {
-			response = resp
-		}
-		if content == "" {
-			if err := l.sendRawLine(flusher, rawLine); err != nil {
-				return err
-			}
-			return nil
-		}
-
-		// Add to window and complete content
-		window = append(window, content)
-		if content != DONE {
-			fullContent.WriteString(content)
-		}
-
-		// 3. Tool detection (only when tool not yet detected)
-		if !toolDetected && l.toolExecutor != nil && remainingDepth > 0 {
-			currentContent := strings.Join(window, "")
-			hasTool, name := l.toolExecutor.DetectTools(l.ctx, currentContent)
-
-			if hasTool {
-				toolDetected = true
-				toolName = name
-				logger.Info("detected server xml tool", zap.String("name", name))
-
-				// Send content before tool call
-				toolStartIndex := strings.Index(currentContent, "<"+toolName+">")
-				if toolStartIndex > 0 {
-					preToolContent := currentContent[:toolStartIndex]
-					if err := l.sendStreamContent(flusher, response, preToolContent); err != nil {
-						logger.Error("failed to sendStreamContent when detecting tool",
-							zap.String("preToolContent", preToolContent), zap.Error(err))
-						return err
-					}
-				}
-
-				window = []string{currentContent[toolStartIndex:]}
-			}
-		}
-
-		// 4. Send content beyond window
-		if !toolDetected && len(window) >= windowSize {
-			if err := l.sendStreamContent(flusher, response, window[0]); err != nil {
-				return err
-			}
-			window = window[1:]
-		}
-
-		return nil
+		return l.handleStreamChunk(flusher, rawLine, state, remainingDepth)
 	})
 
-	if err != nil {
-		logger.Error("ChatLLMWithMessagesStreamRaw error", zap.Error(err))
-		if l.isContextLengthError(err) {
-			logger.Error("Input context too long", zap.Error(err))
-			lengthErr := types.NewContextTooLongError()
-			l.responseHandler.sendSSEError(l.writer, lengthErr)
-			chatLog.AddError(types.ErrContextExceeded, lengthErr)
-			return nil
-		}
+	return state.toolDetected, err
+}
 
-		l.responseHandler.sendSSEError(l.writer, err)
-		chatLog.AddError(types.ErrApiError, err)
-		return nil
+// handleStreamChunk processes individual streaming chunks
+func (l *ChatCompletionLogic) handleStreamChunk(
+	flusher http.Flusher,
+	rawLine string,
+	state *streamState,
+	remainingDepth int,
+) error {
+	content, usage, resp := l.responseHandler.extractStreamingData(rawLine)
+	state.finalUsage = usage
+	if resp != nil {
+		state.response = resp
 	}
 
-	// Phase 2: Handle tool call (if detected)
-	if toolDetected {
-		// Execute tool (using all collected content)
-		toolContent := strings.Join(window, "")
-		logger.Info("starting to call tool", zap.String("name", toolName))
-		if err := l.sendStreamContent(flusher, response, "<tool>Starting to execute tool...\n</tool>"); err != nil {
-			return err
-		}
-		newMessages, err := l.toolExecutor.ExecuteTools(
-			l.ctx,
-			toolName,
-			toolContent,
-			messages,
-		)
-		if err != nil {
-			return err
-		}
-
-		// // Send tool call end event
-		// TODO send tool call end event
-		if err := l.sendStreamContent(flusher, response, "<tool>Tool call completed</tool>"); err != nil {
-			return err
-		}
-
-		// Recursive processing
-		return l.handleStreamingWithTools(
-			llmClient,
-			flusher,
-			newMessages,
-			chatLog,
-			remainingDepth-1,
-		)
+	if content == "" {
+		return l.sendRawLine(flusher, rawLine)
 	}
 
-	// Phase 3: Send remaining content when no tool call
-	logger.Info("starting to send remaining content before ending.")
-	if len(window) > 0 {
-		if window[len(window)-1] == DONE {
-			window = window[:len(window)-1]
-		}
+	// Add to window and complete content
+	state.window = append(state.window, content)
+	if content != "[DONE]" {
+		state.fullContent.WriteString(content)
+	}
 
-		endContent := strings.Join(window, "")
-		if err := l.sendStreamContent(flusher, response, endContent); err != nil {
-			return err
-		}
-		if err := l.sendRawLine(flusher, DONE); err != nil {
+	// Check for tool detection
+	if !state.toolDetected && l.toolExecutor != nil && remainingDepth > 0 {
+		if err := l.detectAndHandleTool(flusher, state); err != nil {
 			return err
 		}
 	}
 
-	// Update statistics
-	if remainingDepth == 3 {
-		chatLog.MainModelLatency = time.Since(modelStart).Milliseconds()
-		chatLog.ResponseContent = fullContent.String()
-
-		if finalUsage != nil {
-			chatLog.Usage = *finalUsage
-		} else {
-			chatLog.Usage = l.responseHandler.calculateUsage(
-				chatLog.CompressedTokens.All,
-				chatLog.ResponseContent,
-			)
-			logger.Info("calculated usage for streaming response",
-				zap.Int("totalTokens", chatLog.Usage.TotalTokens),
-			)
+	// Send content beyond window
+	if !state.toolDetected && len(state.window) >= state.windowSize {
+		if err := l.sendStreamContent(flusher, state.response, state.window[0]); err != nil {
+			return err
 		}
+		state.window = state.window[1:]
 	}
 
 	return nil
+}
+
+// detectAndHandleTool handles tool detection and pre-tool content sending
+func (l *ChatCompletionLogic) detectAndHandleTool(flusher http.Flusher, state *streamState) error {
+	currentContent := strings.Join(state.window, "")
+	hasTool, name := l.toolExecutor.DetectTools(l.ctx, currentContent)
+
+	if !hasTool {
+		return nil
+	}
+
+	state.toolDetected = true
+	state.toolName = name
+	logger.Info("detected server xml tool", zap.String("name", name))
+
+	// Send content before tool call
+	toolStartIndex := strings.Index(currentContent, "<"+name+">")
+	if toolStartIndex > 0 {
+		preToolContent := currentContent[:toolStartIndex]
+		if err := l.sendStreamContent(flusher, state.response, preToolContent); err != nil {
+			logger.Error("failed to sendStreamContent when detecting tool",
+				zap.String("preToolContent", preToolContent), zap.Error(err))
+			return err
+		}
+	}
+
+	state.window = []string{currentContent[toolStartIndex:]}
+	return nil
+}
+
+// handleToolExecution executes the detected tool and continues processing
+func (l *ChatCompletionLogic) handleToolExecution(
+	llmClient client.LLMInterface,
+	flusher http.Flusher,
+	messages []types.Message,
+	chatLog *model.ChatLog,
+	state *streamState,
+	remainingDepth int,
+) error {
+	logger.Info("starting to call tool", zap.String("name", state.toolName))
+	toolContent := strings.Join(state.window, "")
+
+	if err := l.sendStreamContent(flusher, state.response, "<tool>Starting to execute tool...\n</tool>"); err != nil {
+		return err
+	}
+
+	newMessages, err := l.toolExecutor.ExecuteTools(
+		l.ctx,
+		state.toolName,
+		toolContent,
+		messages,
+	)
+	if err != nil {
+		return err
+	}
+
+	if err := l.sendStreamContent(flusher, state.response, "<tool>Tool call completed\n</tool>"); err != nil {
+		return err
+	}
+
+	// Recursive processing
+	return l.handleStreamingWithTools(
+		llmClient,
+		flusher,
+		newMessages,
+		chatLog,
+		remainingDepth-1,
+	)
+}
+
+// completeStreamResponse sends remaining content and updates statistics
+func (l *ChatCompletionLogic) completeStreamResponse(
+	flusher http.Flusher,
+	chatLog *model.ChatLog,
+	state *streamState,
+	remainingDepth int,
+) error {
+	logger.Info("starting to send remaining content before ending.")
+
+	if len(state.window) > 0 {
+		if state.window[len(state.window)-1] == "[DONE]" {
+			state.window = state.window[:len(state.window)-1]
+		}
+
+		endContent := strings.Join(state.window, "")
+		if err := l.sendStreamContent(flusher, state.response, endContent); err != nil {
+			return err
+		}
+		if err := l.sendRawLine(flusher, "[DONE]"); err != nil {
+			return err
+		}
+	}
+
+	// Update statistics only for the initial call
+	if remainingDepth == MaxToolCallDepth {
+		l.updateStreamStats(chatLog, state)
+	}
+
+	return nil
+}
+
+// handleStreamError handles streaming errors with appropriate error responses
+func (l *ChatCompletionLogic) handleStreamError(err error, chatLog *model.ChatLog) error {
+	logger.Error("ChatLLMWithMessagesStreamRaw error", zap.Error(err))
+
+	if l.isContextLengthError(err) {
+		logger.Error("Input context too long", zap.Error(err))
+		lengthErr := types.NewContextTooLongError()
+		l.responseHandler.sendSSEError(l.writer, lengthErr)
+		chatLog.AddError(types.ErrContextExceeded, lengthErr)
+		return nil
+	}
+
+	l.responseHandler.sendSSEError(l.writer, err)
+	chatLog.AddError(types.ErrApiError, err)
+	return nil
+}
+
+// updateStreamStats updates chat log with streaming statistics
+func (l *ChatCompletionLogic) updateStreamStats(chatLog *model.ChatLog, state *streamState) {
+	chatLog.MainModelLatency = time.Since(state.modelStart).Milliseconds()
+	chatLog.ResponseContent = state.fullContent.String()
+
+	if state.finalUsage != nil {
+		chatLog.Usage = *state.finalUsage
+	} else {
+		chatLog.Usage = l.responseHandler.calculateUsage(
+			chatLog.CompressedTokens.All,
+			chatLog.ResponseContent,
+		)
+		logger.Info("calculated usage for streaming response",
+			zap.Int("totalTokens", chatLog.Usage.TotalTokens),
+		)
+	}
 }
 
 func (l *ChatCompletionLogic) sendRawLine(flusher http.Flusher, raw string) error {
