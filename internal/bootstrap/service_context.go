@@ -15,6 +15,7 @@ type ServiceContext struct {
 	// Clients
 	SemanticClient   client.SemanticInterface
 	FunctionsManager *functions.ToolManager
+	RedisClient      client.RedisInterface
 
 	// Services
 	LoggerService  service.LogRecordInterface
@@ -54,6 +55,9 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		panic("Failed to start logger service:" + err.Error())
 	}
 
+	// Initialize Redis client
+	redisClient := client.NewRedisClient(c.Redis)
+
 	return &ServiceContext{
 		Config:           c,
 		SemanticClient:   semanticClient,
@@ -62,6 +66,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		MetricsService:   metricsService,
 		TokenCounter:     tokenCounter,
 		ToolExecutor:     xmlToolExecutor,
+		RedisClient:      redisClient,
 	}
 }
 

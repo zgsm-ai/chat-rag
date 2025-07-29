@@ -365,6 +365,8 @@ func (l *ChatCompletionLogic) handleToolExecution(
 	logger.Info("starting to call tool", zap.String("name", state.toolName))
 	toolContent := strings.Join(state.window, "")
 
+	l.updateToolStatus(state.toolName, types.ToolStatusRunning)
+
 	if err := l.sendStreamContent(flusher, state.response, "<tool>Starting to execute tool...\n</tool>"); err != nil {
 		return err
 	}
@@ -375,6 +377,16 @@ func (l *ChatCompletionLogic) handleToolExecution(
 		toolContent,
 		messages,
 	)
+
+	var status types.ToolStatus
+	if err != nil {
+		status = types.ToolStatusFailed
+	} else {
+		status = types.ToolStatusSuccess
+	}
+
+	l.updateToolStatus(state.toolName, status)
+
 	if err != nil {
 		return err
 	}
@@ -486,6 +498,21 @@ func (l *ChatCompletionLogic) sendStreamContent(flusher http.Flusher, response *
 }
 
 // Helper methods
+
+func (l *ChatCompletionLogic) updateToolStatus(toolName string, status types.ToolStatus) {
+	toolStatusKey := l.identity.RequestID
+	if toolStatusKey == "" {
+		logger.Warn("requestID is empty, skip updating tool status")
+		return
+	}
+
+	if err := l.svcCtx.RedisClient.SetHashField(l.ctx, toolStatusKey, toolName, string(status), 5*time.Minute); err != nil {
+		logger.Error("failed to update tool status in redis",
+			zap.String("toolName", toolName),
+			zap.String("status", string(status)),
+			zap.Error(err))
+	}
+}
 
 // isContextLengthError checks if the error is due to context length exceeded
 func (l *ChatCompletionLogic) isContextLengthError(err error) bool {

@@ -6,6 +6,13 @@ type LLMConfig struct {
 	FuncCallingModels []string
 }
 
+// RedisConfig holds Redis configuration
+type RedisConfig struct {
+	Addr     string
+	Password string
+	DB       int
+}
+
 // Config holds all service configuration
 type Config struct {
 	// Server configuration
@@ -38,6 +45,9 @@ type Config struct {
 
 	//Department configuration
 	DepartmentApiEndpoint string
+
+	// Redis configuration
+	Redis RedisConfig
 
 	LLM LLMConfig
 }

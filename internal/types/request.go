@@ -44,6 +44,15 @@ const (
 	HeaderProjectPath   = "zgsm-project-path"
 )
 
+// ToolStatus defines the status of the tool
+type ToolStatus string
+
+const (
+	ToolStatusRunning ToolStatus = "running"
+	ToolStatusSuccess ToolStatus = "success"
+	ToolStatusFailed  ToolStatus = "failed"
+)
+
 type ChatCompletionRequest struct {
 	Model         string        `json:"model"`
 	Messages      []Message     `json:"messages"`
@@ -138,4 +147,22 @@ type PropertyDetails struct {
 
 type Items struct {
 	Type string `json:"type"`
+}
+
+// ToolStatusResponse defines tool status response structure
+type ToolStatusResponse struct {
+	Code    int            `json:"code"`
+	Data    ToolStatusData `json:"data"`
+	Message string         `json:"message"`
+}
+
+// ToolStatusData defines tool status data structure
+type ToolStatusData struct {
+	Tools map[string]ToolStatusDetail `json:"tools,omitempty"`
+}
+
+// ToolStatusDetail defines tool status detail structure
+type ToolStatusDetail struct {
+	Status string      `json:"status"`
+	Result interface{} `json:"result,omitempty"`
 }

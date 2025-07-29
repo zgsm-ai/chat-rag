@@ -7,8 +7,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/zgsm-ai/chat-rag/internal/bootstrap"
+	"github.com/zgsm-ai/chat-rag/internal/logger"
 	"github.com/zgsm-ai/chat-rag/internal/logic"
 	"github.com/zgsm-ai/chat-rag/internal/types"
+	"go.uber.org/zap"
 )
 
 // ChatCompletionHandler handles chat completion requests
@@ -102,5 +104,52 @@ func sendStreamError(c *gin.Context, err error, flusher http.Flusher) {
 
 	if flusher != nil {
 		flusher.Flush()
+	}
+}
+
+// ChatStatusHandler handles tool status query requests
+func ChatStatusHandler(svcCtx *bootstrap.ServiceContext) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Validate requestId parameter
+		requestId := c.Param("requestId")
+		if requestId == "" {
+			c.JSON(http.StatusBadRequest, types.ToolStatusResponse{
+				Code:    http.StatusBadRequest,
+				Data:    types.ToolStatusData{},
+				Message: "requestId is required",
+			})
+			return
+		}
+
+		// Get tool status from Redis
+		toolStatusData, err := svcCtx.RedisClient.GetHash(c.Request.Context(), requestId)
+		if err != nil {
+			logger.Error("Error fetching tool status from Redis", zap.Error(err))
+			// Return 404 if requestID not found in Redis
+			c.JSON(http.StatusNotFound, types.ToolStatusResponse{
+				Code:    http.StatusNotFound,
+				Data:    types.ToolStatusData{},
+				Message: "request-id not found",
+			})
+			return
+		}
+
+		// Build tools map from Redis data
+		tools := make(map[string]types.ToolStatusDetail)
+		for toolName, status := range toolStatusData {
+			tools[toolName] = types.ToolStatusDetail{
+				Status: status,
+				Result: nil, // For now, result is always null
+			}
+		}
+
+		logger.Info("Tool status fetched from Redis", zap.Any("tools", tools))
+
+		// Return success response with tools data
+		c.JSON(http.StatusOK, types.ToolStatusResponse{
+			Code:    http.StatusOK,
+			Data:    types.ToolStatusData{Tools: tools},
+			Message: "success",
+		})
 	}
 }
