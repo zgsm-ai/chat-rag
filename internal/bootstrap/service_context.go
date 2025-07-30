@@ -32,7 +32,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	// Initialize semantic client
 	semanticClient := client.NewSemanticClient(c.SemanticApiEndpoint)
 	functionManager := functions.NewToolManager("etc/functions.yaml")
-	xmlToolExecutor := functions.NewXmlToolExecutor()
+	xmlToolExecutor := functions.NewXmlToolExecutor(c, semanticClient)
 
 	// Initialize token counter
 	tokenCounter, err := tokenizer.NewTokenCounter()

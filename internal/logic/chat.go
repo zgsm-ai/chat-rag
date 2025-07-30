@@ -54,7 +54,7 @@ func NewChatCompletionLogic(
 	}
 }
 
-const MaxToolCallDepth = 3
+const MaxToolCallDepth = 5
 
 // processRequest handles common request processing logic
 func (l *ChatCompletionLogic) processRequest() (*model.ChatLog, *ds.ProcessedPrompt, error) {
@@ -292,6 +292,7 @@ func (l *ChatCompletionLogic) handleStreamChunk(
 	remainingDepth int,
 ) error {
 	content, usage, resp := l.responseHandler.extractStreamingData(rawLine)
+	// fmt.Println(content)
 	state.finalUsage = usage
 	if resp != nil {
 		state.response = resp
@@ -364,42 +365,56 @@ func (l *ChatCompletionLogic) handleToolExecution(
 ) error {
 	logger.Info("starting to call tool", zap.String("name", state.toolName))
 	toolContent := strings.Join(state.window, "")
+	toolCall := model.ToolCall{
+		ToolName:  state.toolName,
+		ToolInput: toolContent,
+	}
 
 	l.updateToolStatus(state.toolName, types.ToolStatusRunning)
 
-	if err := l.sendStreamContent(flusher, state.response, "<tool>Starting to execute tool...\n</tool>"); err != nil {
-		return err
+	// execute and record tool call latency
+	toolStart := time.Now()
+	result, err := l.toolExecutor.ExecuteTools(l.ctx, state.toolName, toolContent)
+	toolLatency := time.Since(toolStart).Milliseconds()
+	toolCall.Latency = toolLatency
+	toolCall.ToolOutput = result
+
+	status := types.ToolStatusSuccess
+	if err != nil {
+		logger.Warn("tool execute failed", zap.String("tool", state.toolName), zap.Error(err))
+		status = types.ToolStatusFailed
+		result = fmt.Sprintf("%s execute failed, err: %v", state.toolName, err)
+		toolCall.ResultStatus = string(status)
 	}
 
-	newMessages, err := l.toolExecutor.ExecuteTools(
-		l.ctx,
-		state.toolName,
-		toolContent,
-		messages,
+	messages = append(messages,
+		types.Message{
+			Role:    types.RoleAssistant,
+			Content: toolContent,
+		},
+		types.Message{
+			Role: types.RoleUser,
+			Content: []model.Content{
+				{
+					Type: model.ContTypeText,
+					Text: fmt.Sprintf("[%s] Result:", state.toolName),
+				}, {
+					Type: model.ContTypeText,
+					Text: result,
+				},
+			},
+		},
 	)
 
-	var status types.ToolStatus
-	if err != nil {
-		status = types.ToolStatusFailed
-	} else {
-		status = types.ToolStatusSuccess
-	}
-
 	l.updateToolStatus(state.toolName, status)
-
-	if err != nil {
-		return err
-	}
-
-	if err := l.sendStreamContent(flusher, state.response, "<tool>Tool call completed\n</tool>"); err != nil {
-		return err
-	}
+	chatLog.CompressedPrompt = messages
+	chatLog.ToolCalls = append(chatLog.ToolCalls, toolCall)
 
 	// Recursive processing
 	return l.handleStreamingWithTools(
 		llmClient,
 		flusher,
-		newMessages,
+		messages,
 		chatLog,
 		remainingDepth-1,
 	)

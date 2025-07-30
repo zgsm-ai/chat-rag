@@ -9,6 +9,7 @@ import (
 	"github.com/zgsm-ai/chat-rag/internal/bootstrap"
 	"github.com/zgsm-ai/chat-rag/internal/logger"
 	"github.com/zgsm-ai/chat-rag/internal/logic"
+	"github.com/zgsm-ai/chat-rag/internal/model"
 	"github.com/zgsm-ai/chat-rag/internal/types"
 	"go.uber.org/zap"
 )
@@ -23,8 +24,12 @@ func ChatCompletionHandler(svcCtx *bootstrap.ServiceContext) gin.HandlerFunc {
 			return
 		}
 
-		// 2. Arrange identity from headers
-		identity := getIdentityFromHeaders(c)
+		// 2. Get identity from context (set by middleware)
+		identity, exists := model.GetIdentityFromContext(c.Request.Context())
+		if !exists {
+			logger.Warn("failed to get identity from context")
+			return
+		}
 
 		// 3. Initialize logic
 		l := logic.NewChatCompletionLogic(

@@ -6,9 +6,9 @@ Port: 8888
 TokenThreshold: 50_000
 
 # Semantic API configuration
-SemanticApiEndpoint: "http://localhost:8002/codebase-indexer/api/v1/semantics"
-TopK: 5
-SemanticScoreThreshold: 0.5
+SemanticApiEndpoint: "http://127.0.0.1:18888/codebase-embedder/api/v1/search/semantic"
+TopK: 10
+SemanticScoreThreshold: 0.7
 
 # Logging configuration
 LogFilePath: "logs/"

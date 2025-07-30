@@ -1,6 +1,7 @@
 package client
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -18,11 +19,12 @@ type SemanticInterface interface {
 
 // SemanticRequest represents the request structure for semantic search
 type SemanticRequest struct {
-	ClientId      string `json:"clientId"`
-	CodebasePath  string `json:"codebasePath"`
-	Query         string `json:"query"`
-	TopK          int    `json:"topK"`
-	Authorization string `json:"authorization"`
+	ClientId      string  `json:"clientId"`
+	CodebasePath  string  `json:"codebasePath"`
+	Query         string  `json:"query"`
+	TopK          int     `json:"topK"`
+	Authorization string  `json:"authorization"`
+	Score         float64 `json:"score"`
 }
 
 // ResponseWrapper represents the API standard response wrapper
@@ -62,22 +64,20 @@ func NewSemanticClient(endpoint string) SemanticInterface {
 
 // Search performs semantic search and returns relevant context
 func (c *SemanticClient) Search(ctx context.Context, req SemanticRequest) (*SemanticData, error) {
-	// Create URL with query parameters
+	// Create URL
 	u, err := url.Parse(c.endpoint)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse endpoint URL: %w", err)
 	}
 
-	// Add request fields as query parameters
-	q := u.Query()
-	q.Add("clientId", req.ClientId)
-	q.Add("codebasePath", req.CodebasePath)
-	q.Add("query", req.Query)
-	q.Add("topK", fmt.Sprintf("%d", req.TopK))
-	u.RawQuery = q.Encode()
+	// Marshal request body
+	reqBody, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request body: %w", err)
+	}
 
 	// Create HTTP request
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), bytes.NewReader(reqBody))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}

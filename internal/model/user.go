@@ -1,6 +1,7 @@
 package model
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -8,6 +9,13 @@ import (
 	"github.com/google/uuid"
 	"github.com/zgsm-ai/chat-rag/internal/logger"
 	"go.uber.org/zap"
+)
+
+// ContextKey is a type for context keys to avoid collisions
+type ContextKey string
+
+const (
+	IdentityContextKey ContextKey = "identity"
 )
 
 type Identity struct {
@@ -212,4 +220,10 @@ func (u *UserInfo) ExtractLoginFromToken() string {
 	}
 
 	return "unknown"
+}
+
+// GetIdentityFromContext retrieves identity from context
+func GetIdentityFromContext(ctx context.Context) (*Identity, bool) {
+	identity, ok := ctx.Value(IdentityContextKey).(*Identity)
+	return identity, ok
 }

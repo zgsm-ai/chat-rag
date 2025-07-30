@@ -42,7 +42,7 @@ func getIdentityFromHeaders(c *gin.Context) *model.Identity {
 	return &model.Identity{
 		RequestID:   c.GetHeader(types.HeaderRequestId),
 		TaskID:      c.GetHeader(types.HeaderTaskId),
-		ClientID:    c.GetHeader(types.HeaderTaskId),
+		ClientID:    c.GetHeader(types.HeaderClientId),
 		ClientIDE:   clientIDE,
 		ProjectPath: projectPath,
 		AuthToken:   jwtToken,
