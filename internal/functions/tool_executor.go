@@ -2,7 +2,6 @@ package functions
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -10,6 +9,7 @@ import (
 	"github.com/zgsm-ai/chat-rag/internal/config"
 	"github.com/zgsm-ai/chat-rag/internal/logger"
 	"github.com/zgsm-ai/chat-rag/internal/model"
+	"github.com/zgsm-ai/chat-rag/internal/utils"
 	"go.uber.org/zap"
 )
 
@@ -53,8 +53,11 @@ func NewXmlToolExecutor(c config.Config, semanticClient client.SemanticInterface
 					return "", fmt.Errorf("semantic client search error: %w", err)
 				}
 
-				jsonResult, _ := json.Marshal(result.Results)
-				return string(jsonResult), nil
+				jsonResult, err := utils.MarshalJSONWithoutEscapeHTML(result.Results)
+				if err != nil {
+					return "", fmt.Errorf("result json encode error: %w", err)
+				}
+				return jsonResult, nil
 			},
 		},
 	}

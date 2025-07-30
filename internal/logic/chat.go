@@ -292,7 +292,6 @@ func (l *ChatCompletionLogic) handleStreamChunk(
 	remainingDepth int,
 ) error {
 	content, usage, resp := l.responseHandler.extractStreamingData(rawLine)
-	// fmt.Println(content)
 	state.finalUsage = usage
 	if resp != nil {
 		state.response = resp
@@ -372,6 +371,12 @@ func (l *ChatCompletionLogic) handleToolExecution(
 
 	l.updateToolStatus(state.toolName, types.ToolStatusRunning)
 
+	// DEBUG
+	if err := l.sendStreamContent(flusher, state.response,
+		fmt.Sprintf("########## TOOL DEBUG #############\n[%s] 开始调用....\n\n输入:\n%s\n\n", state.toolName, toolContent)); err != nil {
+		return err
+	}
+
 	// execute and record tool call latency
 	toolStart := time.Now()
 	result, err := l.toolExecutor.ExecuteTools(l.ctx, state.toolName, toolContent)
@@ -385,6 +390,10 @@ func (l *ChatCompletionLogic) handleToolExecution(
 		status = types.ToolStatusFailed
 		result = fmt.Sprintf("%s execute failed, err: %v", state.toolName, err)
 		toolCall.ResultStatus = string(status)
+	}
+	if err := l.sendStreamContent(flusher, state.response,
+		fmt.Sprintf(">>>[%s] 执行完成\n\n结果：\n%s\n***************** END *****************\n\n", state.toolName, result)); err != nil {
+		return err
 	}
 
 	messages = append(messages,
