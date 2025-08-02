@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/zgsm-ai/chat-rag/internal/model"
+	"github.com/zgsm-ai/chat-rag/internal/types"
 )
 
 // IdentityMiddleware is an optional authentication middleware
@@ -16,6 +17,12 @@ func IdentityMiddleware() gin.HandlerFunc {
 
 		// Store identity information in context
 		ctxWithIdentity := context.WithValue(c.Request.Context(), model.IdentityContextKey, identity)
+
+		// Also store x-request-id directly in context for logger access
+		if identity.RequestID != "" {
+			ctxWithIdentity = context.WithValue(ctxWithIdentity, types.HeaderRequestId, identity.RequestID)
+		}
+
 		c.Request = c.Request.WithContext(ctxWithIdentity)
 
 		// Continue processing the request

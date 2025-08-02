@@ -77,6 +77,11 @@ func handleNonStreamResponse(c *gin.Context, l *logic.ChatCompletionLogic) {
 
 // sendErrorResponse sends a structured error response
 func sendErrorResponse(c *gin.Context, statusCode int, err error) {
+	// Check if the error is an APIError with a specific status code
+	if apiErr, ok := err.(*types.APIError); ok && apiErr.StatusCode != 0 {
+		statusCode = apiErr.StatusCode
+	}
+
 	c.AbortWithStatusJSON(statusCode, gin.H{
 		"error": gin.H{
 			"message": err.Error(),
@@ -92,15 +97,23 @@ func sendStreamError(c *gin.Context, err error, flusher http.Flusher) {
 		Error struct {
 			Message string `json:"message"`
 			Type    string `json:"type"`
+			Code    int    `json:"code"`
 		} `json:"error"`
 	}{
 		Error: struct {
 			Message string `json:"message"`
 			Type    string `json:"type"`
+			Code    int    `json:"code"`
 		}{
 			Message: err.Error(),
 			Type:    "api_error",
+			Code:    http.StatusInternalServerError,
 		},
+	}
+
+	// Check if the error is an APIError with a specific status code
+	if apiErr, ok := err.(*types.APIError); ok && apiErr.StatusCode != 0 {
+		errorMsg.Error.Code = apiErr.StatusCode
 	}
 
 	errorData, _ := json.Marshal(errorMsg)

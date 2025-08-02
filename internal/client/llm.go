@@ -145,7 +145,8 @@ func (c *LLMClient) ChatLLMWithMessagesStreamRaw(ctx context.Context, messages [
 	// Send request
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to make request: %w", err)
+		logger.ErrorC(ctx, "Failed to connect to LLM service", zap.Error(err))
+		return types.NewModelServiceUnavailableError()
 	}
 	defer resp.Body.Close()
 
@@ -156,7 +157,7 @@ func (c *LLMClient) ChatLLMWithMessagesStreamRaw(ctx context.Context, messages [
 			zap.Int("status code", resp.StatusCode),
 			zap.String("body", bodyStr),
 		)
-		return fmt.Errorf("%s", bodyStr)
+		return types.NewHTTPStatusError(resp.StatusCode, bodyStr)
 	}
 
 	// Read streaming response line by line
@@ -219,7 +220,8 @@ func (c *LLMClient) ChatLLMWithMessagesRaw(ctx context.Context, messages []types
 	// Send request
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil_resp, fmt.Errorf("failed to make request: %w", err)
+		logger.Error("Failed to connect to LLM service", zap.Error(err))
+		return nil_resp, types.NewModelServiceUnavailableError()
 	}
 	defer resp.Body.Close()
 
@@ -231,7 +233,7 @@ func (c *LLMClient) ChatLLMWithMessagesRaw(ctx context.Context, messages []types
 			zap.Int("status code", resp.StatusCode),
 			zap.String("body", bodyStr),
 		)
-		return nil_resp, fmt.Errorf("%s", bodyStr)
+		return nil_resp, types.NewHTTPStatusError(resp.StatusCode, bodyStr)
 	}
 
 	// Read response body

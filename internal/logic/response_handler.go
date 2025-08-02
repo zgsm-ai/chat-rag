@@ -155,12 +155,26 @@ func (h *ResponseHandler) CreateSSEData(finalResponse *types.ChatCompletionRespo
 func (h *ResponseHandler) sendSSEError(w http.ResponseWriter, err error) {
 	logger.Warn("sending SSE error response", zap.Error(err))
 
+	// Default error code
+	errorCode := types.ErrCodeInernalError
+	message := types.ErrMsgInernalError
+
+	// Check if the error is an APIError with a specific status code
+	if apiErr, ok := err.(*types.APIError); ok && apiErr.StatusCode != 0 {
+		errorCode = fmt.Sprintf("%d", apiErr.StatusCode)
+		if apiErr.Message != "" {
+			message = apiErr.Message
+		} else {
+			message = fmt.Sprintf("status code: %s", errorCode)
+		}
+	}
+
 	// Create error response in OpenAI format
 	errorResponse := map[string]interface{}{
 		"error": map[string]interface{}{
-			"message": fmt.Sprintf("%v", err),
+			"message": message,
 			"type":    "server_error",
-			"code":    "internal_error",
+			"code":    errorCode,
 		},
 	}
 

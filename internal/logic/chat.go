@@ -58,7 +58,7 @@ const MaxToolCallDepth = 5
 
 // processRequest handles common request processing logic
 func (l *ChatCompletionLogic) processRequest() (*model.ChatLog, *ds.ProcessedPrompt, error) {
-	logger.Info("starting to process request", zap.String("user", l.identity.UserName))
+	logger.InfoC(l.ctx, "starting to process request", zap.String("user", l.identity.UserName))
 	startTime := time.Now()
 
 	// Initialize chat log
@@ -248,7 +248,7 @@ func (l *ChatCompletionLogic) handleStreamingWithTools(
 	chatLog *model.ChatLog,
 	remainingDepth int,
 ) error {
-	logger.Info("starting to handle streaming with tools",
+	logger.InfoC(l.ctx, "starting to handle streaming with tools",
 		zap.Int("remainingDepth", remainingDepth),
 		zap.Int("MaxToolCallDepth", MaxToolCallDepth),
 	)
@@ -373,7 +373,7 @@ func (l *ChatCompletionLogic) handleToolExecution(
 
 	// DEBUG
 	if err := l.sendStreamContent(flusher, state.response,
-		fmt.Sprintf("########## TOOL DEBUG #############\n[%s] 开始调用....\n\n输入:\n%s\n\n", state.toolName, toolContent)); err != nil {
+		fmt.Sprintf(">>>>TOOL DEBUG\n[%s] 开始调用....\n\n## 输入:\n%s\n\n", state.toolName, toolContent)); err != nil {
 		return err
 	}
 
@@ -392,7 +392,7 @@ func (l *ChatCompletionLogic) handleToolExecution(
 		toolCall.ResultStatus = string(status)
 	}
 	if err := l.sendStreamContent(flusher, state.response,
-		fmt.Sprintf(">>>[%s] 执行完成\n\n结果：\n%s\n***************** END *****************\n\n", state.toolName, result)); err != nil {
+		fmt.Sprintf(">>>[%s] 执行完成\n\n>## 结果：\n%s\n>>>>END\n\n", state.toolName, result)); err != nil {
 		return err
 	}
 
@@ -462,7 +462,7 @@ func (l *ChatCompletionLogic) completeStreamResponse(
 
 // handleStreamError handles streaming errors with appropriate error responses
 func (l *ChatCompletionLogic) handleStreamError(err error, chatLog *model.ChatLog) error {
-	logger.Error("ChatLLMWithMessagesStreamRaw error", zap.Error(err))
+	logger.ErrorC(l.ctx, "ChatLLMWithMessagesStreamRaw error", zap.Error(err))
 
 	if l.isContextLengthError(err) {
 		logger.Error("Input context too long", zap.Error(err))

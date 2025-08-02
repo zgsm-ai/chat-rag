@@ -1,6 +1,9 @@
 package types
 
-import "fmt"
+import (
+	"fmt"
+	"net/http"
+)
 
 // ErrorType defines different types of errors
 type ErrorType string
@@ -27,19 +30,46 @@ const (
 
 const (
 	ErrCodeContextExceeded = "chat-rag.context_length_exceeded"
+	ErrMsgContextExceeded  = "The request exceeds the model's maximum context length. Please reduce the length of your input."
+
+	ErrCodeModelServiceUnavailable = "chat-rag.model_service_unavailable"
+	ErrMsgModelServiceUnavailable  = "Unable to access the AI model service. Please try again later."
+
+	ErrCodeInernalError = "chat-rag.internal_error"
+	ErrMsgInernalError  = "Internal Server Error. Please try again later."
 )
 
 type APIError struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
-	Success bool   `json:"success"`
+	Code       string `json:"code"`
+	Message    string `json:"message"`
+	Success    bool   `json:"success"`
+	StatusCode int    `json:"statusCode,omitempty"`
 }
 
 func NewContextTooLongError() *APIError {
 	return &APIError{
-		Code:    ErrCodeContextExceeded,
-		Message: "The request exceeds the model's maximum context length. Please reduce the length of your input.",
-		Success: false,
+		Code:       ErrCodeContextExceeded,
+		Message:    ErrMsgContextExceeded,
+		Success:    false,
+		StatusCode: http.StatusBadRequest,
+	}
+}
+
+func NewModelServiceUnavailableError() *APIError {
+	return &APIError{
+		Code:       ErrCodeModelServiceUnavailable,
+		Message:    ErrMsgModelServiceUnavailable,
+		Success:    false,
+		StatusCode: http.StatusServiceUnavailable,
+	}
+}
+
+func NewHTTPStatusError(statusCode int, message string) *APIError {
+	return &APIError{
+		Code:       fmt.Sprintf("%d", statusCode),
+		Message:    message,
+		Success:    false,
+		StatusCode: statusCode,
 	}
 }
 

@@ -37,10 +37,6 @@ func NewXmlToolExecutor(c config.Config, semanticClient client.SemanticInterface
 					return "", fmt.Errorf("param<%s> extract failed: %w", "query", err)
 				}
 
-				// DEBUG
-				identity.ClientID = "5"
-				identity.ProjectPath = "D:\\workspace"
-
 				result, err := semanticClient.Search(ctx, client.SemanticRequest{
 					ClientId:      identity.ClientID,
 					CodebasePath:  identity.ProjectPath,
