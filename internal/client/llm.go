@@ -157,6 +157,11 @@ func (c *LLMClient) ChatLLMWithMessagesStreamRaw(ctx context.Context, messages [
 			zap.Int("status code", resp.StatusCode),
 			zap.String("body", bodyStr),
 		)
+
+		if bodyStr == "" {
+			bodyStr = fmt.Sprintf("%s\n\n[Detail] status code: %d",
+				types.ErrMsgModelServiceUnavailable, resp.StatusCode)
+		}
 		return types.NewHTTPStatusError(resp.StatusCode, bodyStr)
 	}
 
