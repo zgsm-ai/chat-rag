@@ -32,6 +32,7 @@ type ChatCompletionLogic struct {
 	identity        *model.Identity
 	responseHandler *ResponseHandler
 	toolExecutor    functions.ToolExecutor
+	usage           *types.Usage
 }
 
 func NewChatCompletionLogic(
@@ -229,7 +230,6 @@ type streamState struct {
 	toolDetected bool
 	toolName     string
 	fullContent  strings.Builder
-	finalUsage   *types.Usage
 	response     *types.ChatCompletionResponse
 	modelStart   time.Time
 }
@@ -292,11 +292,12 @@ func (l *ChatCompletionLogic) handleStreamChunk(
 	remainingDepth int,
 ) error {
 	content, usage, resp := l.responseHandler.extractStreamingData(rawLine)
-	state.finalUsage = usage
 	if resp != nil {
 		state.response = resp
 	}
-
+	if usage != nil {
+		l.usage = usage
+	}
 	if content == "" {
 		return l.sendRawLine(flusher, rawLine)
 	}
@@ -444,6 +445,7 @@ func (l *ChatCompletionLogic) completeStreamResponse(
 		}
 
 		endContent := strings.Join(state.window, "")
+		state.response.Usage = *l.usage
 		if err := l.sendStreamContent(flusher, state.response, endContent); err != nil {
 			return err
 		}
@@ -482,23 +484,24 @@ func (l *ChatCompletionLogic) updateStreamStats(chatLog *model.ChatLog, state *s
 	chatLog.MainModelLatency = time.Since(state.modelStart).Milliseconds()
 	chatLog.ResponseContent = state.fullContent.String()
 
-	if state.finalUsage != nil {
-		chatLog.Usage = *state.finalUsage
+	if l.usage != nil {
+		chatLog.Usage = *l.usage
 	} else {
 		chatLog.Usage = l.responseHandler.calculateUsage(
 			chatLog.CompressedTokens.All,
 			chatLog.ResponseContent,
 		)
-		logger.Info("calculated usage for streaming response",
-			zap.Int("totalTokens", chatLog.Usage.TotalTokens),
-		)
+		logger.Info("calculated usage for streaming response")
 	}
+
+	logger.Info("prompt usage", zap.Any("usage", chatLog.Usage))
 }
 
 func (l *ChatCompletionLogic) sendRawLine(flusher http.Flusher, raw string) error {
 	if !strings.HasPrefix(raw, "data: ") {
 		raw = "data: " + raw
 	}
+
 	_, err := fmt.Fprintf(l.writer, "%s\n\n", raw)
 	flusher.Flush()
 	return err
@@ -516,6 +519,7 @@ func (l *ChatCompletionLogic) sendStreamContent(flusher http.Flusher, response *
 		},
 	}}
 	jsonData, _ := json.Marshal(response)
+
 	_, err := fmt.Fprintf(l.writer, "data: %s\n\n", jsonData)
 	flusher.Flush()
 	return err
