@@ -3,7 +3,7 @@ Host: 0.0.0.0
 Port: 8888
 
 # Token processing configuration
-TokenThreshold: 50_000
+TokenThreshold: 5000_000
 
 # Semantic API configuration
 SemanticApiEndpoint: "http://127.0.0.1:18888/codebase-embedder/api/v1/search/semantic"
@@ -16,9 +16,9 @@ LokiEndpoint: "http://localhost:3100/loki/api/v1/push"
 LogScanIntervalSec: 10
 
 # Model configuration
-SummaryModel: "deepseek-v3"
+SummaryModel: "qwen2.5-coder-32b"
 SummaryModelTokenThreshold: 64_000
-ClassifyModel: "glm45-fp8"
+ClassifyModel: "qwen2.5-coder-32b"
 
 # Split system prompt, used to compress system prompt
 SystemPromptSplitStr: "====\n\nRULES"
@@ -32,8 +32,8 @@ DepartmentApiEndpoint: "http://localhost:1234/work_id?work_id="
 # Models supported by function calling
 LLM:
   # Endpoint: "https://zgsm.sangfor.com/chat-rag/api/v1/chat/completions"
-  # Endpoint: "http://127.0.0.1:30616/v1/chat/completions"
-  Endpoint: "http://127.0.0.1:30616/123/v1/chat/completions234"
+  Endpoint: "http://127.0.0.1:30616/v1/chat/completions"
+  # Endpoint: "http://127.0.0.1:30616/123/v1/chat/completions234"
   # Endpoint: "http://123/v1/chat/completions234"
   FuncCallingModels:
     - "deepseek-v3"
