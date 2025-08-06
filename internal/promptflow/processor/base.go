@@ -104,7 +104,7 @@ func (e *End) SetNext(processor Processor) {
 }
 
 func SetLanguage(language string, messages []types.Message) []types.Message {
-	if language == "" {
+	if language == "" || language == "*" {
 		logger.Warn("language is empty, skipping language setting")
 		return messages
 	}
