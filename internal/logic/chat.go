@@ -266,7 +266,7 @@ func (l *ChatCompletionLogic) handleStreamingWithTools(
 		return l.handleToolExecution(llmClient, flusher, messages, chatLog, state, remainingDepth)
 	}
 
-	return l.completeStreamResponse(flusher, chatLog, state, remainingDepth)
+	return l.completeStreamResponse(flusher, chatLog, state)
 }
 
 // processStream handles the streaming response processing
@@ -374,7 +374,7 @@ func (l *ChatCompletionLogic) handleToolExecution(
 
 	// DEBUG
 	if err := l.sendStreamContent(flusher, state.response,
-		fmt.Sprintf(">>>>TOOL DEBUG\n[%s] 开始调用....\n\n## 输入:\n%s\n\n", state.toolName, toolContent)); err != nil {
+		fmt.Sprintf("# TOOL DEBUG\n[%s] 开始调用....\n\n## 输入:\n%s\n\n", state.toolName, toolContent)); err != nil {
 		return err
 	}
 
@@ -391,9 +391,10 @@ func (l *ChatCompletionLogic) handleToolExecution(
 		status = types.ToolStatusFailed
 		result = fmt.Sprintf("%s execute failed, err: %v", state.toolName, err)
 		toolCall.ResultStatus = string(status)
+		toolCall.Error = err.Error()
 	}
 	if err := l.sendStreamContent(flusher, state.response,
-		fmt.Sprintf(">>>[%s] 执行完成\n\n>## 结果：\n%s\n>>>>END\n\n", state.toolName, result)); err != nil {
+		fmt.Sprintf("## [%s] 执行完成\n\n## 结果：\n%s\n# END\n\n--- \n", state.toolName, result)); err != nil {
 		return err
 	}
 
@@ -435,7 +436,6 @@ func (l *ChatCompletionLogic) completeStreamResponse(
 	flusher http.Flusher,
 	chatLog *model.ChatLog,
 	state *streamState,
-	remainingDepth int,
 ) error {
 	logger.Info("starting to send remaining content before ending.")
 
@@ -454,10 +454,7 @@ func (l *ChatCompletionLogic) completeStreamResponse(
 		}
 	}
 
-	// Update statistics only for the initial call
-	if remainingDepth == MaxToolCallDepth {
-		l.updateStreamStats(chatLog, state)
-	}
+	l.updateStreamStats(chatLog, state)
 
 	return nil
 }

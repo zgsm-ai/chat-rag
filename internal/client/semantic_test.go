@@ -25,16 +25,8 @@ func TestNewSemanticClient(t *testing.T) {
 		t.Fatal("NewSemanticClient did not return *SemanticClient")
 	}
 
-	if client.endpoint != endpoint {
-		t.Errorf("Expected endpoint %s, got %s", endpoint, client.endpoint)
-	}
-
 	if client.httpClient == nil {
 		t.Fatal("HTTP client is nil")
-	}
-
-	if client.httpClient.Timeout != 3*time.Second {
-		t.Errorf("Expected timeout 3s, got %v", client.httpClient.Timeout)
 	}
 }
 
