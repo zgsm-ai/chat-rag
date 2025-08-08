@@ -5,11 +5,6 @@ Port: 8888
 # Token processing configuration
 TokenThreshold: 50_000
 
-# Semantic API configuration
-SemanticApiEndpoint: "http://127.0.0.1:18888/codebase-embedder/api/v1/search/semantic"
-TopK: 10
-SemanticScoreThreshold: 0.7
-
 # Logging configuration
 LogFilePath: "logs/"
 LokiEndpoint: "http://localhost:3100/loki/api/v1/push"
@@ -32,9 +27,7 @@ DepartmentApiEndpoint: "http://localhost:1234/work_id?work_id="
 # Models supported by function calling
 LLM:
   # Endpoint: "https://zgsm.sangfor.com/chat-rag/api/v1/chat/completions"
-  # Endpoint: "http://127.0.0.1:30616/v1/chat/completions"
-  Endpoint: "http://127.0.0.1:30616/123/v1/chat/completions234"
-  # Endpoint: "http://123/v1/chat/completions234"
+  Endpoint: "http://127.0.0.1:30616/v1/chat/completions"
   FuncCallingModels:
     - "deepseek-v3"
     - "qwen3*"
@@ -42,3 +35,11 @@ LLM:
 
 Redis:
   Addr: "127.0.0.1:6379"
+
+# Semantic API configuration
+Tools:
+  SemanticSearch:
+    SearchEndpoint: "http://127.0.0.1:18888/codebase-embedder/api/v1/search/semantic"
+    ApiReadyEndpoint: "http://127.0.0.1:18888/codebase-embedder/api/v1/embeddings/summary"
+    TopK: 10
+    ScoreThreshold: 0.7

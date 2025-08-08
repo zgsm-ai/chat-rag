@@ -33,7 +33,7 @@ func NewRagOnlyProcessor(
 ) (*RagOnlyProcessor, error) {
 	return &RagOnlyProcessor{
 		ctx:            ctx,
-		semanticClient: client.NewSemanticClient(svcCtx.Config.SemanticApiEndpoint),
+		semanticClient: client.NewSemanticClient(svcCtx.Config.Tools.SemanticSearch),
 		config:         svcCtx.Config,
 		tokenCounter:   svcCtx.TokenCounter,
 		identity:       identity,
@@ -64,7 +64,7 @@ func (p *RagOnlyProcessor) Arrange(messages []types.Message) (*ds.ProcessedPromp
 func (p *RagOnlyProcessor) buildProcessorChain() error {
 	p.semanticSearch = processor.NewSemanticSearch(
 		p.ctx,
-		p.config,
+		p.config.Tools.SemanticSearch,
 		p.semanticClient,
 		p.identity,
 	)

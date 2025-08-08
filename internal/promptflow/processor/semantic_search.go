@@ -19,7 +19,7 @@ type SemanticSearch struct {
 	Recorder
 	ctx            context.Context
 	semanticClient client.SemanticInterface
-	config         config.Config
+	config         config.SemanticSearchConfig
 	identity       *model.Identity
 
 	next Processor
@@ -30,7 +30,7 @@ type SemanticSearch struct {
 
 func NewSemanticSearch(
 	ctx context.Context,
-	config config.Config,
+	config config.SemanticSearchConfig,
 	semanticClient client.SemanticInterface,
 	identity *model.Identity,
 ) *SemanticSearch {
@@ -174,7 +174,7 @@ func (s *SemanticSearch) buildContextString(results []client.SemanticResult) str
 	var contextParts []string
 
 	for _, result := range results {
-		if result.Score < s.config.SemanticScoreThreshold {
+		if result.Score < s.config.ScoreThreshold {
 			continue
 		}
 

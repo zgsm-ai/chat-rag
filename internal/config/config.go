@@ -13,6 +13,22 @@ type RedisConfig struct {
 	DB       int
 }
 
+type ToolConfig struct {
+	SemanticSearch SemanticSearchConfig
+	RelationSearch RelationSearchConfig
+}
+
+type SemanticSearchConfig struct {
+	SearchEndpoint   string
+	ApiReadyEndpoint string
+	TopK             int
+	ScoreThreshold   float64
+}
+
+type RelationSearchConfig struct {
+	SearchEndpoint string
+}
+
 // Config holds all service configuration
 type Config struct {
 	// Server configuration
@@ -22,10 +38,8 @@ type Config struct {
 	// Token processing configuration
 	TokenThreshold int
 
-	// Semantic API configuration
-	SemanticApiEndpoint    string
-	TopK                   int
-	SemanticScoreThreshold float64
+	// Tools configuration
+	Tools ToolConfig
 
 	// Logging configuration
 	LogFilePath        string
