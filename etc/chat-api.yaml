@@ -3,7 +3,7 @@ Host: 0.0.0.0
 Port: 8888
 
 # Token processing configuration
-TokenThreshold: 50_000
+TokenThreshold: 100_000
 
 # Logging configuration
 LogFilePath: "logs/"
