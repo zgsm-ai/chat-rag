@@ -9,11 +9,18 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/zgsm-ai/chat-rag/internal/config"
 )
 
 func TestNewSemanticClient(t *testing.T) {
-	endpoint := "http://localhost:8002/v1/semantic"
-	clientInterface := NewSemanticClient(endpoint)
+	semanticConfig := config.SemanticSearchConfig{
+		SearchEndpoint:   "http://localhost:8002/v1/semantic",
+		ApiReadyEndpoint: "http://localhost:8002/v1/ready",
+		TopK:             5,
+		ScoreThreshold:   0.5,
+	}
+	clientInterface := NewSemanticClient(semanticConfig)
 
 	if clientInterface == nil {
 		t.Fatal("NewSemanticClient returned nil")
@@ -25,8 +32,12 @@ func TestNewSemanticClient(t *testing.T) {
 		t.Fatal("NewSemanticClient did not return *SemanticClient")
 	}
 
-	if client.httpClient == nil {
-		t.Fatal("HTTP client is nil")
+	if client.searchClient == nil {
+		t.Fatal("Search client is nil")
+	}
+
+	if client.readyClient == nil {
+		t.Fatal("Ready client is nil")
 	}
 }
 
@@ -82,15 +93,26 @@ func TestSemanticClient_Search_Success(t *testing.T) {
 			t.Errorf("Expected request fields %+v, got %+v", expectedReq, req)
 		}
 
-		// Send mock response
+		// Send mock response - wrap in the expected API response format
+		wrapper := SemanticResponseWrapper{
+			Code:    200,
+			Message: "success",
+			Data:    &mockResponse,
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(mockResponse)
+		json.NewEncoder(w).Encode(wrapper)
 	}))
 	defer server.Close()
 
 	// Create client with mock server URL
-	client := NewSemanticClient(server.URL)
+	semanticConfig := config.SemanticSearchConfig{
+		SearchEndpoint:   server.URL,
+		ApiReadyEndpoint: "http://localhost:8002/v1/ready",
+		TopK:             5,
+		ScoreThreshold:   0.5,
+	}
+	client := NewSemanticClient(semanticConfig)
 
 	// Test request
 	req := SemanticRequest{
@@ -138,13 +160,25 @@ func TestSemanticClient_Search_EmptyResults(t *testing.T) {
 
 	// Create mock server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Send mock response - wrap in the expected API response format
+		wrapper := SemanticResponseWrapper{
+			Code:    200,
+			Message: "success",
+			Data:    &mockResponse,
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(mockResponse)
+		json.NewEncoder(w).Encode(wrapper)
 	}))
 	defer server.Close()
 
-	client := NewSemanticClient(server.URL)
+	semanticConfig := config.SemanticSearchConfig{
+		SearchEndpoint:   server.URL,
+		ApiReadyEndpoint: "http://localhost:8002/v1/ready",
+		TopK:             5,
+		ScoreThreshold:   0.5,
+	}
+	client := NewSemanticClient(semanticConfig)
 
 	req := SemanticRequest{
 		ClientId:     "test-client",
@@ -176,7 +210,13 @@ func TestSemanticClient_Search_HTTPError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewSemanticClient(server.URL)
+	semanticConfig := config.SemanticSearchConfig{
+		SearchEndpoint:   server.URL,
+		ApiReadyEndpoint: "http://localhost:8002/v1/ready",
+		TopK:             5,
+		ScoreThreshold:   0.5,
+	}
+	client := NewSemanticClient(semanticConfig)
 
 	req := SemanticRequest{
 		ClientId:     "test-client",
@@ -192,7 +232,7 @@ func TestSemanticClient_Search_HTTPError(t *testing.T) {
 		t.Fatal("Expected error, got nil")
 	}
 
-	expectedError := "semantic search failed with status: 500"
+	expectedError := "request failed! status: 500"
 	if !strings.Contains(err.Error(), expectedError) {
 		t.Errorf("Expected error to contain '%s', got '%s'", expectedError, err.Error())
 	}
@@ -207,7 +247,13 @@ func TestSemanticClient_Search_InvalidJSON(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewSemanticClient(server.URL)
+	semanticConfig := config.SemanticSearchConfig{
+		SearchEndpoint:   server.URL,
+		ApiReadyEndpoint: "http://localhost:8002/v1/ready",
+		TopK:             5,
+		ScoreThreshold:   0.5,
+	}
+	client := NewSemanticClient(semanticConfig)
 
 	req := SemanticRequest{
 		ClientId:     "test-client",
@@ -233,13 +279,26 @@ func TestSemanticClient_Search_ContextCancellation(t *testing.T) {
 	// Create mock server with delay
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(100 * time.Millisecond)
+		// Send mock response - wrap in the expected API response format
+		mockResponse := SemanticData{Results: []SemanticResult{}}
+		wrapper := SemanticResponseWrapper{
+			Code:    200,
+			Message: "success",
+			Data:    &mockResponse,
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(SemanticData{Results: []SemanticResult{}})
+		json.NewEncoder(w).Encode(wrapper)
 	}))
 	defer server.Close()
 
-	client := NewSemanticClient(server.URL)
+	semanticConfig := config.SemanticSearchConfig{
+		SearchEndpoint:   server.URL,
+		ApiReadyEndpoint: "http://localhost:8002/v1/ready",
+		TopK:             5,
+		ScoreThreshold:   0.5,
+	}
+	client := NewSemanticClient(semanticConfig)
 
 	req := SemanticRequest{
 		ClientId:     "test-client",
@@ -267,7 +326,13 @@ func TestSemanticClient_Search_ContextCancellation(t *testing.T) {
 
 func TestSemanticClient_Search_InvalidURL(t *testing.T) {
 	// Create client with invalid URL
-	client := NewSemanticClient("invalid-url")
+	semanticConfig := config.SemanticSearchConfig{
+		SearchEndpoint:   "invalid-url",
+		ApiReadyEndpoint: "http://localhost:8002/v1/ready",
+		TopK:             5,
+		ScoreThreshold:   0.5,
+	}
+	client := NewSemanticClient(semanticConfig)
 
 	req := SemanticRequest{
 		ClientId:     "test-client",
@@ -373,13 +438,25 @@ func TestSemanticClient_Search_LargeResponse(t *testing.T) {
 	}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Send mock response - wrap in the expected API response format
+		wrapper := SemanticResponseWrapper{
+			Code:    200,
+			Message: "success",
+			Data:    &mockResponse,
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(mockResponse)
+		json.NewEncoder(w).Encode(wrapper)
 	}))
 	defer server.Close()
 
-	client := NewSemanticClient(server.URL)
+	semanticConfig := config.SemanticSearchConfig{
+		SearchEndpoint:   server.URL,
+		ApiReadyEndpoint: "http://localhost:8002/v1/ready",
+		TopK:             50,
+		ScoreThreshold:   0.5,
+	}
+	client := NewSemanticClient(semanticConfig)
 
 	req := SemanticRequest{
 		ClientId:     "test-client",
@@ -421,7 +498,13 @@ func TestSemanticClient_Search_DifferentStatusCodes(t *testing.T) {
 			}))
 			defer server.Close()
 
-			client := NewSemanticClient(server.URL)
+			semanticConfig := config.SemanticSearchConfig{
+				SearchEndpoint:   server.URL,
+				ApiReadyEndpoint: "http://localhost:8002/v1/ready",
+				TopK:             5,
+				ScoreThreshold:   0.5,
+			}
+			client := NewSemanticClient(semanticConfig)
 
 			req := SemanticRequest{
 				ClientId:     "test-client",
@@ -438,7 +521,7 @@ func TestSemanticClient_Search_DifferentStatusCodes(t *testing.T) {
 			}
 
 			if tc.expectError && err != nil {
-				expectedError := fmt.Sprintf("semantic search failed with status: %d", tc.statusCode)
+				expectedError := fmt.Sprintf("request failed! status: %d", tc.statusCode)
 				if !strings.Contains(err.Error(), expectedError) {
 					t.Errorf("Expected error to contain '%s', got '%s'", expectedError, err.Error())
 				}
@@ -498,13 +581,25 @@ func TestSemanticClient_Search_EdgeCases(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				// Send mock response - wrap in the expected API response format
+				wrapper := SemanticResponseWrapper{
+					Code:    200,
+					Message: "success",
+					Data:    &tc.response,
+				}
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(tc.response)
+				json.NewEncoder(w).Encode(wrapper)
 			}))
 			defer server.Close()
 
-			client := NewSemanticClient(server.URL)
+			semanticConfig := config.SemanticSearchConfig{
+				SearchEndpoint:   server.URL,
+				ApiReadyEndpoint: "http://localhost:8002/v1/ready",
+				TopK:             5,
+				ScoreThreshold:   0.5,
+			}
+			client := NewSemanticClient(semanticConfig)
 
 			ctx := context.Background()
 			resp, err := client.Search(ctx, tc.request)
@@ -533,13 +628,25 @@ func BenchmarkSemanticClient_Search(b *testing.B) {
 	}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Send mock response - wrap in the expected API response format
+		wrapper := SemanticResponseWrapper{
+			Code:    200,
+			Message: "success",
+			Data:    &mockResponse,
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(mockResponse)
+		json.NewEncoder(w).Encode(wrapper)
 	}))
 	defer server.Close()
 
-	client := NewSemanticClient(server.URL)
+	semanticConfig := config.SemanticSearchConfig{
+		SearchEndpoint:   server.URL,
+		ApiReadyEndpoint: "http://localhost:8002/v1/ready",
+		TopK:             1,
+		ScoreThreshold:   0.5,
+	}
+	client := NewSemanticClient(semanticConfig)
 
 	req := SemanticRequest{
 		ClientId:     "benchmark-client",
@@ -575,13 +682,25 @@ func BenchmarkSemanticClient_Search_LargeResponse(b *testing.B) {
 	}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Send mock response - wrap in the expected API response format
+		wrapper := SemanticResponseWrapper{
+			Code:    200,
+			Message: "success",
+			Data:    &mockResponse,
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(mockResponse)
+		json.NewEncoder(w).Encode(wrapper)
 	}))
 	defer server.Close()
 
-	client := NewSemanticClient(server.URL)
+	semanticConfig := config.SemanticSearchConfig{
+		SearchEndpoint:   server.URL,
+		ApiReadyEndpoint: "http://localhost:8002/v1/ready",
+		TopK:             100,
+		ScoreThreshold:   0.5,
+	}
+	client := NewSemanticClient(semanticConfig)
 
 	req := SemanticRequest{
 		ClientId:     "benchmark-client",
@@ -604,7 +723,13 @@ func BenchmarkSemanticClient_Search_LargeResponse(b *testing.B) {
 // Example test to demonstrate usage
 func ExampleSemanticClient_Search() {
 	// Create a semantic client
-	client := NewSemanticClient("http://localhost:8002/v1/semantic")
+	semanticConfig := config.SemanticSearchConfig{
+		SearchEndpoint:   "http://localhost:8002/v1/semantic",
+		ApiReadyEndpoint: "http://localhost:8002/v1/ready",
+		TopK:             10,
+		ScoreThreshold:   0.5,
+	}
+	client := NewSemanticClient(semanticConfig)
 
 	// Prepare search request
 	req := SemanticRequest{

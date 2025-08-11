@@ -30,9 +30,10 @@ type ServiceContext struct {
 // NewServiceContext creates a new service context with all dependencies
 func NewServiceContext(c config.Config) *ServiceContext {
 	// Initialize semantic client
-	semanticClient := client.NewSemanticClient(c.SemanticApiEndpoint)
+	semanticClient := client.NewSemanticClient(c.Tools.SemanticSearch)
+	relationClient := client.NewRelationClient(c.Tools.RelationSearch.SearchEndpoint)
 	functionManager := functions.NewToolManager("etc/functions.yaml")
-	xmlToolExecutor := functions.NewXmlToolExecutor(c, semanticClient)
+	xmlToolExecutor := functions.NewXmlToolExecutor(c.Tools.SemanticSearch, semanticClient, relationClient)
 
 	// Initialize token counter
 	tokenCounter, err := tokenizer.NewTokenCounter()

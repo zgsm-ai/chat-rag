@@ -18,18 +18,17 @@ import (
 
 type RagCompressProcessor struct {
 	ctx              context.Context
-	semanticClient   client.SemanticInterface
 	llmClient        client.LLMInterface
 	tokenCounter     *tokenizer.TokenCounter
 	config           config.Config
 	identity         *model.Identity
 	functionsManager *functions.ToolManager
 	modelName        string
+	toolsExecutor    functions.ToolExecutor
 
 	// systemCompressor *processor.SystemCompressor
 	userMsgFilter   *processor.UserMsgFilter
 	functionAdapter *processor.FunctionAdapter
-	semanticSearch  *processor.SemanticSearch
 	userCompressor  *processor.UserCompressor
 	xmlToolAdapter  *processor.XmlToolAdapter
 	ruleInjector    *processor.RulesInjector
@@ -66,13 +65,13 @@ func NewRagCompressProcessor(
 
 	return &RagCompressProcessor{
 		ctx:              ctx,
-		semanticClient:   client.NewSemanticClient(svcCtx.Config.SemanticApiEndpoint),
 		modelName:        modelName,
 		llmClient:        llmClient,
 		config:           svcCtx.Config,
 		tokenCounter:     svcCtx.TokenCounter,
 		identity:         identity,
 		functionsManager: svcCtx.FunctionsManager,
+		toolsExecutor:    svcCtx.ToolExecutor,
 		start:            processor.NewStartPoint(),
 		end:              processor.NewEndpoint(),
 	}, nil
@@ -105,18 +104,12 @@ func (p *RagCompressProcessor) buildProcessorChain() error {
 	// 	p.llmClient,
 	// )
 	p.userMsgFilter = processor.NewUserMsgFilter()
-	p.xmlToolAdapter = processor.NewXmlToolAdapter()
+	p.xmlToolAdapter = processor.NewXmlToolAdapter(p.ctx, p.toolsExecutor)
 	p.ruleInjector = processor.NewRulesInjector()
 	p.functionAdapter = processor.NewFunctionAdapter(
 		p.modelName,
 		p.config.LLM.FuncCallingModels,
 		p.functionsManager,
-	)
-	p.semanticSearch = processor.NewSemanticSearch(
-		p.ctx,
-		p.config,
-		p.semanticClient,
-		p.identity,
 	)
 	p.userCompressor = processor.NewUserCompressor(
 		p.ctx,
@@ -125,8 +118,7 @@ func (p *RagCompressProcessor) buildProcessorChain() error {
 		p.tokenCounter,
 	)
 
-	// chain order: system -> semantic -> user
-	// p.systemCompressor.SetNext(p.semanticSearch)
+	// execute chain
 	p.start.SetNext(p.ruleInjector)
 	p.ruleInjector.SetNext(p.userMsgFilter)
 	p.userMsgFilter.SetNext(p.xmlToolAdapter)
@@ -144,9 +136,6 @@ func (p *RagCompressProcessor) createProcessedPrompt(
 	processedMsgs := processor.SetLanguage(p.identity.Language, promptMsg.AssemblePrompt())
 	return &ds.ProcessedPrompt{
 		Messages:               processedMsgs,
-		SemanticLatency:        p.semanticSearch.Latency,
-		SemanticContext:        p.semanticSearch.SemanticResult,
-		SemanticErr:            p.semanticSearch.Err,
 		SummaryLatency:         p.userCompressor.Latency,
 		SummaryErr:             p.userCompressor.Err,
 		IsUserPromptCompressed: p.userCompressor.Handled,
