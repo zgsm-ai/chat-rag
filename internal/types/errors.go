@@ -26,6 +26,13 @@ const (
 
 	// ErrExtra represents extra operation errors
 	ErrExtra ErrorType = "ExtraError"
+
+	// llm api error type
+	ErrQuotaCheck   ErrorType = "quota-check"
+	ErrQuotaManager ErrorType = "quota-manager"
+	ErrAiGateway    ErrorType = "ai-gateway"
+
+	ErrServerModel ErrorType = "ai_model_error"
 )
 
 const (
@@ -44,6 +51,7 @@ type APIError struct {
 	Message    string `json:"message"`
 	Success    bool   `json:"success"`
 	StatusCode int    `json:"statusCode,omitempty"`
+	Type       string `json:"type,omitempty"`
 }
 
 func NewContextTooLongError() *APIError {
@@ -52,6 +60,7 @@ func NewContextTooLongError() *APIError {
 		Message:    ErrMsgContextExceeded,
 		Success:    false,
 		StatusCode: http.StatusBadRequest,
+		Type:       string(ErrServerModel),
 	}
 }
 
@@ -61,6 +70,7 @@ func NewModelServiceUnavailableError() *APIError {
 		Message:    ErrMsgModelServiceUnavailable,
 		Success:    false,
 		StatusCode: http.StatusServiceUnavailable,
+		Type:       string(ErrServerModel),
 	}
 }
 
@@ -70,6 +80,7 @@ func NewHTTPStatusError(statusCode int, message string) *APIError {
 		Message:    message,
 		Success:    false,
 		StatusCode: statusCode,
+		Type:       string(ErrServerModel),
 	}
 }
 

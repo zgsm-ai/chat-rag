@@ -120,12 +120,6 @@ func (c *LLMClient) ChatLLMWithMessagesStreamRaw(ctx context.Context, messages [
 		return fmt.Errorf("failed to marshal request payload: %w", err)
 	}
 
-	// DEBUG Write to log file
-	// logPath := filepath.Join("logs", fmt.Sprintf("request_%d.json", time.Now().Unix()))
-	// if err := os.WriteFile(logPath, jsonData, 0644); err != nil {
-	// 	return fmt.Errorf("failed to write request log: %w", err)
-	// }
-
 	reader := strings.NewReader(string(jsonData))
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint, reader)
 	if err != nil {
@@ -158,11 +152,33 @@ func (c *LLMClient) ChatLLMWithMessagesStreamRaw(ctx context.Context, messages [
 			zap.String("body", bodyStr),
 		)
 
-		if bodyStr == "" {
-			bodyStr = fmt.Sprintf("%s\n\n[Detail] status code: %d",
-				types.ErrMsgModelServiceUnavailable, resp.StatusCode)
+		// parse err
+		var apiError types.APIError
+		if err := json.Unmarshal([]byte(bodyStr), &apiError); err == nil {
+			apiError.StatusCode = resp.StatusCode
+			if strings.Contains(apiError.Code, string(types.ErrQuotaCheck)) {
+				apiError.Type = string(types.ErrQuotaCheck)
+				return &apiError
+			}
+
+			if strings.Contains(apiError.Code, string(types.ErrQuotaManager)) {
+				apiError.Type = string(types.ErrQuotaManager)
+				return &apiError
+			}
+
+			if strings.Contains(apiError.Code, string(types.ErrAiGateway)) {
+				apiError.Type = string(types.ErrAiGateway)
+				return &apiError
+			}
 		}
-		return types.NewHTTPStatusError(resp.StatusCode, bodyStr)
+
+		if bodyStr == "" {
+			bodyStr = "None"
+		}
+		message := fmt.Sprintf("%s\n\n[Error]:\nCode: %d\nMessage: %s",
+			types.ErrMsgModelServiceUnavailable, resp.StatusCode, bodyStr)
+
+		return types.NewHTTPStatusError(resp.StatusCode, message)
 	}
 
 	// Read streaming response line by line

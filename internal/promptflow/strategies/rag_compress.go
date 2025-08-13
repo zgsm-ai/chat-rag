@@ -27,12 +27,12 @@ type RagCompressProcessor struct {
 	toolsExecutor    functions.ToolExecutor
 
 	// systemCompressor *processor.SystemCompressor
-	userMsgFilter   *processor.UserMsgFilter
-	functionAdapter *processor.FunctionAdapter
-	userCompressor  *processor.UserCompressor
-	xmlToolAdapter  *processor.XmlToolAdapter
-	start           *processor.Start
-	end             *processor.End
+	userMsgFilter *processor.UserMsgFilter
+	// functionAdapter *processor.FunctionAdapter
+	userCompressor *processor.UserCompressor
+	xmlToolAdapter *processor.XmlToolAdapter
+	start          *processor.Start
+	end            *processor.End
 }
 
 // copyAndSetQuotaIdentity
@@ -104,11 +104,11 @@ func (p *RagCompressProcessor) buildProcessorChain() error {
 	// )
 	p.userMsgFilter = processor.NewUserMsgFilter()
 	p.xmlToolAdapter = processor.NewXmlToolAdapter(p.ctx, p.toolsExecutor)
-	p.functionAdapter = processor.NewFunctionAdapter(
-		p.modelName,
-		p.config.LLM.FuncCallingModels,
-		p.functionsManager,
-	)
+	// p.functionAdapter = processor.NewFunctionAdapter(
+	// 	p.modelName,
+	// 	p.config.LLM.FuncCallingModels,
+	// 	p.functionsManager,
+	// )
 	p.userCompressor = processor.NewUserCompressor(
 		p.ctx,
 		p.config,
