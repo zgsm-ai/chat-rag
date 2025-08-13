@@ -140,7 +140,8 @@ func ChatStatusHandler(svcCtx *bootstrap.ServiceContext) gin.HandlerFunc {
 		}
 
 		// Get tool status from Redis
-		toolStatusData, err := svcCtx.RedisClient.GetHash(c.Request.Context(), requestId)
+		toolStatusKey := types.ToolStatusRedisKeyPrefix + requestId
+		toolStatusData, err := svcCtx.RedisClient.GetHash(c.Request.Context(), toolStatusKey)
 		if err != nil {
 			logger.Error("Error fetching tool status from Redis", zap.Error(err))
 			// Return 404 if requestID not found in Redis

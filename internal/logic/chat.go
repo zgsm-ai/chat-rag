@@ -390,11 +390,11 @@ func (l *ChatCompletionLogic) handleToolExecution(
 		logger.WarnC(l.ctx, "tool execute failed", zap.String("tool", state.toolName), zap.Error(err))
 		status = types.ToolStatusFailed
 		result = fmt.Sprintf("%s execute failed, err: %v", state.toolName, err)
-		toolCall.ResultStatus = string(status)
 		toolCall.Error = err.Error()
 	} else {
 		logger.InfoC(l.ctx, "tool execute succeed", zap.String("tool", state.toolName))
 	}
+	toolCall.ResultStatus = string(status)
 	// if err := l.sendStreamContent(flusher, state.response,
 	// 	fmt.Sprintf("## [%s] 执行完成\n\n## 结果：\n%s\n# END\n\n--- \n", state.toolName, result)); err != nil {
 	// 	return err
@@ -527,11 +527,11 @@ func (l *ChatCompletionLogic) sendStreamContent(flusher http.Flusher, response *
 // Helper methods
 
 func (l *ChatCompletionLogic) updateToolStatus(toolName string, status types.ToolStatus) {
-	toolStatusKey := l.identity.RequestID
-	if toolStatusKey == "" {
+	if l.identity.RequestID == "" {
 		logger.Warn("requestID is empty, skip updating tool status")
 		return
 	}
+	toolStatusKey := types.ToolStatusRedisKeyPrefix + l.identity.RequestID
 
 	if err := l.svcCtx.RedisClient.SetHashField(l.ctx, toolStatusKey, toolName, string(status), 5*time.Minute); err != nil {
 		logger.Error("failed to update tool status in redis",

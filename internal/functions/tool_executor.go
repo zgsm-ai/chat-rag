@@ -111,150 +111,6 @@ type XmlToolExecutor struct {
 	tools map[string]ToolFunc
 }
 
-// func NewXmlToolExecutor(c config.SemanticSearchConfig, semanticClient client.SemanticInterface, relationClient client.RelationInterface) *XmlToolExecutor {
-// 	toolExecutor := &XmlToolExecutor{
-// 		tools: map[string]ToolFunc{
-// 			CodebaseSearchToolName: {
-// 				description: CodebaseSearchToolDesc,
-// 				execute: func(ctx context.Context, param string) (string, error) {
-// 					identity, exists := model.GetIdentityFromContext(ctx)
-// 					if !exists {
-// 						return "", fmt.Errorf("no identity found in context")
-// 					}
-// 					query, err := ExactXmlParam(param, "query")
-// 					if err != nil {
-// 						return "", fmt.Errorf("param<%s> extract failed: %w", "query", err)
-// 					}
-
-// 					result, err := semanticClient.Search(ctx, client.SemanticRequest{
-// 						ClientId:      identity.ClientID,
-// 						CodebasePath:  identity.ProjectPath,
-// 						Query:         query,
-// 						TopK:          c.TopK,
-// 						Authorization: identity.AuthToken,
-// 						Score:         c.ScoreThreshold,
-// 					})
-// 					if err != nil {
-// 						return "", fmt.Errorf("semantic client search error: %w", err)
-// 					}
-
-// 					jsonResult, err := utils.MarshalJSONWithoutEscapeHTML(result.Results)
-// 					if err != nil {
-// 						return "", fmt.Errorf("result json encode error: %w", err)
-// 					}
-// 					return jsonResult, nil
-// 				},
-// 				readyCheck: func(ctx context.Context) (bool, error) {
-// 					identity, exists := model.GetIdentityFromContext(ctx)
-// 					if !exists {
-// 						return false, fmt.Errorf("no identity found in context")
-// 					}
-
-// 					return semanticClient.CheckReady(ctx, client.ReadyRequest{
-// 						ClientId:     identity.ClientID,
-// 						CodebasePath: identity.ProjectPath,
-// 					})
-// 				},
-// 			},
-// 			RelationSearchToolName: {
-// 				description: RelationSearchToolDesc,
-// 				execute: func(ctx context.Context, param string) (string, error) {
-// 					identity, exists := model.GetIdentityFromContext(ctx)
-// 					if !exists {
-// 						return "", fmt.Errorf("no identity found in context")
-// 					}
-
-// 					// 提取必需参数
-// 					filePath, err := ExactXmlParam(param, "filePath")
-// 					if err != nil {
-// 						return "", fmt.Errorf("param<%s> extract failed: %w", "filePath", err)
-// 					}
-
-// 					startLineStr, err := ExactXmlParam(param, "startLine")
-// 					if err != nil {
-// 						return "", fmt.Errorf("param<%s> extract failed: %w", "startLine", err)
-// 					}
-// 					startLine, err := strconv.Atoi(startLineStr)
-// 					if err != nil {
-// 						return "", fmt.Errorf("param<%s> parse failed: %w", "startLine", err)
-// 					}
-
-// 					startColumnStr, err := ExactXmlParam(param, "startColumn")
-// 					if err != nil {
-// 						return "", fmt.Errorf("param<%s> extract failed: %w", "startColumn", err)
-// 					}
-// 					startColumn, err := strconv.Atoi(startColumnStr)
-// 					if err != nil {
-// 						return "", fmt.Errorf("param<%s> parse failed: %w", "startColumn", err)
-// 					}
-
-// 					endLineStr, err := ExactXmlParam(param, "endLine")
-// 					if err != nil {
-// 						return "", fmt.Errorf("param<%s> extract failed: %w", "endLine", err)
-// 					}
-// 					endLine, err := strconv.Atoi(endLineStr)
-// 					if err != nil {
-// 						return "", fmt.Errorf("param<%s> parse failed: %w", "endLine", err)
-// 					}
-
-// 					endColumnStr, err := ExactXmlParam(param, "endColumn")
-// 					if err != nil {
-// 						return "", fmt.Errorf("param<%s> extract failed: %w", "endColumn", err)
-// 					}
-// 					endColumn, err := strconv.Atoi(endColumnStr)
-// 					if err != nil {
-// 						return "", fmt.Errorf("param<%s> parse failed: %w", "endColumn", err)
-// 					}
-
-// 					// 构建请求
-// 					req := client.RelationRequest{
-// 						ClientId:      identity.ClientID,
-// 						CodebasePath:  identity.ProjectPath,
-// 						FilePath:      filePath,
-// 						StartLine:     startLine,
-// 						StartColumn:   startColumn,
-// 						EndLine:       endLine,
-// 						EndColumn:     endColumn,
-// 						Authorization: identity.AuthToken,
-// 					}
-
-// 					// 提取可选参数
-// 					if symbolName, err := ExactXmlParam(param, "symbolName"); err == nil && symbolName != "" {
-// 						req.SymbolName = symbolName
-// 					}
-
-// 					if includeContentStr, err := ExactXmlParam(param, "includeContent"); err == nil && includeContentStr != "" {
-// 						if includeContent, err := strconv.Atoi(includeContentStr); err == nil {
-// 							req.IncludeContent = includeContent
-// 						}
-// 					}
-
-// 					if maxLayerStr, err := ExactXmlParam(param, "maxLayer"); err == nil && maxLayerStr != "" {
-// 						if maxLayer, err := strconv.Atoi(maxLayerStr); err == nil {
-// 							req.MaxLayer = maxLayer
-// 						}
-// 					}
-
-// 					// 执行关系搜索
-// 					result, err := relationClient.Search(ctx, req)
-// 					if err != nil {
-// 						return "", fmt.Errorf("relation client search error: %w", err)
-// 					}
-
-// 					// 序列化结果
-// 					jsonResult, err := utils.MarshalJSONWithoutEscapeHTML(result)
-// 					if err != nil {
-// 						return "", fmt.Errorf("result json encode error: %w", err)
-// 					}
-// 					return jsonResult, nil
-// 				},
-// 				readyCheck: nil,
-// 			},
-// 		},
-// 	}
-// 	return toolExecutor
-// }
-
 // NewXmlToolExecutor creates a new XmlToolExecutor instance
 func NewXmlToolExecutor(
 	c config.SemanticSearchConfig,
@@ -264,7 +120,7 @@ func NewXmlToolExecutor(
 	return &XmlToolExecutor{
 		tools: map[string]ToolFunc{
 			CodebaseSearchToolName: createCodebaseSearchTool(c, semanticClient),
-			RelationSearchToolName: createRelationSearchTool(relationClient),
+			// RelationSearchToolName: createRelationSearchTool(relationClient),
 		},
 	}
 }
@@ -315,7 +171,7 @@ func createCodebaseSearchTool(c config.SemanticSearchConfig, semanticClient clie
 // createRelationSearchTool creates the relation search tool function
 func createRelationSearchTool(relationClient client.RelationInterface) ToolFunc {
 	return ToolFunc{
-		description: RelationSearchToolDesc, // Defined in constants
+		description: RelationSearchToolDesc,
 		execute: func(ctx context.Context, param string) (string, error) {
 			identity, err := getIdentityFromContext(ctx)
 			if err != nil {
@@ -445,18 +301,6 @@ func (x *XmlToolExecutor) ExecuteTools(ctx context.Context, toolName string, con
 
 	return toolFunc.execute(ctx, param)
 }
-
-// // ExactXmlParam extracts the value of a specific XML parameter from the content
-// func ExactXmlParam(content string, paramName string) (string, error) {
-// 	start := strings.Index(content, "<"+paramName+">")
-// 	end := strings.Index(content, "</"+paramName+">")
-// 	if end == -1 {
-// 		return "", fmt.Errorf("can not extract param")
-// 	}
-
-// 	param := content[start+len(paramName)+2 : end]
-// 	return param, nil
-// }
 
 // CheckApiReady checks if the tool is ready to use
 func (x *XmlToolExecutor) CheckToolReady(ctx context.Context, toolName string) (bool, error) {

@@ -53,6 +53,9 @@ const (
 	ToolStatusFailed  ToolStatus = "failed"
 )
 
+// Redis key prefix for tool status
+const ToolStatusRedisKeyPrefix = "tool_status:"
+
 type ChatCompletionRequest struct {
 	Model         string        `json:"model"`
 	Messages      []Message     `json:"messages"`
