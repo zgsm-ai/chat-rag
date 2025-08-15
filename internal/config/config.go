@@ -16,6 +16,7 @@ type RedisConfig struct {
 type ToolConfig struct {
 	SemanticSearch SemanticSearchConfig
 	RelationSearch RelationSearchConfig
+	CodeDefinition CodeDefinitionConfig
 }
 
 type SemanticSearchConfig struct {
@@ -27,6 +28,11 @@ type SemanticSearchConfig struct {
 
 type RelationSearchConfig struct {
 	SearchEndpoint string
+}
+
+type CodeDefinitionConfig struct {
+	SearchEndpoint   string
+	ApiReadyEndpoint string
 }
 
 // Config holds all service configuration

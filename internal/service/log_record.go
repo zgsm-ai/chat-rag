@@ -465,6 +465,7 @@ func (ls *LoggerRecordService) classifyLog(logs *model.ChatLog) string {
 	validatedCategory := ls.validateCategory(category)
 	logger.Info("Log classification result",
 		zap.String("category", validatedCategory),
+		zap.String("model", ls.llmClient.GetModelName()),
 	)
 
 	return validatedCategory

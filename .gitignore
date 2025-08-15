@@ -13,6 +13,7 @@ go/pkg/
 .idea/
 .vscode/
 .roo/
+.cursor/
 *.swp
 *.swo
 

@@ -32,8 +32,9 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	// Initialize semantic client
 	semanticClient := client.NewSemanticClient(c.Tools.SemanticSearch)
 	relationClient := client.NewRelationClient(c.Tools.RelationSearch.SearchEndpoint)
-	functionManager := functions.NewToolManager("etc/functions.yaml")
-	xmlToolExecutor := functions.NewXmlToolExecutor(c.Tools.SemanticSearch, semanticClient, relationClient)
+	definitionClient := client.NewDefinitionClient(c.Tools.CodeDefinition)
+	// functionManager := functions.NewToolManager("etc/functions.yaml")
+	xmlToolExecutor := functions.NewXmlToolExecutor(c.Tools.SemanticSearch, semanticClient, relationClient, definitionClient)
 
 	// Initialize token counter
 	tokenCounter, err := tokenizer.NewTokenCounter()
@@ -60,14 +61,14 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	redisClient := client.NewRedisClient(c.Redis)
 
 	return &ServiceContext{
-		Config:           c,
-		SemanticClient:   semanticClient,
-		FunctionsManager: functionManager,
-		LoggerService:    loggerService,
-		MetricsService:   metricsService,
-		TokenCounter:     tokenCounter,
-		ToolExecutor:     xmlToolExecutor,
-		RedisClient:      redisClient,
+		Config:         c,
+		SemanticClient: semanticClient,
+		// FunctionsManager: functionManager,
+		LoggerService:  loggerService,
+		MetricsService: metricsService,
+		TokenCounter:   tokenCounter,
+		ToolExecutor:   xmlToolExecutor,
+		RedisClient:    redisClient,
 	}
 }
 

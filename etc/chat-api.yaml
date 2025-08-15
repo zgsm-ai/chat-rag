@@ -13,7 +13,7 @@ LogScanIntervalSec: 10
 # Model configuration
 SummaryModel: "deepseek-v3"
 SummaryModelTokenThreshold: 64_000
-ClassifyModel: "glm45-fp8"
+ClassifyModel: "gpt-oss-120b"
 
 # Split system prompt, used to compress system prompt
 SystemPromptSplitStr: "====\n\nRULES"
@@ -41,5 +41,8 @@ Tools:
   SemanticSearch:
     SearchEndpoint: "http://123.58.64.57:30080/codebase-embedder/api/v1/search/semantic"
     ApiReadyEndpoint: "http://123.58.64.57:30080/codebase-embedder/api/v1/embeddings/summary"
-    TopK: 10
+    TopK: 50
     ScoreThreshold: 0.7
+  CodeDefinition:
+    SearchEndpoint: "http://123.58.64.57:30080/codebase-indexer/api/v1/search/definition"
+    ApiReadyEndpoint: "http://123.58.64.57:30080/codebase-indexer/api/v1/index/summary"

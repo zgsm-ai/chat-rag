@@ -15,14 +15,14 @@ import (
 const (
 	CodebaseSearchToolName = "codebase_search"
 	CodebaseSearchToolDesc = `## codebase_search
-Description: 
-Find files most relevant to the search query.
+Description: Find files most relevant to the search query.
 This is a semantic search tool, so the query should ask for something semantically matching what is needed.
 If it makes sense to only search in a particular directory, please specify it in the path parameter.
 Unless there is a clear reason to use your own search query, please just reuse the user's exact query with their wording.
 Their exact wording/phrasing can often be helpful for the semantic search query. 
 Keeping the same exact question format can also be helpful.
 IMPORTANT: Queries MUST be in English. Translate non-English queries before searching.
+When you need to search for relevant codes, use this tool first.
 
 Parameters:
 - query: (required) The search query to find relevant code. You should reuse the user's exact query/most recent message with their wording unless there is a clear reason not to.
@@ -85,6 +85,46 @@ Example: Exploring all references to the GetUserById function
   <maxLayer>3</maxLayer>
 </relation_search>
 `
+
+	GetDefinitionToolName = "get_code_definition"
+	GetDefinitionToolDesc = `## get_code_definition
+Description:
+Retrieve the full definition implementation of a symbol (function, class, method, interface, etc.) from the codebase based on absolute file path and optional position.
+This tool is used when you know the file path and (optionally) the line range or code snippet, and you want the full implementation including code content and its exact position in the file.
+It supports partial matching using a snippet if line numbers are not provided.
+
+Parameters:
+- codebasePath: (required) Absolute path to the codebase root
+- filePath: (required) Full path to the file within the codebase. Must match the path separator style of the current operating system (e.g., Windows → \ , Linux/Mac → /).
+- startLine: (optional) Start line number of the definition (1-based).
+- endLine: (optional) End line number of the definition (1-based).
+- codeSnippet: (optional) A piece of code from the definition to help locate it.
+
+Usage:
+<get_code_definition>
+  <codebasePath>Absolute path to the codebase root</codebasePath>
+  <filePath>Full file path to the definition</filePath>
+  <startLine>Start line number (optional)</startLine>
+  <endLine>End line number (optional)</endLine>
+  <codeSnippet>Code snippet to help locate the definition (optional)</codeSnippet>
+</get_code_definition>
+
+Example: Get the implementation of NewTokenCounter(Windows)
+<get_code_definition>
+  <codebasePath>d:\workspace\project\</codebasePath>
+  <filePath>d:\workspace\project\internal\tokenizer\tokenizer.go</filePath>
+  <startLine>57</startLine>
+  <endLine>75</endLine>
+</get_code_definition>
+
+Example: Get the implementation of NewTokenCounter(Linux)
+<get_code_definition>
+  <codebasePath>/home/user/project</codebasePath>
+  <filePath>/home/user/project/internal/tokenizer/tokenizer.go</filePath>
+  <startLine>57</startLine>
+  <endLine>75</endLine>
+</get_code_definition>
+`
 )
 
 type ToolExecutor interface {
@@ -116,11 +156,13 @@ func NewXmlToolExecutor(
 	c config.SemanticSearchConfig,
 	semanticClient client.SemanticInterface,
 	relationClient client.RelationInterface,
+	definitionClient client.DefinitionInterface,
 ) *XmlToolExecutor {
 	return &XmlToolExecutor{
 		tools: map[string]ToolFunc{
 			CodebaseSearchToolName: createCodebaseSearchTool(c, semanticClient),
 			// RelationSearchToolName: createRelationSearchTool(relationClient),
+			GetDefinitionToolName: createGetDefinitionTool(definitionClient),
 		},
 	}
 }
@@ -159,6 +201,9 @@ func createCodebaseSearchTool(c config.SemanticSearchConfig, semanticClient clie
 			if err != nil {
 				return false, err
 			}
+			if identity.ClientID == "" {
+				return false, fmt.Errorf("get none clientId.")
+			}
 
 			return semanticClient.CheckReady(ctx, client.ReadyRequest{
 				ClientId:     identity.ClientID,
@@ -191,6 +236,74 @@ func createRelationSearchTool(relationClient client.RelationInterface) ToolFunc 
 			return utils.MarshalJSONWithoutEscapeHTML(result)
 		},
 	}
+}
+
+// createGetDefinitionTool creates the code definition search tool function
+func createGetDefinitionTool(definitionClient client.DefinitionInterface) ToolFunc {
+	return ToolFunc{
+		description: GetDefinitionToolDesc,
+		execute: func(ctx context.Context, param string) (string, error) {
+			identity, err := getIdentityFromContext(ctx)
+			if err != nil {
+				return "", err
+			}
+
+			req, err := buildDefinitionRequest(identity, param)
+			if err != nil {
+				return "", fmt.Errorf("failed to build request: %w", err)
+			}
+
+			result, err := definitionClient.Search(ctx, req)
+			if err != nil {
+				return "", fmt.Errorf("code definition search failed: %w", err)
+			}
+
+			return utils.MarshalJSONWithoutEscapeHTML(result)
+		},
+		readyCheck: func(ctx context.Context) (bool, error) {
+			identity, err := getIdentityFromContext(ctx)
+			if err != nil {
+				return false, err
+			}
+			if identity.ClientID == "" {
+				return false, fmt.Errorf("get none clientId.")
+			}
+
+			return definitionClient.CheckReady(ctx, client.ReadyRequest{
+				ClientId:     identity.ClientID,
+				CodebasePath: identity.ProjectPath,
+			})
+		},
+	}
+}
+
+// buildDefinitionRequest constructs a DefinitionRequest from XML parameters
+func buildDefinitionRequest(identity *model.Identity, param string) (client.DefinitionRequest, error) {
+	req := client.DefinitionRequest{
+		ClientId:      identity.ClientID,
+		CodebasePath:  identity.ProjectPath,
+		Authorization: identity.AuthToken,
+	}
+
+	var err error
+	if req.FilePath, err = extractXmlParam(param, "filePath"); err != nil {
+		return req, fmt.Errorf("filePath: %w", err)
+	}
+
+	// Optional parameters
+	if startLine, err := extractXmlIntParam(param, "startLine"); err == nil {
+		req.StartLine = &startLine
+	}
+
+	if endLine, err := extractXmlIntParam(param, "endLine"); err == nil {
+		req.EndLine = &endLine
+	}
+
+	if codeSnippet, err := extractXmlParam(param, "codeSnippet"); err == nil {
+		req.CodeSnippet = codeSnippet
+	}
+
+	return req, nil
 }
 
 // buildRelationRequest constructs a RelationRequest from XML parameters

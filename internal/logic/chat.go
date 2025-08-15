@@ -55,7 +55,7 @@ func NewChatCompletionLogic(
 	}
 }
 
-const MaxToolCallDepth = 5
+const MaxToolCallDepth = 10
 
 // processRequest handles common request processing logic
 func (l *ChatCompletionLogic) processRequest() (*model.ChatLog, *ds.ProcessedPrompt, error) {
@@ -179,7 +179,7 @@ func (l *ChatCompletionLogic) ChatCompletion() (resp *types.ChatCompletionRespon
 		}
 
 		chatLog.AddError(types.ErrApiError, err)
-		return nil, fmt.Errorf("failed to generate completion: %w", err)
+		return nil, err
 	}
 
 	chatLog.MainModelLatency = time.Since(modelStart).Milliseconds()

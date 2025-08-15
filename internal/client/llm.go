@@ -93,6 +93,44 @@ func (c *LLMClient) GenerateContent(ctx context.Context, systemPrompt string, us
 	return content, nil
 }
 
+// handleAPIError handles common API error processing for both streaming and non-streaming responses
+func (c *LLMClient) handleAPIError(resp *http.Response, logMessage string) error {
+	body, _ := io.ReadAll(resp.Body)
+	bodyStr := string(body)
+	logger.Warn(logMessage,
+		zap.Int("status code", resp.StatusCode),
+		zap.String("body", bodyStr),
+	)
+
+	// parse err
+	var apiError types.APIError
+	if err := json.Unmarshal([]byte(bodyStr), &apiError); err == nil {
+		apiError.StatusCode = resp.StatusCode
+		if strings.Contains(apiError.Code, string(types.ErrQuotaCheck)) {
+			apiError.Type = string(types.ErrQuotaCheck)
+			return &apiError
+		}
+
+		if strings.Contains(apiError.Code, string(types.ErrQuotaManager)) {
+			apiError.Type = string(types.ErrQuotaManager)
+			return &apiError
+		}
+
+		if strings.Contains(apiError.Code, string(types.ErrAiGateway)) {
+			apiError.Type = string(types.ErrAiGateway)
+			return &apiError
+		}
+	}
+
+	if bodyStr == "" {
+		bodyStr = "None"
+	}
+	message := fmt.Sprintf("%s\n\n[Error]:\nCode: %d\nMessage: %s",
+		types.ErrMsgModelServiceUnavailable, resp.StatusCode, bodyStr)
+
+	return types.NewHTTPStatusError(resp.StatusCode, message)
+}
+
 // ChatLLMWithMessagesStreamRaw directly calls the API using HTTP client to get raw streaming response
 func (c *LLMClient) ChatLLMWithMessagesStreamRaw(ctx context.Context, messages []types.Message, callback func(string) error) error {
 	if callback == nil {
@@ -145,40 +183,7 @@ func (c *LLMClient) ChatLLMWithMessagesStreamRaw(ctx context.Context, messages [
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		bodyStr := string(body)
-		logger.Warn("LLMClient get straming error response",
-			zap.Int("status code", resp.StatusCode),
-			zap.String("body", bodyStr),
-		)
-
-		// parse err
-		var apiError types.APIError
-		if err := json.Unmarshal([]byte(bodyStr), &apiError); err == nil {
-			apiError.StatusCode = resp.StatusCode
-			if strings.Contains(apiError.Code, string(types.ErrQuotaCheck)) {
-				apiError.Type = string(types.ErrQuotaCheck)
-				return &apiError
-			}
-
-			if strings.Contains(apiError.Code, string(types.ErrQuotaManager)) {
-				apiError.Type = string(types.ErrQuotaManager)
-				return &apiError
-			}
-
-			if strings.Contains(apiError.Code, string(types.ErrAiGateway)) {
-				apiError.Type = string(types.ErrAiGateway)
-				return &apiError
-			}
-		}
-
-		if bodyStr == "" {
-			bodyStr = "None"
-		}
-		message := fmt.Sprintf("%s\n\n[Error]:\nCode: %d\nMessage: %s",
-			types.ErrMsgModelServiceUnavailable, resp.StatusCode, bodyStr)
-
-		return types.NewHTTPStatusError(resp.StatusCode, message)
+		return c.handleAPIError(resp, "LLMClient get straming error response")
 	}
 
 	// Read streaming response line by line
@@ -248,13 +253,8 @@ func (c *LLMClient) ChatLLMWithMessagesRaw(ctx context.Context, messages []types
 
 	// Check response status code
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		bodyStr := string(body)
-		logger.Warn("LLMClient get error response",
-			zap.Int("status code", resp.StatusCode),
-			zap.String("body", bodyStr),
-		)
-		return nil_resp, types.NewHTTPStatusError(resp.StatusCode, bodyStr)
+		err := c.handleAPIError(resp, "LLMClient get error response")
+		return nil_resp, err
 	}
 
 	// Read response body
