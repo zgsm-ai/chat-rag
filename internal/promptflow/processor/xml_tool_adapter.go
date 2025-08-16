@@ -74,8 +74,8 @@ func (x *XmlToolAdapter) insertToolsIntoSystemContent(content string) (string, e
 	for _, toolName := range x.toolExecutor.GetAllTools() {
 		ready, err := x.toolExecutor.CheckToolReady(x.ctx, toolName)
 		if !ready {
-			logger.WarnC(x.ctx, "Tool is not ready, skip adapt", zap.String("method", method),
-				zap.String("tool", toolName), zap.Error(err))
+			logger.WarnC(x.ctx, "Tool is not ready, skip adapt", zap.String("tool", toolName),
+				zap.String("method", method), zap.Error(err))
 			continue
 		}
 

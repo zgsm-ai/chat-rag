@@ -13,7 +13,7 @@ import (
 // SemanticInterface defines the interface for semantic search client
 type SemanticInterface interface {
 	// Search performs semantic search and returns relevant context
-	Search(ctx context.Context, req SemanticRequest) (*SemanticData, error)
+	Search(ctx context.Context, req SemanticRequest) (string, error)
 	// CheckReady checks if the semantic search service is available
 	CheckReady(ctx context.Context, req ReadyRequest) (bool, error)
 }
@@ -30,8 +30,9 @@ type SemanticRequest struct {
 
 // ReadyRequest represents the request structure for checking service availability
 type ReadyRequest struct {
-	ClientId     string `json:"clientId"`
-	CodebasePath string `json:"codebasePath"`
+	ClientId      string `json:"clientId"`
+	CodebasePath  string `json:"codebasePath"`
+	Authorization string `json:"authorization"`
 }
 
 // SemanticResponseWrapper represents the API standard response wrapper for semantic search
@@ -65,7 +66,7 @@ func NewSemanticClient(semanticConfig config.SemanticSearchConfig) SemanticInter
 		Timeout: 5 * time.Second,
 	}
 	readyConfig := HTTPClientConfig{
-		Timeout: 1 * time.Second,
+		Timeout: 3 * time.Second,
 	}
 	return &SemanticClient{
 		searchClient: NewHTTPClient(semanticConfig.SearchEndpoint, searchConfig),
@@ -74,7 +75,7 @@ func NewSemanticClient(semanticConfig config.SemanticSearchConfig) SemanticInter
 }
 
 // Search performs semantic search and returns relevant context
-func (c *SemanticClient) Search(ctx context.Context, req SemanticRequest) (*SemanticData, error) {
+func (c *SemanticClient) Search(ctx context.Context, req SemanticRequest) (string, error) {
 	// Prepare HTTP request
 	httpReq := Request{
 		Method:        http.MethodPost,
@@ -82,24 +83,41 @@ func (c *SemanticClient) Search(ctx context.Context, req SemanticRequest) (*Sema
 		Body:          req,
 	}
 
-	// Execute request using typed method
-	wrapper, err := DoTypedJSONRequest[*SemanticData](c.searchClient, ctx, httpReq)
+	// Execute request and get raw response
+	resp, err := c.searchClient.DoRequest(ctx, httpReq)
 	if err != nil {
-		return nil, err
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	// Check response status
+	if resp.StatusCode != http.StatusOK {
+		body, err := io.ReadAll(resp.Body)
+		respBody := ""
+		if err == nil {
+			respBody = string(body)
+		}
+		return "", fmt.Errorf(
+			"request failed! status: %d, response:%s, url: %s",
+			resp.StatusCode, respBody, resp.Request.URL.String(),
+		)
 	}
 
-	if wrapper.Data == nil {
-		return nil, fmt.Errorf("empty response data")
+	// Read response body as string
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	return wrapper.Data, nil
+	return string(body), nil
 }
 
 // CheckReady checks if the semantic search service is available
 func (c *SemanticClient) CheckReady(ctx context.Context, req ReadyRequest) (bool, error) {
 	// Prepare HTTP request
 	httpReq := Request{
-		Method: http.MethodGet,
+		Method:        http.MethodGet,
+		Authorization: req.Authorization,
 		QueryParams: map[string]string{
 			"clientId":     req.ClientId,
 			"codebasePath": req.CodebasePath,

@@ -90,26 +90,29 @@ Example: Exploring all references to the GetUserById function
 	GetDefinitionToolDesc = `## get_code_definition
 Description:
 Retrieve the full definition implementation of a symbol (function, class, method, interface, etc.) from the codebase based on absolute file path and optional position.
-This tool is used when you know the file path and (optionally) the line range or code snippet, and you want the full implementation including code content and its exact position in the file.
+This tool is used when you know the file path and the line range , and you want the full implementation including code content and its exact position in the file.
 It supports partial matching using a snippet if line numbers are not provided.
+When you need to search for definition of related codes, use this tool first.
+Important Rules on Path Separators:
+- On Windows: File paths MUST use backslashes ('\') as separators (e.g., "C:\project\file.go")
+- On Linux/Mac: File paths MUST use forward slashes ('/') as separators (e.g., "/home/user/project/file.go")
+- The filePath parameter must exactly match the operating system's native path separator style
 
 Parameters:
 - codebasePath: (required) Absolute path to the codebase root
-- filePath: (required) Full path to the file within the codebase. Must match the path separator style of the current operating system (e.g., Windows → \ , Linux/Mac → /).
-- startLine: (optional) Start line number of the definition (1-based).
-- endLine: (optional) End line number of the definition (1-based).
-- codeSnippet: (optional) A piece of code from the definition to help locate it.
+- filePath: (required) Full path to the file within the codebase. Must match the path separator style of the current operating system.
+- startLine: (required) Start line number of the definition (1-based).
+- endLine: (required) End line number of the definition (1-based).
 
 Usage:
 <get_code_definition>
   <codebasePath>Absolute path to the codebase root</codebasePath>
-  <filePath>Full file path to the definition</filePath>
-  <startLine>Start line number (optional)</startLine>
-  <endLine>End line number (optional)</endLine>
-  <codeSnippet>Code snippet to help locate the definition (optional)</codeSnippet>
+  <filePath>Full file path to the definition (with correct OS path separators)</filePath>
+  <startLine>Start line number (required)</startLine>
+  <endLine>End line number (required)</endLine>
 </get_code_definition>
 
-Example: Get the implementation of NewTokenCounter(Windows)
+Example: Get the implementation of NewTokenCounter(Windows) - NOTE BACKSLASHES
 <get_code_definition>
   <codebasePath>d:\workspace\project\</codebasePath>
   <filePath>d:\workspace\project\internal\tokenizer\tokenizer.go</filePath>
@@ -117,7 +120,7 @@ Example: Get the implementation of NewTokenCounter(Windows)
   <endLine>75</endLine>
 </get_code_definition>
 
-Example: Get the implementation of NewTokenCounter(Linux)
+Example: Get the implementation of NewTokenCounter(Linux) - NOTE FORWARD SLASHES
 <get_code_definition>
   <codebasePath>/home/user/project</codebasePath>
   <filePath>/home/user/project/internal/tokenizer/tokenizer.go</filePath>
@@ -194,7 +197,7 @@ func createCodebaseSearchTool(c config.SemanticSearchConfig, semanticClient clie
 				return "", fmt.Errorf("semantic search failed: %w", err)
 			}
 
-			return utils.MarshalJSONWithoutEscapeHTML(result.Results)
+			return result, nil
 		},
 		readyCheck: func(ctx context.Context) (bool, error) {
 			identity, err := getIdentityFromContext(ctx)
@@ -202,12 +205,53 @@ func createCodebaseSearchTool(c config.SemanticSearchConfig, semanticClient clie
 				return false, err
 			}
 			if identity.ClientID == "" {
-				return false, fmt.Errorf("get none clientId.")
+				return false, fmt.Errorf("get none clientId")
 			}
 
-			return semanticClient.CheckReady(ctx, client.ReadyRequest{
-				ClientId:     identity.ClientID,
-				CodebasePath: identity.ProjectPath,
+			return semanticClient.CheckReady(context.Background(), client.ReadyRequest{
+				ClientId:      identity.ClientID,
+				CodebasePath:  identity.ProjectPath,
+				Authorization: identity.AuthToken,
+			})
+		},
+	}
+}
+
+// createGetDefinitionTool creates the code definition search tool function
+func createGetDefinitionTool(definitionClient client.DefinitionInterface) ToolFunc {
+	return ToolFunc{
+		description: GetDefinitionToolDesc,
+		execute: func(ctx context.Context, param string) (string, error) {
+			identity, err := getIdentityFromContext(ctx)
+			if err != nil {
+				return "", err
+			}
+
+			req, err := buildDefinitionRequest(identity, param)
+			if err != nil {
+				return "", fmt.Errorf("failed to build request: %w", err)
+			}
+
+			result, err := definitionClient.Search(ctx, req)
+			if err != nil {
+				return "", fmt.Errorf("code definition search failed: %w", err)
+			}
+
+			return result, nil
+		},
+		readyCheck: func(ctx context.Context) (bool, error) {
+			identity, err := getIdentityFromContext(ctx)
+			if err != nil {
+				return false, err
+			}
+			if identity.ClientID == "" {
+				return false, fmt.Errorf("get none clientId")
+			}
+
+			return definitionClient.CheckReady(context.Background(), client.ReadyRequest{
+				ClientId:      identity.ClientID,
+				CodebasePath:  identity.ProjectPath,
+				Authorization: identity.AuthToken,
 			})
 		},
 	}
@@ -234,45 +278,6 @@ func createRelationSearchTool(relationClient client.RelationInterface) ToolFunc 
 			}
 
 			return utils.MarshalJSONWithoutEscapeHTML(result)
-		},
-	}
-}
-
-// createGetDefinitionTool creates the code definition search tool function
-func createGetDefinitionTool(definitionClient client.DefinitionInterface) ToolFunc {
-	return ToolFunc{
-		description: GetDefinitionToolDesc,
-		execute: func(ctx context.Context, param string) (string, error) {
-			identity, err := getIdentityFromContext(ctx)
-			if err != nil {
-				return "", err
-			}
-
-			req, err := buildDefinitionRequest(identity, param)
-			if err != nil {
-				return "", fmt.Errorf("failed to build request: %w", err)
-			}
-
-			result, err := definitionClient.Search(ctx, req)
-			if err != nil {
-				return "", fmt.Errorf("code definition search failed: %w", err)
-			}
-
-			return utils.MarshalJSONWithoutEscapeHTML(result)
-		},
-		readyCheck: func(ctx context.Context) (bool, error) {
-			identity, err := getIdentityFromContext(ctx)
-			if err != nil {
-				return false, err
-			}
-			if identity.ClientID == "" {
-				return false, fmt.Errorf("get none clientId.")
-			}
-
-			return definitionClient.CheckReady(ctx, client.ReadyRequest{
-				ClientId:     identity.ClientID,
-				CodebasePath: identity.ProjectPath,
-			})
 		},
 	}
 }
@@ -375,7 +380,12 @@ func extractXmlParam(content, paramName string) (string, error) {
 		return "", fmt.Errorf("end tag not found")
 	}
 
-	return content[start+len(startTag) : end], nil
+	paramValue := content[start+len(startTag) : end]
+
+	// Check and replace double backslashes with single backslashes to conform to Windows path format
+	paramValue = strings.ReplaceAll(paramValue, "\\\\", "\\")
+
+	return paramValue, nil
 }
 
 func extractXmlIntParam(content, paramName string) (int, error) {

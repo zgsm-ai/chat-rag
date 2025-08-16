@@ -158,7 +158,8 @@ func DoTypedJSONRequest[T any](c *HTTPClient, ctx context.Context, req Request) 
 	// Parse response
 	var wrapper TypedResponseWrapper[T]
 	if err := json.NewDecoder(resp.Body).Decode(&wrapper); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+		body, err := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to decode response: %w\n, response: %s", err, body)
 	}
 
 	return &wrapper, nil

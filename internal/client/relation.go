@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -11,7 +12,7 @@ import (
 // RelationInterface defines the interface for relation search client
 type RelationInterface interface {
 	// Search performs relation search and returns relation data
-	Search(ctx context.Context, req RelationRequest) (*RelationData, error)
+	Search(ctx context.Context, req RelationRequest) (string, error)
 }
 
 // RelationRequest represents the request structure for relation search
@@ -74,7 +75,7 @@ func NewRelationClient(endpoint string) RelationInterface {
 }
 
 // Search performs relation search and returns relation data
-func (c *RelationClient) Search(ctx context.Context, req RelationRequest) (*RelationData, error) {
+func (c *RelationClient) Search(ctx context.Context, req RelationRequest) (string, error) {
 	// Build query parameters
 	queryParams := map[string]string{
 		"clientId":     req.ClientId,
@@ -105,15 +106,31 @@ func (c *RelationClient) Search(ctx context.Context, req RelationRequest) (*Rela
 		Authorization: req.Authorization,
 	}
 
-	// Execute request using typed method
-	wrapper, err := DoTypedJSONRequest[*RelationData](c.httpClient, ctx, httpReq)
+	// Execute request and get raw response
+	resp, err := c.httpClient.DoRequest(ctx, httpReq)
 	if err != nil {
-		return nil, err
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	// Check response status
+	if resp.StatusCode != http.StatusOK {
+		body, err := io.ReadAll(resp.Body)
+		respBody := ""
+		if err == nil {
+			respBody = string(body)
+		}
+		return "", fmt.Errorf(
+			"request failed! status: %d, response:%s, url: %s",
+			resp.StatusCode, respBody, resp.Request.URL.String(),
+		)
 	}
 
-	if wrapper.Data == nil {
-		return nil, fmt.Errorf("empty response data")
+	// Read response body as string
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	return wrapper.Data, nil
+	return string(body), nil
 }
