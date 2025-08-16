@@ -2,8 +2,6 @@ package client
 
 import (
 	"context"
-	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -13,6 +11,8 @@ import (
 type RelationInterface interface {
 	// Search performs relation search and returns relation data
 	Search(ctx context.Context, req RelationRequest) (string, error)
+	// CheckReady checks if the relation search service is available
+	CheckReady(ctx context.Context, req ReadyRequest) (bool, error)
 }
 
 // RelationRequest represents the request structure for relation search
@@ -61,22 +61,44 @@ type RelationNode struct {
 
 // RelationClient handles communication with the relation search service
 type RelationClient struct {
-	httpClient *HTTPClient
+	*BaseClient[RelationRequest, string]
 }
 
 // NewRelationClient creates a new relation client instance
 func NewRelationClient(endpoint string) RelationInterface {
-	config := HTTPClientConfig{
-		Timeout: 3 * time.Second,
+	config := BaseClientConfig{
+		SearchEndpoint: endpoint,
+		ReadyEndpoint:  endpoint + "/ready",
+		SearchTimeout:  3 * time.Second,
+		ReadyTimeout:   3 * time.Second,
 	}
+
+	baseClient := NewBaseClient(config,
+		&RelationRequestBuilder{},
+		&RelationRequestBuilder{},
+		&StringResponseHandler{},
+		&StringResponseHandler{},
+	)
+
 	return &RelationClient{
-		httpClient: NewHTTPClient(endpoint, config),
+		BaseClient: baseClient,
 	}
 }
 
 // Search performs relation search and returns relation data
 func (c *RelationClient) Search(ctx context.Context, req RelationRequest) (string, error) {
-	// Build query parameters
+	return c.BaseClient.Search(ctx, req)
+}
+
+// CheckReady checks if the relation search service is available
+func (c *RelationClient) CheckReady(ctx context.Context, req ReadyRequest) (bool, error) {
+	return c.BaseClient.CheckReady(ctx, req)
+}
+
+// RelationRequestBuilder Relation请求构建策略
+type RelationRequestBuilder struct{}
+
+func (b *RelationRequestBuilder) BuildRequest(req RelationRequest) Request {
 	queryParams := map[string]string{
 		"clientId":     req.ClientId,
 		"codebasePath": req.CodebasePath,
@@ -90,47 +112,27 @@ func (c *RelationClient) Search(ctx context.Context, req RelationRequest) (strin
 	if req.SymbolName != "" {
 		queryParams["symbolName"] = req.SymbolName
 	}
-
 	if req.IncludeContent != 0 {
 		queryParams["includeContent"] = strconv.Itoa(req.IncludeContent)
 	}
-
 	if req.MaxLayer != 0 {
 		queryParams["maxLayer"] = strconv.Itoa(req.MaxLayer)
 	}
 
-	// Prepare HTTP request
-	httpReq := Request{
+	return Request{
 		Method:        http.MethodGet,
 		QueryParams:   queryParams,
 		Authorization: req.Authorization,
 	}
+}
 
-	// Execute request and get raw response
-	resp, err := c.httpClient.DoRequest(ctx, httpReq)
-	if err != nil {
-		return "", err
+func (b *RelationRequestBuilder) BuildReadyRequest(req ReadyRequest) Request {
+	return Request{
+		Method: http.MethodGet,
+		QueryParams: map[string]string{
+			"clientId":     req.ClientId,
+			"codebasePath": req.CodebasePath,
+		},
+		Authorization: req.Authorization,
 	}
-	defer resp.Body.Close()
-
-	// Check response status
-	if resp.StatusCode != http.StatusOK {
-		body, err := io.ReadAll(resp.Body)
-		respBody := ""
-		if err == nil {
-			respBody = string(body)
-		}
-		return "", fmt.Errorf(
-			"request failed! status: %d, response:%s, url: %s",
-			resp.StatusCode, respBody, resp.Request.URL.String(),
-		)
-	}
-
-	// Read response body as string
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	return string(body), nil
 }

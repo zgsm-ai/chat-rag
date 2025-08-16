@@ -3,7 +3,6 @@ package client
 import (
 	"context"
 	"fmt"
-	"io"
 	"net/http"
 	"time"
 
@@ -60,108 +59,74 @@ type DefinitionPosition struct {
 
 // DefinitionClient handles communication with the code definition search service
 type DefinitionClient struct {
-	searchClient *HTTPClient
-	readyClient  *HTTPClient
+	*BaseClient[DefinitionRequest, string]
 }
 
 // NewDefinitionClient creates a new definition client instance
 func NewDefinitionClient(definitionConfig config.CodeDefinitionConfig) DefinitionInterface {
-	searchConfig := HTTPClientConfig{
-		Timeout: 5 * time.Second,
+	config := BaseClientConfig{
+		SearchEndpoint: definitionConfig.SearchEndpoint,
+		ReadyEndpoint:  definitionConfig.ApiReadyEndpoint,
+		SearchTimeout:  5 * time.Second,
+		ReadyTimeout:   3 * time.Second,
 	}
-	readyConfig := HTTPClientConfig{
-		Timeout: 3 * time.Second,
-	}
+
+	baseClient := NewBaseClient(config,
+		&DefinitionRequestBuilder{},
+		&DefinitionRequestBuilder{},
+		&StringResponseHandler{},
+		&StringResponseHandler{},
+	)
+
 	return &DefinitionClient{
-		searchClient: NewHTTPClient(definitionConfig.SearchEndpoint, searchConfig),
-		readyClient:  NewHTTPClient(definitionConfig.ApiReadyEndpoint, readyConfig),
+		BaseClient: baseClient,
 	}
 }
 
 // Search performs code definition search and returns definition details
 func (c *DefinitionClient) Search(ctx context.Context, req DefinitionRequest) (string, error) {
-	// Prepare HTTP request
-	httpReq := Request{
-		Method:        http.MethodGet,
-		Authorization: req.Authorization,
-		QueryParams: map[string]string{
-			"clientId":     req.ClientId,
-			"codebasePath": req.CodebasePath,
-			"filePath":     req.FilePath,
-		},
-	}
-
-	// Add optional parameters if provided
-	if req.StartLine != nil {
-		httpReq.QueryParams["startLine"] = fmt.Sprintf("%d", *req.StartLine)
-	}
-
-	if req.EndLine != nil {
-		httpReq.QueryParams["endLine"] = fmt.Sprintf("%d", *req.EndLine)
-	}
-
-	if req.CodeSnippet != "" {
-		httpReq.QueryParams["codeSnippet"] = req.CodeSnippet
-	}
-
-	// Execute request and get raw response
-	resp, err := c.searchClient.DoRequest(ctx, httpReq)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	// Check response status
-	if resp.StatusCode != http.StatusOK {
-		body, err := io.ReadAll(resp.Body)
-		respBody := ""
-		if err == nil {
-			respBody = string(body)
-		}
-		return "", fmt.Errorf(
-			"request failed! status: %d, response:%s, url: %s",
-			resp.StatusCode, respBody, resp.Request.URL.String(),
-		)
-	}
-
-	// Read response body as string
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	return string(body), nil
+	return c.BaseClient.Search(ctx, req)
 }
 
 // CheckReady checks if the code definition search service is available
 func (c *DefinitionClient) CheckReady(ctx context.Context, req ReadyRequest) (bool, error) {
-	// Prepare HTTP request
-	httpReq := Request{
+	return c.BaseClient.CheckReady(ctx, req)
+}
+
+// DefinitionRequestBuilder Definition请求构建策略
+type DefinitionRequestBuilder struct{}
+
+func (b *DefinitionRequestBuilder) BuildRequest(req DefinitionRequest) Request {
+	queryParams := map[string]string{
+		"clientId":     req.ClientId,
+		"codebasePath": req.CodebasePath,
+		"filePath":     req.FilePath,
+	}
+
+	if req.StartLine != nil {
+		queryParams["startLine"] = fmt.Sprintf("%d", *req.StartLine)
+	}
+	if req.EndLine != nil {
+		queryParams["endLine"] = fmt.Sprintf("%d", *req.EndLine)
+	}
+	if req.CodeSnippet != "" {
+		queryParams["codeSnippet"] = req.CodeSnippet
+	}
+
+	return Request{
 		Method:        http.MethodGet,
+		QueryParams:   queryParams,
 		Authorization: req.Authorization,
+	}
+}
+
+func (b *DefinitionRequestBuilder) BuildReadyRequest(req ReadyRequest) Request {
+	return Request{
+		Method: http.MethodGet,
 		QueryParams: map[string]string{
 			"clientId":     req.ClientId,
 			"codebasePath": req.CodebasePath,
 		},
+		Authorization: req.Authorization,
 	}
-
-	// Execute request
-	resp, err := c.readyClient.DoRequest(ctx, httpReq)
-	if err != nil {
-		return false, err
-	}
-	defer resp.Body.Close()
-
-	// Check response status
-	if resp.StatusCode == http.StatusOK {
-		return true, nil
-	}
-
-	// Read response body for error information
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return false, fmt.Errorf("failed to read response body: %v", err)
-	}
-
-	return false, fmt.Errorf("code: %d, body: %s", resp.StatusCode, body)
 }

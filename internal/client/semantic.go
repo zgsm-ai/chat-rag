@@ -2,8 +2,6 @@ package client
 
 import (
 	"context"
-	"fmt"
-	"io"
 	"net/http"
 	"time"
 
@@ -25,7 +23,7 @@ type SemanticRequest struct {
 	Query         string  `json:"query"`
 	TopK          int     `json:"topK"`
 	Authorization string  `json:"authorization"`
-	Score         float64 `json:"score"`
+	Score         float64 `json:"scoreThreshold"`
 }
 
 // ReadyRequest represents the request structure for checking service availability
@@ -56,91 +54,58 @@ type SemanticResult struct {
 
 // SemanticClient handles communication with the semantic search service
 type SemanticClient struct {
-	searchClient *HTTPClient
-	readyClient  *HTTPClient
+	*BaseClient[SemanticRequest, string]
 }
 
 // NewSemanticClient creates a new semantic client instance
 func NewSemanticClient(semanticConfig config.SemanticSearchConfig) SemanticInterface {
-	searchConfig := HTTPClientConfig{
-		Timeout: 5 * time.Second,
+	config := BaseClientConfig{
+		SearchEndpoint: semanticConfig.SearchEndpoint,
+		ReadyEndpoint:  semanticConfig.ApiReadyEndpoint,
+		SearchTimeout:  5 * time.Second,
+		ReadyTimeout:   3 * time.Second,
 	}
-	readyConfig := HTTPClientConfig{
-		Timeout: 3 * time.Second,
-	}
+
+	baseClient := NewBaseClient(config,
+		&SemanticRequestBuilder{},
+		&SemanticRequestBuilder{},
+		&StringResponseHandler{},
+		&StringResponseHandler{},
+	)
+
 	return &SemanticClient{
-		searchClient: NewHTTPClient(semanticConfig.SearchEndpoint, searchConfig),
-		readyClient:  NewHTTPClient(semanticConfig.ApiReadyEndpoint, readyConfig),
+		BaseClient: baseClient,
 	}
 }
 
 // Search performs semantic search and returns relevant context
 func (c *SemanticClient) Search(ctx context.Context, req SemanticRequest) (string, error) {
-	// Prepare HTTP request
-	httpReq := Request{
-		Method:        http.MethodPost,
-		Authorization: req.Authorization,
-		Body:          req,
-	}
-
-	// Execute request and get raw response
-	resp, err := c.searchClient.DoRequest(ctx, httpReq)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	// Check response status
-	if resp.StatusCode != http.StatusOK {
-		body, err := io.ReadAll(resp.Body)
-		respBody := ""
-		if err == nil {
-			respBody = string(body)
-		}
-		return "", fmt.Errorf(
-			"request failed! status: %d, response:%s, url: %s",
-			resp.StatusCode, respBody, resp.Request.URL.String(),
-		)
-	}
-
-	// Read response body as string
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	return string(body), nil
+	return c.BaseClient.Search(ctx, req)
 }
 
 // CheckReady checks if the semantic search service is available
 func (c *SemanticClient) CheckReady(ctx context.Context, req ReadyRequest) (bool, error) {
-	// Prepare HTTP request
-	httpReq := Request{
-		Method:        http.MethodGet,
+	return c.BaseClient.CheckReady(ctx, req)
+}
+
+// SemanticRequestBuilder Semantic请求构建策略
+type SemanticRequestBuilder struct{}
+
+func (b *SemanticRequestBuilder) BuildRequest(req SemanticRequest) Request {
+	return Request{
+		Method:        http.MethodPost,
 		Authorization: req.Authorization,
+		Body:          req,
+	}
+}
+
+func (b *SemanticRequestBuilder) BuildReadyRequest(req ReadyRequest) Request {
+	return Request{
+		Method: http.MethodGet,
 		QueryParams: map[string]string{
 			"clientId":     req.ClientId,
 			"codebasePath": req.CodebasePath,
 		},
+		Authorization: req.Authorization,
 	}
-
-	// Execute request
-	resp, err := c.readyClient.DoRequest(ctx, httpReq)
-	if err != nil {
-		return false, err
-	}
-	defer resp.Body.Close()
-
-	// Check response status
-	if resp.StatusCode == http.StatusOK {
-		return true, nil
-	}
-
-	// Read response body for error information
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return false, fmt.Errorf("failed to read response body: %v", err)
-	}
-
-	return false, fmt.Errorf("code: %d, body: %s", resp.StatusCode, body)
 }

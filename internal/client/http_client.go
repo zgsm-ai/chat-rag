@@ -46,13 +46,6 @@ type Request struct {
 	Authorization string            `json:"-"`
 }
 
-// TypedResponseWrapper represents a typed API response wrapper
-type TypedResponseWrapper[T any] struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
-	Data    T      `json:"data"`
-}
-
 // DoRequest executes an HTTP request and returns the response
 func (c *HTTPClient) DoRequest(ctx context.Context, req Request) (*http.Response, error) {
 	// Create URL
@@ -131,48 +124,6 @@ func (c *HTTPClient) DoRequest(ctx context.Context, req Request) (*http.Response
 	}
 
 	return resp, nil
-}
-
-// DoTypedJSONRequest executes an HTTP request and unmarshals the JSON response into a typed wrapper
-func DoTypedJSONRequest[T any](c *HTTPClient, ctx context.Context, req Request) (*TypedResponseWrapper[T], error) {
-	// Execute request
-	resp, err := c.DoRequest(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	// Check response status
-	if resp.StatusCode != http.StatusOK {
-		body, err := io.ReadAll(resp.Body)
-		respBody := ""
-		if err == nil {
-			respBody = string(body)
-		}
-		return nil, fmt.Errorf(
-			"request failed! status: %d, response:%s, url: %s",
-			resp.StatusCode, respBody, resp.Request.URL.String(),
-		)
-	}
-
-	// Parse response
-	var wrapper TypedResponseWrapper[T]
-	if err := json.NewDecoder(resp.Body).Decode(&wrapper); err != nil {
-		body, err := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("failed to decode response: %w\n, response: %s", err, body)
-	}
-
-	return &wrapper, nil
-}
-
-// DoTypedRequest executes an HTTP request and returns the typed data directly
-func DoTypedRequest[T any](c *HTTPClient, ctx context.Context, req Request) (*T, error) {
-	wrapper, err := DoTypedJSONRequest[T](c, ctx, req)
-	if err != nil {
-		return nil, err
-	}
-
-	return &wrapper.Data, nil
 }
 
 // structToMap converts a struct to a map[string]interface{}

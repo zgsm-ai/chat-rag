@@ -372,12 +372,6 @@ func (l *ChatCompletionLogic) handleToolExecution(
 
 	l.updateToolStatus(state.toolName, types.ToolStatusRunning)
 
-	// // DEBUG
-	// if err := l.sendStreamContent(flusher, state.response,
-	// 	fmt.Sprintf("# TOOL DEBUG\n[%s] 开始调用....\n\n## 输入:\n%s\n\n", state.toolName, toolContent)); err != nil {
-	// 	return err
-	// }
-
 	// execute and record tool call latency
 	toolStart := time.Now()
 	result, err := l.toolExecutor.ExecuteTools(l.ctx, state.toolName, toolContent)
@@ -392,13 +386,14 @@ func (l *ChatCompletionLogic) handleToolExecution(
 		result = fmt.Sprintf("%s execute failed, err: %v", state.toolName, err)
 		toolCall.Error = err.Error()
 	} else {
-		logger.InfoC(l.ctx, "tool execute succeed", zap.String("tool", state.toolName))
+		resultStr := fmt.Sprintf("%v", result)
+		if len(resultStr) > 400 {
+			resultStr = resultStr[:400] + "..."
+		}
+		logger.InfoC(l.ctx, "tool execute succeed", zap.String("tool", state.toolName),
+			zap.String("result", resultStr))
 	}
 	toolCall.ResultStatus = string(status)
-	// if err := l.sendStreamContent(flusher, state.response,
-	// 	fmt.Sprintf("## [%s] 执行完成\n\n## 结果：\n%s\n# END\n\n--- \n", state.toolName, result)); err != nil {
-	// 	return err
-	// }
 
 	messages = append(messages,
 		types.Message{

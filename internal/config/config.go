@@ -27,7 +27,8 @@ type SemanticSearchConfig struct {
 }
 
 type RelationSearchConfig struct {
-	SearchEndpoint string
+	SearchEndpoint   string
+	ApiReadyEndpoint string
 }
 
 type CodeDefinitionConfig struct {
