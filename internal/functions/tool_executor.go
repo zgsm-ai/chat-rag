@@ -93,10 +93,6 @@ Retrieve the full definition implementation of a symbol (function, class, method
 This tool is used when you know the file path and the line range , and you want the full implementation including code content and its exact position in the file.
 It supports partial matching using a snippet if line numbers are not provided.
 When you need to search for definition of related codes, use this tool first.
-Important Rules on Path Separators:
-- On Windows: File paths MUST use backslashes ('\') as separators (e.g., "C:\project\file.go")
-- On Linux/Mac: File paths MUST use forward slashes ('/') as separators (e.g., "/home/user/project/file.go")
-- The filePath parameter must exactly match the operating system's native path separator style
 
 Parameters:
 - codebasePath: (required) Absolute path to the codebase root
@@ -107,7 +103,7 @@ Parameters:
 Usage:
 <get_code_definition>
   <codebasePath>Absolute path to the codebase root</codebasePath>
-  <filePath>Full file path to the definition (with correct OS path separators)</filePath>
+  <filePath>Full file path to the definition (With correct OS path separators.)</filePath>
   <startLine>Start line number (required)</startLine>
   <endLine>End line number (required)</endLine>
 </get_code_definition>
@@ -293,6 +289,11 @@ func buildDefinitionRequest(identity *model.Identity, param string) (client.Defi
 	var err error
 	if req.FilePath, err = extractXmlParam(param, "filePath"); err != nil {
 		return req, fmt.Errorf("filePath: %w", err)
+	}
+
+	// Check the operating system type and convert the file path separator if it is a Windows system
+	if strings.Contains(strings.ToLower(identity.ClientOS), "windows") {
+		req.FilePath = strings.ReplaceAll(req.FilePath, "/", "\\")
 	}
 
 	// Optional parameters

@@ -44,6 +44,7 @@ func getIdentityFromHeaders(c *gin.Context) *model.Identity {
 		TaskID:      c.GetHeader(types.HeaderTaskId),
 		ClientID:    c.GetHeader(types.HeaderClientId),
 		ClientIDE:   clientIDE,
+		ClientOS:    c.GetHeader(types.HeaderClientOS),
 		ProjectPath: projectPath,
 		AuthToken:   jwtToken,
 		UserName:    userInfo.Name,

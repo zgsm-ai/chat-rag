@@ -39,6 +39,7 @@ const (
 	HeaderTaskId        = "zgsm-task-id"
 	HeaderClientId      = "zgsm-client-id"
 	HeaderClientIde     = "zgsm-client-ide"
+	HeaderClientOS      = "X-Stainless-OS"
 	HeaderLanguage      = "Accept-Language"
 	HeaderAuthorization = "authorization"
 	HeaderProjectPath   = "zgsm-project-path"

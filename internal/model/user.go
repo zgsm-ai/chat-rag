@@ -23,6 +23,7 @@ type Identity struct {
 	RequestID   string    `json:"request_id"`
 	ClientID    string    `json:"client_id"`
 	ClientIDE   string    `json:"client_ide"`
+	ClientOS    string    `json:"client_os"`
 	UserName    string    `json:"user_name"`
 	ProjectPath string    `json:"project_path"`
 	AuthToken   string    `json:"auth_token"`
