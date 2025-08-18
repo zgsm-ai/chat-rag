@@ -8,7 +8,7 @@ TokenThreshold: 50_000
 # Logging configuration
 LogFilePath: "logs/"
 LokiEndpoint: "http://localhost:3100/loki/api/v1/push"
-LogScanIntervalSec: 1000
+LogScanIntervalSec: 10
 
 # Model configuration
 SummaryModel: "deepseek-v3"

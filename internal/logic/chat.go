@@ -373,12 +373,12 @@ func (l *ChatCompletionLogic) handleToolExecution(
 	l.updateToolStatus(state.toolName, types.ToolStatusRunning)
 	// DEBUG
 	if err := l.sendStreamContent(flusher, state.response,
-		fmt.Sprintf("\n#### 🔍`%s` 工具检索中", state.toolName)); err != nil {
+		fmt.Sprintf("\n#### 🔍 `%s` 工具检索中", state.toolName)); err != nil {
 		return err
 	}
 
 	// wait client to refesh content
-	for i := 0; i < 6; i++ {
+	for i := 0; i < 7; i++ {
 		if err := l.sendStreamContent(flusher, state.response, "."); err != nil {
 			return err
 		}
@@ -399,11 +399,12 @@ func (l *ChatCompletionLogic) handleToolExecution(
 		result = fmt.Sprintf("%s execute failed, err: %v", state.toolName, err)
 		toolCall.Error = err.Error()
 	} else {
-		if len(result) > 400 {
-			result = result[:400] + "..."
+		logResult := result
+		if len(logResult) > 400 {
+			logResult = logResult[:400] + "..."
 		}
 		logger.InfoC(l.ctx, "tool execute succeed", zap.String("tool", state.toolName),
-			zap.String("result", result))
+			zap.String("result", logResult))
 	}
 	toolCall.ResultStatus = string(status)
 
