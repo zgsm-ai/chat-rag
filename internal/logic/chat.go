@@ -236,7 +236,7 @@ type streamState struct {
 
 func newStreamState() *streamState {
 	return &streamState{
-		windowSize: 15,
+		windowSize: 6,
 		modelStart: time.Now(),
 	}
 }
@@ -371,6 +371,19 @@ func (l *ChatCompletionLogic) handleToolExecution(
 	}
 
 	l.updateToolStatus(state.toolName, types.ToolStatusRunning)
+	// DEBUG
+	if err := l.sendStreamContent(flusher, state.response,
+		fmt.Sprintf("\n#### 🔍`%s` 工具检索中", state.toolName)); err != nil {
+		return err
+	}
+
+	// wait client to refesh content
+	for i := 0; i < 6; i++ {
+		if err := l.sendStreamContent(flusher, state.response, "."); err != nil {
+			return err
+		}
+		time.Sleep(700 * time.Millisecond)
+	}
 
 	// execute and record tool call latency
 	toolStart := time.Now()
@@ -386,12 +399,11 @@ func (l *ChatCompletionLogic) handleToolExecution(
 		result = fmt.Sprintf("%s execute failed, err: %v", state.toolName, err)
 		toolCall.Error = err.Error()
 	} else {
-		resultStr := fmt.Sprintf("%v", result)
-		if len(resultStr) > 400 {
-			resultStr = resultStr[:400] + "..."
+		if len(result) > 400 {
+			result = result[:400] + "..."
 		}
 		logger.InfoC(l.ctx, "tool execute succeed", zap.String("tool", state.toolName),
-			zap.String("result", resultStr))
+			zap.String("result", result))
 	}
 	toolCall.ResultStatus = string(status)
 
@@ -534,6 +546,9 @@ func (l *ChatCompletionLogic) updateToolStatus(toolName string, status types.Too
 			zap.String("status", string(status)),
 			zap.Error(err))
 	}
+
+	logger.Info("Tool execute status updated", zap.String("tool", toolName),
+		zap.String("execute status", string(status)))
 }
 
 // isContextLengthError checks if the error is due to context length exceeded

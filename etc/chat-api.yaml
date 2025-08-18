@@ -8,7 +8,7 @@ TokenThreshold: 50_000
 # Logging configuration
 LogFilePath: "logs/"
 LokiEndpoint: "http://localhost:3100/loki/api/v1/push"
-LogScanIntervalSec: 10
+LogScanIntervalSec: 1000
 
 # Model configuration
 SummaryModel: "deepseek-v3"
@@ -27,7 +27,8 @@ DepartmentApiEndpoint: "http://localhost:1234/work_id?work_id="
 # Models supported by function calling
 LLM:
   # Endpoint: "https://zgsm.sangfor.com/chat-rag/api/v1/chat/completions"
-  Endpoint: "http://127.0.0.1:30616/v1/chat/completions"
+  # Endpoint: "http://127.0.0.1:32325/v1/chat/completions"
+  Endpoint: "http://127.0.0.1:32325/model/glm-4.5-fp8/v1/chat/completions"
   FuncCallingModels:
     - "deepseek-v3"
     - "qwen3*"
