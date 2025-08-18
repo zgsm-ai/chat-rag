@@ -44,6 +44,9 @@ Tools:
     ApiReadyEndpoint: "http://123.58.64.57:30080/codebase-embedder/api/v1/embeddings/summary"
     TopK: 50
     ScoreThreshold: 0.7
-  CodeDefinition:
+  DefinitionSearch:
     SearchEndpoint: "http://123.58.64.57:30080/codebase-indexer/api/v1/search/definition"
+    ApiReadyEndpoint: "http://123.58.64.57:30080/codebase-indexer/api/v1/index/summary"
+  ReferenceSearch:
+    SearchEndpoint: "http://123.58.64.57:30080/codebase-indexer/api/v1/search/reference"
     ApiReadyEndpoint: "http://123.58.64.57:30080/codebase-indexer/api/v1/index/summary"

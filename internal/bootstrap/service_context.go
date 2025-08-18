@@ -31,10 +31,15 @@ type ServiceContext struct {
 func NewServiceContext(c config.Config) *ServiceContext {
 	// Initialize semantic client
 	semanticClient := client.NewSemanticClient(c.Tools.SemanticSearch)
-	relationClient := client.NewRelationClient(c.Tools.RelationSearch.SearchEndpoint)
-	definitionClient := client.NewDefinitionClient(c.Tools.CodeDefinition)
+	referenceClient := client.NewReferenceClient(c.Tools.ReferenceSearch)
+	definitionClient := client.NewDefinitionClient(c.Tools.DefinitionSearch)
 	// functionManager := functions.NewToolManager("etc/functions.yaml")
-	xmlToolExecutor := functions.NewXmlToolExecutor(c.Tools.SemanticSearch, semanticClient, relationClient, definitionClient)
+	xmlToolExecutor := functions.NewXmlToolExecutor(
+		c.Tools.SemanticSearch,
+		semanticClient,
+		referenceClient,
+		definitionClient,
+	)
 
 	// Initialize token counter
 	tokenCounter, err := tokenizer.NewTokenCounter()

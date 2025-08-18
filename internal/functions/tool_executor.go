@@ -40,58 +40,45 @@ Example: Searching for functions related to user authentication
 </codebase_search>
 `
 
-	RelationSearchToolName = "relation_search"
-	RelationSearchToolDesc = `## relation_search
+	ReferenceSearchToolName = "code_reference_search"
+	ReferenceSearchToolDesc = `## code_reference_search
 Description:
-Find the definition of a symbol and retrieve its **reference relationships** in a tree structure.
+Find the definition of a symbol and retrieve its **reference relationships**.
 This tool takes a code location (by file and range) and optionally a symbol name, and returns its definition and all references (across files) with their precise code locations.
 Use this tool when the user wants to understand **how a function/class is used or called**, or **explore code dependencies** from a specific location.
 You MUST specify the file path and the exact code range (line and column positions) to locate the target symbol.
 You can optionally provide a symbol name if it's known (e.g., function name), and enable content fetching if needed.
-The result is returned as a **tree structure**, where the root is the definition node and children are reference nodes (possibly nested).
 
 Parameters:
 - filePath: (required) Relative path to the file where the symbol is located (e.g., src/utils/math.go).
 - startLine: (required) The line number where the symbol starts.
 - startColumn: (required) The column number where the symbol starts.
 - endLine: (required) The line number where the symbol ends.
-- endColumn: (required) The column number where the symbol ends.
 - symbolName: (optional) The name of the symbol (e.g., function name, class name). Use this only if you're confident about the symbol.
-- includeContent: (optional) Set to 1 if you need the actual code content of the definition and references. Defaults to 0.
-- maxLayer: (optional) Maximum number of reference levels to follow (default is 10). Use smaller values for simpler trees.
 
 Usage:
-<relation_search>
+<code_reference_search>
   <filePath>Relative path to the file containing the symbol</filePath>
   <startLine>Start line number of the symbol (1-based)</startLine>
-  <startColumn>Start column number of the symbol (1-based)</startColumn>
   <endLine>End line number of the symbol (1-based)</endLine>
-  <endColumn>End column number of the symbol (1-based)</endColumn>
   <symbolName>Symbol name (optional)</symbolName>
-  <includeContent>1 to include code content, 0 or omit to skip (optional)</includeContent>
-  <maxLayer>Maximum number of reference layers to return (optional, default 10)</maxLayer>
-</relation_search>
+</code_reference_search>
 
 
 Example: Exploring all references to the GetUserById function
-<relation_search>
+<code_reference_search>
   <filePath>src/services/user_service.go</filePath>
   <startLine>12</startLine>
-  <startColumn>5</startColumn>
   <endLine>14</endLine>
-  <endColumn>1</endColumn>
   <symbolName>GetUserById</symbolName>
-  <includeContent>1</includeContent>
-  <maxLayer>3</maxLayer>
-</relation_search>
+</code_reference_search>
 `
 
-	GetDefinitionToolName = "get_code_definition"
-	GetDefinitionToolDesc = `## get_code_definition
+	GetDefinitionToolName = "code_definition_search"
+	GetDefinitionToolDesc = `## code_definition_search
 Description:
 Retrieve the full definition implementation of a symbol (function, class, method, interface, etc.) from the codebase based on absolute file path and optional position.
 This tool is used when you know the file path and the line range , and you want the full implementation including code content and its exact position in the file.
-It supports partial matching using a snippet if line numbers are not provided.
 When you need to search for definition of related codes, use this tool first.
 
 Parameters:
@@ -101,28 +88,28 @@ Parameters:
 - endLine: (required) End line number of the definition (1-based).
 
 Usage:
-<get_code_definition>
+<code_definition_search>
   <codebasePath>Absolute path to the codebase root</codebasePath>
   <filePath>Full file path to the definition (With correct OS path separators.)</filePath>
   <startLine>Start line number (required)</startLine>
   <endLine>End line number (required)</endLine>
-</get_code_definition>
+</code_definition_search>
 
 Example: Get the implementation of NewTokenCounter(Windows) - NOTE BACKSLASHES
-<get_code_definition>
+<code_definition_search>
   <codebasePath>d:\workspace\project\</codebasePath>
   <filePath>d:\workspace\project\internal\tokenizer\tokenizer.go</filePath>
   <startLine>57</startLine>
   <endLine>75</endLine>
-</get_code_definition>
+</code_definition_search>
 
 Example: Get the implementation of NewTokenCounter(Linux) - NOTE FORWARD SLASHES
-<get_code_definition>
+<code_definition_search>
   <codebasePath>/home/user/project</codebasePath>
   <filePath>/home/user/project/internal/tokenizer/tokenizer.go</filePath>
   <startLine>57</startLine>
   <endLine>75</endLine>
-</get_code_definition>
+</code_definition_search>
 `
 )
 
@@ -154,7 +141,7 @@ type XmlToolExecutor struct {
 func NewXmlToolExecutor(
 	c config.SemanticSearchConfig,
 	semanticClient client.SemanticInterface,
-	relationClient client.RelationInterface,
+	relationClient client.ReferenceInterface,
 	definitionClient client.DefinitionInterface,
 ) *XmlToolExecutor {
 	return &XmlToolExecutor{
@@ -253,10 +240,10 @@ func createGetDefinitionTool(definitionClient client.DefinitionInterface) ToolFu
 	}
 }
 
-// createRelationSearchTool creates the relation search tool function
-func createRelationSearchTool(relationClient client.RelationInterface) ToolFunc {
+// createReferenceSearchTool creates the relation search tool function
+func createReferenceSearchTool(referenceClient client.ReferenceInterface) ToolFunc {
 	return ToolFunc{
-		description: RelationSearchToolDesc,
+		description: ReferenceSearchToolDesc,
 		execute: func(ctx context.Context, param string) (string, error) {
 			identity, err := getIdentityFromContext(ctx)
 			if err != nil {
@@ -268,12 +255,27 @@ func createRelationSearchTool(relationClient client.RelationInterface) ToolFunc 
 				return "", fmt.Errorf("failed to build request: %w", err)
 			}
 
-			result, err := relationClient.Search(ctx, req)
+			result, err := referenceClient.Search(ctx, req)
 			if err != nil {
 				return "", fmt.Errorf("relation search failed: %w", err)
 			}
 
 			return utils.MarshalJSONWithoutEscapeHTML(result)
+		},
+		readyCheck: func(ctx context.Context) (bool, error) {
+			identity, err := getIdentityFromContext(ctx)
+			if err != nil {
+				return false, err
+			}
+			if identity.ClientID == "" {
+				return false, fmt.Errorf("get none clientId")
+			}
+
+			return referenceClient.CheckReady(context.Background(), client.ReadyRequest{
+				ClientId:      identity.ClientID,
+				CodebasePath:  identity.ProjectPath,
+				Authorization: identity.AuthToken,
+			})
 		},
 	}
 }
@@ -313,8 +315,8 @@ func buildDefinitionRequest(identity *model.Identity, param string) (client.Defi
 }
 
 // buildRelationRequest constructs a RelationRequest from XML parameters
-func buildRelationRequest(identity *model.Identity, param string) (client.RelationRequest, error) {
-	req := client.RelationRequest{
+func buildRelationRequest(identity *model.Identity, param string) (client.ReferenceRequest, error) {
+	req := client.ReferenceRequest{
 		ClientId:      identity.ClientID,
 		CodebasePath:  identity.ProjectPath,
 		Authorization: identity.AuthToken,
@@ -329,10 +331,6 @@ func buildRelationRequest(identity *model.Identity, param string) (client.Relati
 		return req, fmt.Errorf("startLine: %w", err)
 	}
 
-	if req.StartColumn, err = extractXmlIntParam(param, "startColumn"); err != nil {
-		return req, fmt.Errorf("startColumn: %w", err)
-	}
-
 	if req.EndLine, err = extractXmlIntParam(param, "endLine"); err != nil {
 		return req, fmt.Errorf("endLine: %w", err)
 	}
@@ -344,14 +342,6 @@ func buildRelationRequest(identity *model.Identity, param string) (client.Relati
 	// Optional parameters
 	if symbolName, err := extractXmlParam(param, "symbolName"); err == nil {
 		req.SymbolName = symbolName
-	}
-
-	if includeContent, err := extractXmlIntParam(param, "includeContent"); err == nil {
-		req.IncludeContent = includeContent
-	}
-
-	if maxLayer, err := extractXmlIntParam(param, "maxLayer"); err == nil {
-		req.MaxLayer = maxLayer
 	}
 
 	return req, nil

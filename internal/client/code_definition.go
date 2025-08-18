@@ -63,7 +63,7 @@ type DefinitionClient struct {
 }
 
 // NewDefinitionClient creates a new definition client instance
-func NewDefinitionClient(definitionConfig config.CodeDefinitionConfig) DefinitionInterface {
+func NewDefinitionClient(definitionConfig config.DefinitionSearchConfig) DefinitionInterface {
 	config := BaseClientConfig{
 		SearchEndpoint: definitionConfig.SearchEndpoint,
 		ReadyEndpoint:  definitionConfig.ApiReadyEndpoint,

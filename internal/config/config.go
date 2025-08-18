@@ -14,9 +14,9 @@ type RedisConfig struct {
 }
 
 type ToolConfig struct {
-	SemanticSearch SemanticSearchConfig
-	RelationSearch RelationSearchConfig
-	CodeDefinition CodeDefinitionConfig
+	SemanticSearch   SemanticSearchConfig
+	DefinitionSearch DefinitionSearchConfig
+	ReferenceSearch  ReferenceSearchConfig
 }
 
 type SemanticSearchConfig struct {
@@ -26,12 +26,12 @@ type SemanticSearchConfig struct {
 	ScoreThreshold   float64
 }
 
-type RelationSearchConfig struct {
+type ReferenceSearchConfig struct {
 	SearchEndpoint   string
 	ApiReadyEndpoint string
 }
 
-type CodeDefinitionConfig struct {
+type DefinitionSearchConfig struct {
 	SearchEndpoint   string
 	ApiReadyEndpoint string
 }

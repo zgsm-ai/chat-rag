@@ -71,6 +71,7 @@ func (x *XmlToolAdapter) insertToolsIntoSystemContent(content string) (string, e
 
 	// Combine all tools into a single string
 	var toolsContent strings.Builder
+	var hasCodebaseSearch bool
 	for _, toolName := range x.toolExecutor.GetAllTools() {
 		ready, err := x.toolExecutor.CheckToolReady(x.ctx, toolName)
 		if !ready {
@@ -87,6 +88,11 @@ func (x *XmlToolAdapter) insertToolsIntoSystemContent(content string) (string, e
 		toolsContent.WriteString(desc)
 		toolsContent.WriteString("\n\n")
 		logger.InfoC(x.ctx, "Tool adapted in system prompt", zap.String("name", toolName))
+
+		// Check if this is codebase_search tool
+		if toolName == "codebase_search" {
+			hasCodebaseSearch = true
+		}
 	}
 
 	// Find the tools section
@@ -105,5 +111,16 @@ func (x *XmlToolAdapter) insertToolsIntoSystemContent(content string) (string, e
 
 	// Insert the tools content after the tools header
 	result := content[:insertPos] + "\n" + toolsContent.String() + content[insertPos:]
+
+	// If codebase_search tool is present, add description before MODES section
+	if hasCodebaseSearch {
+		const modesSection = "\n\n====\n\nMODES"
+		modesIndex := strings.Index(result, modesSection)
+		if modesIndex != -1 {
+			codebaseSearchDesc := `- You can use codebase_search to perform semantic-aware searches across your codebase, returning conceptually relevant code snippets based on meaning rather than exact text matches. This is particularly powerful for discovering related functionality, exploring unfamiliar code architecture, or locating implementations when you only understand the purpose but not the specific syntax. For optimal efficiency, always try codebase_search first as it delivers more focused results with lower token consumption. Reserve search_files and read_file for cases where you need literal pattern matching or precise line-by-line analysis of file contents. This balanced approach ensures you get the right search method for each scenario - semantic discovery through codebase_search when possible, falling back to exhaustive text search via search_files and read_file only when necessary.`
+			result = result[:modesIndex] + "\n" + codebaseSearchDesc + result[modesIndex:]
+		}
+	}
+
 	return result, nil
 }

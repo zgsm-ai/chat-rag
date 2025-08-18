@@ -373,7 +373,7 @@ func (l *ChatCompletionLogic) handleToolExecution(
 	l.updateToolStatus(state.toolName, types.ToolStatusRunning)
 	// DEBUG
 	if err := l.sendStreamContent(flusher, state.response,
-		fmt.Sprintf("\n#### 🔍 `%s` 工具检索中", state.toolName)); err != nil {
+		fmt.Sprintf("\n#### 🔍 `%s` 工具执行中", state.toolName)); err != nil {
 		return err
 	}
 
