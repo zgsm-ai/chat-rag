@@ -181,9 +181,14 @@ func (x *XmlToolAdapter) insertToolsIntoSystemContent(content string) (string, e
 		}
 	}
 
+	if hasCodebaseSearch || hasCodeReferenceSearch || hasCodeDefinitionSearch {
+		resultDesc := `- After using codebase_search, code_inition_search, or code_reference_search, always use <thinking> to summarize the key findings from these tools before taking any further actions.`
+		result = result + "\n\nTOOLS USE FOLLOW RULES\n" + resultDesc
+	}
+
 	if hasCodebaseSearch {
 		codeDefinitionSearchDesc := `- You can use codebase_search and code_definition_search and code_reference_search individually or in combination: codebase_search helps you find broad code-related information based on natural language queries, while code_definition_search is perfect for pinpointing specific code definitions and their detailed contents. Only if the results from these two tools are insufficient should you resort to secondary tools for more granular searches.`
-		result = result + "\n\nTOOLS USE FOLLOW RULES\n" + codeDefinitionSearchDesc + "\n" + CodeAnalysisRules
+		result = result + "\n" + codeDefinitionSearchDesc + "\n" + CodeAnalysisRules
 	}
 
 	return result, nil

@@ -56,7 +56,7 @@ It allows you to locate the exact positions of these references across various f
 
 Parameters:
 - codebasePath: (required) Absolute path to the codebase root
-- filePath: (required) The full path to the file to which the code belongs. Must match the path separator style of the current operating system.
+- filePath: (required) The full absolute path to the file to which the code belongs. Must match the path separator style of the current operating system.
 - startLine: (required) The line number where the symbol starts.
 - endLine: (required) The line number where the symbol ends.
 - symbolName: (optional) The name of the symbol (e.g., function name, class name). Use this only if you're confident about the symbol.
@@ -64,7 +64,7 @@ Parameters:
 Usage:
 <code_reference_search>
   <codebasePath>Absolute path to the codebase root</codebasePath>
-  <filePath>The full path to the file to which the code belongs. (With correct OS path separators.)</filePath>
+  <filePath>The full absolute path to the file to which the code belongs. (With correct OS path separators.)</filePath>
   <startLine>Start line number of the symbol (1-based)</startLine>
   <endLine>End line number of the symbol (1-based)</endLine>
   <symbolName>Symbol name (optional)</symbolName>
