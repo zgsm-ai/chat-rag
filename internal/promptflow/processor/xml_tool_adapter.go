@@ -19,17 +19,20 @@ type XmlToolAdapter struct {
 
 const CodeAnalysisRules = `
 Code Analysis Execution Rules
+If the task is related to the project code, follow the following rules:
 Rule 1: Tool Priority Hierarchy
 1. codebase_search (Mandatory first step)
-2. code_definition_search (For specific implementations)
-3. read_file (Only when necessary for detailed analysis)
-4. search_files (For regex pattern matching)
+2. code_definition_search (For specific implementations code)
+3. code_reference_search (For exploring references and code relationships)
+4. read_file (Only when necessary for detailed analysis)
+5. search_files (For regex pattern matching)
 
 Rule 2: Decision Flow for Code Analysis Tasks
 Receive code analysis task →
 Use codebase_search with natural language query →
 Review search results →
-IF specific definition or implementations needed → Use code_definition_search
+Use code_definition_search with line num to query specific definition or implementations code → 
+IF need to explore symbol references or code relationships → Use code_reference_search
 ELSE IF detailed file content required → Use read_file
 ELSE IF pattern matching needed → Use search_files
 END IF
@@ -97,6 +100,7 @@ func (x *XmlToolAdapter) insertToolsIntoSystemContent(content string) (string, e
 	var toolsContent strings.Builder
 	var hasCodebaseSearch bool
 	var hasCodeDefinitionSearch bool
+	var hasCodeReferenceSearch bool
 	for _, toolName := range x.toolExecutor.GetAllTools() {
 		ready, err := x.toolExecutor.CheckToolReady(x.ctx, toolName)
 		if !ready {
@@ -122,6 +126,11 @@ func (x *XmlToolAdapter) insertToolsIntoSystemContent(content string) (string, e
 		// Check if this is code_definition_search tool
 		if toolName == "code_definition_search" {
 			hasCodeDefinitionSearch = true
+		}
+
+		// Check if this is code_definition_search tool
+		if toolName == "code_reference_search" {
+			hasCodeReferenceSearch = true
 		}
 	}
 
@@ -162,15 +171,25 @@ func (x *XmlToolAdapter) insertToolsIntoSystemContent(content string) (string, e
 		}
 	}
 
+	// If code_definition_search tool is present, add description before MODES section
+	if hasCodeReferenceSearch {
+		const modesSection = "\n\n====\n\nMODES"
+		modesIndex := strings.Index(result, modesSection)
+		if modesIndex != -1 {
+			codeReferenceSearchDesc := `- You can use code_reference_search to explore how a symbol (function, class, method, etc.) is referenced across the codebase by specifying its exact file path and line range. This tool is particularly useful when you want to understand how a function or class is used or analyze code dependencies across different parts of the project. By retrieving not only the definition but also all references to the symbol, code_reference_search helps you track its usage throughout the codebase, ensuring that you can see all interactions and relationships. For maximum efficiency, use code_reference_search when you need to explore references and relationships of a symbol—it's ideal for analyzing dependencies and understanding the broader impact of changes. If you need to focus on specific code definitions, code_definition_search may be the better choice.`
+			result = result[:modesIndex] + "\n" + codeReferenceSearchDesc + result[modesIndex:]
+		}
+	}
+
 	if hasCodeDefinitionSearch || hasCodebaseSearch {
-		codeDefinitionSearchDesc := `- You can use codebase_search and code_definition_search individually or in combination: codebase_search helps you find broad code-related information based on natural language queries, while code_definition_search is perfect for pinpointing specific code definitions and their detailed contents. Only if the results from these two tools are insufficient should you resort to secondary tools for more granular searches.`
+		codeDefinitionSearchDesc := `- You can use codebase_search and code_definition_search and code_reference_search individually or in combination: codebase_search helps you find broad code-related information based on natural language queries, while code_definition_search is perfect for pinpointing specific code definitions and their detailed contents. Only if the results from these two tools are insufficient should you resort to secondary tools for more granular searches.`
 		result = result + "\n\nTOOLS USE FOLLOW RULES\n" + codeDefinitionSearchDesc + "\n" + CodeAnalysisRules
 	}
 
-	if hasCodeDefinitionSearch {
-		codeDesc := `- You can use code_definition_search tool in various development tasks. In code generation, it helps quickly find relevant definitions of existing data structures, functions, or methods when creating new code. During code reviews, it enables you to easily locate and review definitions that may be in different files, ensuring proper implementation across the codebase. In unit testing, it allows you to identify necessary definitions from other files, making it easier to set up comprehensive tests. Additionally, for code understanding, this tool provides detailed access to code definitions, helping developers comprehend how different parts of the code interact and function, particularly in complex or unfamiliar systems.\n- If you want to know how a specific method is defined and implemented, simply use the code_definition_search tool, as it provides a fast and accurate way to retrieve the complete definition, making it superior to other ways.`
-		result = result + "\n" + codeDesc
-	}
+	// if hasCodeDefinitionSearch {
+	// 	codeDesc := `- You can use code_definition_search tool in various development tasks. In code generation, it helps quickly find relevant definitions of existing data structures, functions, or methods when creating new code. During code reviews, it enables you to easily locate and review definitions that may be in different files, ensuring proper implementation across the codebase. In unit testing, it allows you to identify necessary definitions from other files, making it easier to set up comprehensive tests. Additionally, for code understanding, this tool provides detailed access to code definitions, helping developers comprehend how different parts of the code interact and function, particularly in complex or unfamiliar systems.\n- If you want to know how a specific method is defined and implemented, simply use the code_definition_search tool, as it provides a fast and accurate way to retrieve the complete definition, making it superior to other ways.`
+	// 	result = result + "\n" + codeDesc
+	// }
 
 	return result, nil
 }

@@ -24,7 +24,6 @@ type ReferenceRequest struct {
 	FilePath      string `json:"filePath"`
 	StartLine     int    `json:"startLine"`
 	EndLine       int    `json:"endLine"`
-	EndColumn     int    `json:"endColumn"`
 	SymbolName    string `json:"symbolName,omitempty"`
 	Authorization string `json:"authorization"`
 }
@@ -104,7 +103,6 @@ func (b *ReferenceRequestBuilder) BuildRequest(req ReferenceRequest) Request {
 		"filePath":     req.FilePath,
 		"startLine":    strconv.Itoa(req.StartLine),
 		"endLine":      strconv.Itoa(req.EndLine),
-		"endColumn":    strconv.Itoa(req.EndColumn),
 	}
 
 	if req.SymbolName != "" {

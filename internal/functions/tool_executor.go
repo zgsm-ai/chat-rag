@@ -43,22 +43,28 @@ Example: Searching for functions related to user authentication
 	ReferenceSearchToolName = "code_reference_search"
 	ReferenceSearchToolDesc = `## code_reference_search
 Description:
-Find the definition of a symbol and retrieve its **reference relationships**.
-This tool takes a code location (by file and range) and optionally a symbol name, and returns its definition and all references (across files) with their precise code locations.
-Use this tool when the user wants to understand **how a function/class is used or called**, or **explore code dependencies** from a specific location.
-You MUST specify the file path and the exact code range (line and column positions) to locate the target symbol.
-You can optionally provide a symbol name if it's known (e.g., function name), and enable content fetching if needed.
+The code_reference_search tool helps you find the definition of a symbol (such as a function, class, or method) 
+and retrieve all reference relationships to that symbol across files in the project. 
+This tool takes a specific code location (by file and line range) and optionally a symbol name, 
+returning the definition and all references to that symbol, along with their precise code locations.
+Use this tool when you want to understand how a function or class is used or called, 
+or when you need to explore code dependencies from a specific location in the codebase.
+Key Features:
+The tool provides the definition of a symbol and all its references, 
+which include class/interface references, function/method calls, and more.
+It allows you to locate the exact positions of these references across various files within the project.
 
 Parameters:
-- filePath: (required) Relative path to the file where the symbol is located (e.g., src/utils/math.go).
+- codebasePath: (required) Absolute path to the codebase root
+- filePath: (required) The full path to the file to which the code belongs. Must match the path separator style of the current operating system.
 - startLine: (required) The line number where the symbol starts.
-- startColumn: (required) The column number where the symbol starts.
 - endLine: (required) The line number where the symbol ends.
 - symbolName: (optional) The name of the symbol (e.g., function name, class name). Use this only if you're confident about the symbol.
 
 Usage:
 <code_reference_search>
-  <filePath>Relative path to the file containing the symbol</filePath>
+  <codebasePath>Absolute path to the codebase root</codebasePath>
+  <filePath>The full path to the file to which the code belongs. (With correct OS path separators.)</filePath>
   <startLine>Start line number of the symbol (1-based)</startLine>
   <endLine>End line number of the symbol (1-based)</endLine>
   <symbolName>Symbol name (optional)</symbolName>
@@ -67,7 +73,8 @@ Usage:
 
 Example: Exploring all references to the GetUserById function
 <code_reference_search>
-  <filePath>src/services/user_service.go</filePath>
+  <codebasePath>d:\workspace\project\</codebasePath>
+  <filePath>d:\workspace\project\internal\tokenizer\tokenizer.go</filePath>
   <startLine>12</startLine>
   <endLine>14</endLine>
   <symbolName>GetUserById</symbolName>
@@ -149,9 +156,9 @@ func NewXmlToolExecutor(
 ) *XmlToolExecutor {
 	return &XmlToolExecutor{
 		tools: map[string]ToolFunc{
-			CodebaseSearchToolName: createCodebaseSearchTool(c, semanticClient),
-			// RelationSearchToolName: createRelationSearchTool(relationClient),
-			DefinitionToolName: createGetDefinitionTool(definitionClient),
+			CodebaseSearchToolName:  createCodebaseSearchTool(c, semanticClient),
+			ReferenceSearchToolName: createReferenceSearchTool(relationClient),
+			DefinitionToolName:      createGetDefinitionTool(definitionClient),
 		},
 	}
 }
@@ -253,7 +260,7 @@ func createReferenceSearchTool(referenceClient client.ReferenceInterface) ToolFu
 				return "", err
 			}
 
-			req, err := buildRelationRequest(identity, param)
+			req, err := buildRerenceRequest(identity, param)
 			if err != nil {
 				return "", fmt.Errorf("failed to build request: %w", err)
 			}
@@ -317,8 +324,8 @@ func buildDefinitionRequest(identity *model.Identity, param string) (client.Defi
 	return req, nil
 }
 
-// buildRelationRequest constructs a RelationRequest from XML parameters
-func buildRelationRequest(identity *model.Identity, param string) (client.ReferenceRequest, error) {
+// buildRerenceRequest constructs a RelationRequest from XML parameters
+func buildRerenceRequest(identity *model.Identity, param string) (client.ReferenceRequest, error) {
 	req := client.ReferenceRequest{
 		ClientId:      identity.ClientID,
 		CodebasePath:  identity.ProjectPath,
@@ -330,16 +337,17 @@ func buildRelationRequest(identity *model.Identity, param string) (client.Refere
 		return req, fmt.Errorf("filePath: %w", err)
 	}
 
+	// Check the operating system type and convert the file path separator if it is a Windows system
+	if strings.Contains(strings.ToLower(identity.ClientOS), "windows") {
+		req.FilePath = strings.ReplaceAll(req.FilePath, "/", "\\")
+	}
+
 	if req.StartLine, err = extractXmlIntParam(param, "startLine"); err != nil {
 		return req, fmt.Errorf("startLine: %w", err)
 	}
 
 	if req.EndLine, err = extractXmlIntParam(param, "endLine"); err != nil {
 		return req, fmt.Errorf("endLine: %w", err)
-	}
-
-	if req.EndColumn, err = extractXmlIntParam(param, "endColumn"); err != nil {
-		return req, fmt.Errorf("endColumn: %w", err)
 	}
 
 	// Optional parameters
