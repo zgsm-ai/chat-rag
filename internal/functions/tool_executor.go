@@ -61,6 +61,9 @@ Parameters:
 - endLine: (required) The line number where the symbol ends.
 - symbolName: (optional) The name of the symbol (e.g., function name, class name). Use this only if you're confident about the symbol.
 
+Important Path Requirements:
+ABSOLUTE PATHS REQUIRED: The filePath parameter must be a full absolute system path (not relative paths or workspace-relative paths)
+
 Usage:
 <code_reference_search>
   <codebasePath>Absolute path to the codebase root</codebasePath>
@@ -96,6 +99,9 @@ Parameters:
 - filePath: (required) Full path to the file within the codebase. Must match the path separator style of the current operating system.
 - startLine: (required) Start line number of the definition (1-based).
 - endLine: (required) End line number of the definition (1-based).
+
+Important Path Requirements:
+ABSOLUTE PATHS REQUIRED: The filePath parameter must be a full absolute system path (not relative paths or workspace-relative paths)
 
 Usage:
 <code_definition_search>
