@@ -181,15 +181,10 @@ func (x *XmlToolAdapter) insertToolsIntoSystemContent(content string) (string, e
 		}
 	}
 
-	if hasCodeDefinitionSearch || hasCodebaseSearch {
+	if hasCodebaseSearch {
 		codeDefinitionSearchDesc := `- You can use codebase_search and code_definition_search and code_reference_search individually or in combination: codebase_search helps you find broad code-related information based on natural language queries, while code_definition_search is perfect for pinpointing specific code definitions and their detailed contents. Only if the results from these two tools are insufficient should you resort to secondary tools for more granular searches.`
 		result = result + "\n\nTOOLS USE FOLLOW RULES\n" + codeDefinitionSearchDesc + "\n" + CodeAnalysisRules
 	}
-
-	// if hasCodeDefinitionSearch {
-	// 	codeDesc := `- You can use code_definition_search tool in various development tasks. In code generation, it helps quickly find relevant definitions of existing data structures, functions, or methods when creating new code. During code reviews, it enables you to easily locate and review definitions that may be in different files, ensuring proper implementation across the codebase. In unit testing, it allows you to identify necessary definitions from other files, making it easier to set up comprehensive tests. Additionally, for code understanding, this tool provides detailed access to code definitions, helping developers comprehend how different parts of the code interact and function, particularly in complex or unfamiliar systems.\n- If you want to know how a specific method is defined and implemented, simply use the code_definition_search tool, as it provides a fast and accurate way to retrieve the complete definition, making it superior to other ways.`
-	// 	result = result + "\n" + codeDesc
-	// }
 
 	return result, nil
 }

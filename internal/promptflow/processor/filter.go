@@ -35,6 +35,7 @@ func (u *UserMsgFilter) Execute(promptMsg *PromptMsg) {
 
 	originalCount := len(promptMsg.olderUserMsgList)
 	u.filterDuplicateMessages(promptMsg)
+	u.filterAssistantToolPatterns(promptMsg)
 	removedCount := originalCount - len(promptMsg.olderUserMsgList)
 
 	logger.Info("User message filter completed",
@@ -77,4 +78,65 @@ func (u *UserMsgFilter) filterDuplicateMessages(promptMsg *PromptMsg) {
 	}
 
 	promptMsg.olderUserMsgList = filteredMessages
+}
+
+// TODO this func will be removed when client apapted tool status dispply
+// filterAssistantToolPatterns removes tool execution patterns from assistant messages
+func (u *UserMsgFilter) filterAssistantToolPatterns(promptMsg *PromptMsg) {
+	for i := range promptMsg.olderUserMsgList {
+		msg := &promptMsg.olderUserMsgList[i]
+
+		// Only process assistant messages
+		if msg.Role != types.RoleAssistant {
+			continue
+		}
+
+		content, ok := msg.Content.(string)
+		if !ok {
+			// Skip non-string content messages
+			continue
+		}
+
+		// Remove tool execution patterns
+		msg.Content = u.removeToolExecutionPatterns(content)
+	}
+}
+
+// removeToolExecutionPatterns removes strings that start with "#### 🔍 " and end with "工具执行中......."
+func (u *UserMsgFilter) removeToolExecutionPatterns(content string) string {
+	startPattern := "#### 🔍 "
+	endPattern := "工具执行中......."
+
+	result := content
+	for {
+		startIndex := u.indexOf(result, startPattern)
+		if startIndex == -1 {
+			break
+		}
+
+		endIndex := u.indexOf(result[startIndex:], endPattern)
+		if endIndex == -1 {
+			break
+		}
+
+		endIndex += startIndex // Adjust to original string index
+		// Include the end pattern length
+		endIndex += len(endPattern)
+
+		// Remove the pattern
+		result = result[:startIndex] + result[endIndex:]
+		logger.Info("removed tool executing... content", zap.String("method", "removeToolExecutionPatterns"))
+	}
+
+	return result
+}
+
+// indexOf returns the index of the first occurrence of pattern in s
+func (u *UserMsgFilter) indexOf(s, pattern string) int {
+	for i := 0; i <= len(s)-len(pattern); i++ {
+		if s[i:i+len(pattern)] == pattern {
+			return i
+		}
+	}
+	return -1
 }
