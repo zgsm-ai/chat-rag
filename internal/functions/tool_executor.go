@@ -74,12 +74,15 @@ Example: Exploring all references to the GetUserById function
 </code_reference_search>
 `
 
-	GetDefinitionToolName = "code_definition_search"
-	GetDefinitionToolDesc = `## code_definition_search
+	DefinitionToolName = "code_definition_search"
+	DefinitionToolDesc = `## code_definition_search
 Description:
-Retrieve the full definition implementation of a symbol (function, class, method, interface, etc.) from the codebase based on absolute file path and optional position.
-This tool is used when you know the file path and the line range , and you want the full implementation including code content and its exact position in the file.
-When you need to search for definition of related codes, use this tool first.
+Retrieve the full definition implementation of a symbol (function, class, method, interface, etc.) within a specific range of lines in a code file. 
+This tool allows you to search for the original definition content of code that is referenced elsewhere (either within the same file or in other files across the project). 
+These references can include class/interface references, function/method calls, and more.
+Usage Priority:
+When you need to search for code definitions or analyze specific implementations, always use this tool first. 
+It efficiently retrieves the precise definition and its details, helping you to avoid unnecessary navigation or additional steps.
 
 Parameters:
 - codebasePath: (required) Absolute path to the codebase root
@@ -148,7 +151,7 @@ func NewXmlToolExecutor(
 		tools: map[string]ToolFunc{
 			CodebaseSearchToolName: createCodebaseSearchTool(c, semanticClient),
 			// RelationSearchToolName: createRelationSearchTool(relationClient),
-			GetDefinitionToolName: createGetDefinitionTool(definitionClient),
+			DefinitionToolName: createGetDefinitionTool(definitionClient),
 		},
 	}
 }
@@ -203,7 +206,7 @@ func createCodebaseSearchTool(c config.SemanticSearchConfig, semanticClient clie
 // createGetDefinitionTool creates the code definition search tool function
 func createGetDefinitionTool(definitionClient client.DefinitionInterface) ToolFunc {
 	return ToolFunc{
-		description: GetDefinitionToolDesc,
+		description: DefinitionToolDesc,
 		execute: func(ctx context.Context, param string) (string, error) {
 			identity, err := getIdentityFromContext(ctx)
 			if err != nil {
