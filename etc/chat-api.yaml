@@ -6,9 +6,11 @@ Port: 8888
 TokenThreshold: 50_000
 
 # Logging configuration
-LogFilePath: "logs/"
-LokiEndpoint: "http://localhost:3100/loki/api/v1/push"
-LogScanIntervalSec: 10
+Log:
+  LogFilePath: "logs/"
+  LokiEndpoint: "http://localhost:3100/loki/api/v1/push"
+  LogScanIntervalSec: 10
+  EnableClassification: false
 
 # Model configuration
 SummaryModel: "deepseek-v3"

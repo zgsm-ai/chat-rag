@@ -36,6 +36,14 @@ type DefinitionSearchConfig struct {
 	ApiReadyEndpoint string
 }
 
+// LogConfig holds logging configuration
+type LogConfig struct {
+	LogFilePath          string
+	LokiEndpoint         string
+	LogScanIntervalSec   int
+	EnableClassification bool
+}
+
 // Config holds all service configuration
 type Config struct {
 	// Server configuration
@@ -49,9 +57,7 @@ type Config struct {
 	Tools ToolConfig
 
 	// Logging configuration
-	LogFilePath        string
-	LokiEndpoint       string
-	LogScanIntervalSec int
+	Log LogConfig
 
 	// Model configuration
 	SummaryModel               string
