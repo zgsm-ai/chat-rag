@@ -29,8 +29,8 @@ DepartmentApiEndpoint: "http://localhost:1234/work_id?work_id="
 # Models supported by function calling
 LLM:
   # Endpoint: "https://zgsm.sangfor.com/chat-rag/api/v1/chat/completions"
-  # Endpoint: "http://127.0.0.1:32325/v1/chat/completions"
-  Endpoint: "http://127.0.0.1:32325/model/glm-4.5-fp8/v1/chat/completions"
+  Endpoint: "http://127.0.0.1:32732/v1/chat/completions"
+  # Endpoint: "http://127.0.0.1:32325/model/glm-4.5-fp8/v1/chat/completions"
   FuncCallingModels:
     - "deepseek-v3"
     - "qwen3*"

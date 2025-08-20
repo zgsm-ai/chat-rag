@@ -125,10 +125,8 @@ func (c *LLMClient) handleAPIError(resp *http.Response, logMessage string) error
 	if bodyStr == "" {
 		bodyStr = "None"
 	}
-	message := fmt.Sprintf("%s\n\n[Error]:\nCode: %d\nMessage: %s",
-		types.ErrMsgModelServiceUnavailable, resp.StatusCode, bodyStr)
 
-	return types.NewHTTPStatusError(resp.StatusCode, message)
+	return types.NewHTTPStatusError(resp.StatusCode, bodyStr)
 }
 
 // ChatLLMWithMessagesStreamRaw directly calls the API using HTTP client to get raw streaming response
