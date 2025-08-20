@@ -63,7 +63,7 @@ func NewSemanticClient(semanticConfig config.SemanticSearchConfig) SemanticInter
 		SearchEndpoint: semanticConfig.SearchEndpoint,
 		ReadyEndpoint:  semanticConfig.ApiReadyEndpoint,
 		SearchTimeout:  5 * time.Second,
-		ReadyTimeout:   3 * time.Second,
+		ReadyTimeout:   5 * time.Second,
 	}
 
 	baseClient := NewBaseClient(config,

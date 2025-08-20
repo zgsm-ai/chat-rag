@@ -57,6 +57,7 @@ This tool is particularly useful when you want to understand how a function or c
 By retrieving not only the definition but also all references to the symbol, code_reference_search helps you track its usage throughout the codebase, 
 ensuring that you can see all interactions and relationships. 
 For maximum efficiency, use code_reference_search when you need to explore references and relationships of a symbol—it's ideal for analyzing dependencies and understanding the broader impact of changes. 
+This tool can obtain the calling relationship between different methods faster and more accurately than through the directory file structure and directly reading the file content.
 If you need to focus on specific code definitions, code_definition_search may be the better choice.
 - If you refactored code that could affect other parts of the codebase. Prioritize using code_reference_search to identify and update all dependent files as needed.
 `
@@ -108,7 +109,8 @@ Example: Exploring all references to the GetUserById function
 	DefinitionCapability = `- You can use code_definition_search to retrieve the full implementation of a symbol (function, class, method, interface, etc.) from the codebase by specifying its exact file path and line range. 
 This is especially useful when you already know the location of a definition and need its complete code content, including precise position details for reference or modification. 
 The tool provides accurate, context-free extraction of definitions, ensuring you get exactly the implementation you need without unnecessary surrounding code. 
-For optimal efficiency, always use code_definition_search first when you have the file path and line numbers—it delivers fast, precise results with minimal overhead. 
+For optimal efficiency, always use code_definition_search first when you have the file path and line numbers—it delivers fast, precise results with minimal overhead.
+This tool can obtain the definition and implementation of the code faster and more accurately than through the directory file structure and directly reading the file content. 
 If you need to search for related definitions without knowing their exact locations, consider using codebase_search (for semantic matches) or search_files (for regex-based scanning) as fallback options.
 `
 	DefinitionToolDesc = `## code_definition_search

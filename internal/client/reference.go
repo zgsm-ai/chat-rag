@@ -67,8 +67,8 @@ func NewReferenceClient(referenceConfig config.ReferenceSearchConfig) ReferenceI
 	config := BaseClientConfig{
 		SearchEndpoint: referenceConfig.SearchEndpoint,
 		ReadyEndpoint:  referenceConfig.ApiReadyEndpoint,
-		SearchTimeout:  3 * time.Second,
-		ReadyTimeout:   3 * time.Second,
+		SearchTimeout:  5 * time.Second,
+		ReadyTimeout:   5 * time.Second,
 	}
 
 	baseClient := NewBaseClient(config,

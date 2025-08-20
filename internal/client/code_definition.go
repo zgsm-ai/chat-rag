@@ -68,7 +68,7 @@ func NewDefinitionClient(definitionConfig config.DefinitionSearchConfig) Definit
 		SearchEndpoint: definitionConfig.SearchEndpoint,
 		ReadyEndpoint:  definitionConfig.ApiReadyEndpoint,
 		SearchTimeout:  5 * time.Second,
-		ReadyTimeout:   3 * time.Second,
+		ReadyTimeout:   5 * time.Second,
 	}
 
 	baseClient := NewBaseClient(config,
