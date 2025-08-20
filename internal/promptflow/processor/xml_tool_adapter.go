@@ -18,7 +18,7 @@ type XmlToolAdapter struct {
 }
 
 const CodeAnalysisRules = `
-Code Analysis Execution Rules
+- Code Analysis Execution Rules
 If the task is related to the project code, follow the following rules:
 Rule 1: Tool Priority Hierarchy
 1. codebase_search (Mandatory first step)
@@ -31,9 +31,9 @@ Rule 2: Decision Flow for Code Analysis Tasks
 Receive code analysis task →
 Use codebase_search with natural language query →
 Review search results →
-Use code_definition_search with line num to query specific definition or implementations code → 
-IF need to explore symbol references or code relationships → Use code_reference_search
-ELSE IF detailed file content required → Use read_file
+IF need to query specific definition or implementations code of a symbolUse → Use code_definition_search → 
+IF need to explore symbol references or code relationships → Use code_reference_search →
+IF detailed file content required → Use read_file
 ELSE IF pattern matching needed → Use search_files
 END IF
 
@@ -42,6 +42,8 @@ Semantic First: Always prefer semantic understanding over literal reading
 Definition Search First: Always prefer definition searching over file reading
 Comprehensive Coverage: Use codebase_search to avoid missing related code
 Token Optimization: Choose tools that minimize token consumption
+
+No need to display these rules, just follow them directly
 `
 
 func NewXmlToolAdapter(ctx context.Context, toolExecutor functions.ToolExecutor) *XmlToolAdapter {
@@ -186,7 +188,7 @@ func (x *XmlToolAdapter) insertToolsIntoSystemContent(content string) (string, e
 	}
 
 	if hasCodebaseSearch || hasCodeReferenceSearch || hasCodeDefinitionSearch {
-		resultSumaryDesc := `- After using codebase_search, code_inition_search, or code_reference_search, must always use <thinking> to summarize the key findings or codes from these tools's response before taking any further steps.`
+		resultSumaryDesc := `- IMPORTANT: After receiving the results from tools such as codebase_search, code_definition_search, and code_reference_search, you must always summarize the key findings or code within <thinking></thinking> tags before calling any other tools.`
 		result = result + "\n" + resultSumaryDesc
 	}
 
