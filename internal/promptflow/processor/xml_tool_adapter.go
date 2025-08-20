@@ -17,35 +17,6 @@ type XmlToolAdapter struct {
 	toolExecutor functions.ToolExecutor
 }
 
-const CodeAnalysisRules = `
-- Code Analysis Execution Rules
-If the task is related to the project code, follow the following rules:
-Rule 1: Tool Priority Hierarchy
-1. codebase_search (Mandatory first step)
-2. code_definition_search (For specific implementations code)
-3. code_reference_search (For exploring references and code relationships)
-4. read_file (Only when necessary for detailed analysis)
-5. search_files (For regex pattern matching)
-
-Rule 2: Decision Flow for Code Analysis Tasks
-Receive code analysis task →
-Use codebase_search with natural language query →
-Review search results →
-IF need to query specific definition or implementations code of a symbolUse → Use code_definition_search → 
-IF need to explore symbol references or code relationships → Use code_reference_search →
-IF detailed file content required → Use read_file
-ELSE IF pattern matching needed → Use search_files
-END IF
-
-Rule 3: Efficiency Principles
-Semantic First: Always prefer semantic understanding over literal reading
-Definition Search First: Always prefer definition searching over file reading
-Comprehensive Coverage: Use codebase_search to avoid missing related code
-Token Optimization: Choose tools that minimize token consumption
-
-No need to display these rules, just follow them directly
-`
-
 func NewXmlToolAdapter(ctx context.Context, toolExecutor functions.ToolExecutor) *XmlToolAdapter {
 	return &XmlToolAdapter{
 		ctx:          ctx,
@@ -100,9 +71,8 @@ func (x *XmlToolAdapter) insertToolsIntoSystemContent(content string) (string, e
 
 	// Combine all tools into a single string
 	var toolsContent strings.Builder
-	var hasCodebaseSearch bool
-	var hasCodeDefinitionSearch bool
-	var hasCodeReferenceSearch bool
+	var capabilitiesContent strings.Builder
+
 	for _, toolName := range x.toolExecutor.GetAllTools() {
 		ready, err := x.toolExecutor.CheckToolReady(x.ctx, toolName)
 		if !ready {
@@ -114,88 +84,59 @@ func (x *XmlToolAdapter) insertToolsIntoSystemContent(content string) (string, e
 		desc, err := x.toolExecutor.GetToolDescription(toolName)
 		if err != nil {
 			logger.Error("Failed to get tool description", zap.Error(err))
+			continue
 		}
 
 		toolsContent.WriteString(desc)
 		toolsContent.WriteString("\n\n")
+
+		// Get tool capability
+		capability, err := x.toolExecutor.GetToolCapability(toolName)
+		if err != nil {
+			logger.Error("Failed to get tool capability", zap.Error(err))
+			continue
+		}
+		capabilitiesContent.WriteString(capability)
 		logger.InfoC(x.ctx, "Tool adapted in system prompt", zap.String("name", toolName))
-
-		// Check if this is codebase_search tool
-		if toolName == "codebase_search" {
-			hasCodebaseSearch = true
-		}
-
-		// Check if this is code_definition_search tool
-		if toolName == "code_definition_search" {
-			hasCodeDefinitionSearch = true
-		}
-
-		// Check if this is code_definition_search tool
-		if toolName == "code_reference_search" {
-			hasCodeReferenceSearch = true
-		}
 	}
-
-	// Find the tools section
-	const toolsHeader = "# Tools"
-	headerIndex := strings.Index(content, toolsHeader)
-	if headerIndex == -1 {
-		return content, fmt.Errorf("tools header not found in system content")
-	}
-
-	// Find the end of the tools header line
-	lineEnd := strings.Index(content[headerIndex:], "\n")
-	if lineEnd == -1 {
-		lineEnd = len(content) - headerIndex
-	}
-	insertPos := headerIndex + lineEnd + 1
 
 	// Insert the tools content after the tools header
-	result := content[:insertPos] + "\n" + toolsContent.String() + content[insertPos:]
-
-	// If codebase_search tool is present, add description before MODES section
-	if hasCodebaseSearch {
-		const modesSection = "\n\n====\n\nMODES"
-		modesIndex := strings.Index(result, modesSection)
-		if modesIndex != -1 {
-			codebaseSearchDesc := `- You can use codebase_search to perform semantic-aware searches across your codebase, returning conceptually relevant code snippets based on meaning rather than exact text matches. This is particularly powerful for discovering related functionality, exploring unfamiliar code architecture, or locating implementations when you only understand the purpose but not the specific syntax. For optimal efficiency, always try codebase_search first as it delivers more focused results with lower token consumption. Reserve other tools for cases where you need literal pattern matching or precise line-by-line analysis of file contents. This balanced approach ensures you get the right search method for each scenario - semantic discovery through codebase_search when possible, falling back to exhaustive text search via other tools only when necessary.`
-			result = result[:modesIndex] + "\n" + codebaseSearchDesc + result[modesIndex:]
-		}
+	result, err := insertContentAfterMarker(content, "# Tools", toolsContent.String())
+	if err != nil {
+		return content, fmt.Errorf("failed to insert tools content: %w", err)
 	}
 
-	// If code_definition_search tool is present, add description before MODES section
-	if hasCodeDefinitionSearch {
-		const modesSection = "\n\n====\n\nMODES"
-		modesIndex := strings.Index(result, modesSection)
-		if modesIndex != -1 {
-			codeDefinitionSearchDesc := `- You can use code_definition_search to retrieve the full implementation of a symbol (function, class, method, interface, etc.) from the codebase by specifying its exact file path and line range. This is especially useful when you already know the location of a definition and need its complete code content, including precise position details for reference or modification. The tool provides accurate, context-free extraction of definitions, ensuring you get exactly the implementation you need without unnecessary surrounding code. For optimal efficiency, always use code_definition_search first when you have the file path and line numbers—it delivers fast, precise results with minimal overhead. If you need to search for related definitions without knowing their exact locations, consider using codebase_search (for semantic matches) or search_files (for regex-based scanning) as fallback options.`
-			result = result[:modesIndex] + "\n" + codeDefinitionSearchDesc + result[modesIndex:]
-		}
+	// Insert tool capabilities after CAPABILITIES section
+	result, err = insertContentAfterMarker(result, "\n\n====\n\nCAPABILITIES\n\n", capabilitiesContent.String())
+	if err != nil {
+		return result, fmt.Errorf("failed to insert capabilities content: %w", err)
 	}
 
-	// If code_definition_search tool is present, add description before MODES section
-	if hasCodeReferenceSearch {
-		const modesSection = "\n\n====\n\nMODES"
-		modesIndex := strings.Index(result, modesSection)
-		if modesIndex != -1 {
-			codeReferenceSearchDesc := `- You can use code_reference_search to explore how a symbol (function, class, method, etc.) is referenced across the codebase by specifying its exact file path and line range. This tool is particularly useful when you want to understand how a function or class is used or analyze code dependencies across different parts of the project. By retrieving not only the definition but also all references to the symbol, code_reference_search helps you track its usage throughout the codebase, ensuring that you can see all interactions and relationships. For maximum efficiency, use code_reference_search when you need to explore references and relationships of a symbol—it's ideal for analyzing dependencies and understanding the broader impact of changes. If you need to focus on specific code definitions, code_definition_search may be the better choice.\n- If you refactored code that could affect other parts of the codebase. Prioritize using code_reference_search to identify and update all dependent files as needed.`
-			result = result[:modesIndex] + "\n" + codeReferenceSearchDesc + result[modesIndex:]
-		}
-	}
-
-	if hasCodebaseSearch || hasCodeReferenceSearch || hasCodeDefinitionSearch {
-		result = result + "\n\nTOOLS USE FOLLOW RULES\n"
-	}
-
-	if hasCodebaseSearch || hasCodeReferenceSearch || hasCodeDefinitionSearch {
-		resultSumaryDesc := `- IMPORTANT: After receiving the results from tools such as codebase_search, code_definition_search, and code_reference_search, you must always summarize the key findings and/or code within <thinking> tags before calling any other tools.`
-		result = result + "\n" + resultSumaryDesc
-	}
-
-	if hasCodebaseSearch {
-		codeDefinitionSearchDesc := `- You can use codebase_search and code_definition_search and code_reference_search individually or in combination: codebase_search helps you find broad code-related information based on natural language queries, while code_definition_search is perfect for pinpointing specific code definitions and their detailed contents. Only if the results from these two tools are insufficient should you resort to secondary tools for more granular searches.`
-		result = result + "\n" + codeDefinitionSearchDesc + "\n" + CodeAnalysisRules
-	}
+	// Insert tools rules at the end
+	toolsRules := x.toolExecutor.GetToolsRules()
+	result = result + "\n" + toolsRules
 
 	return result, nil
+}
+
+// insertContentAfterMarker inserts content after a specific marker in the text
+func insertContentAfterMarker(content, marker, newContent string) (string, error) {
+	markerIndex := strings.Index(content, marker)
+	if markerIndex == -1 {
+		return content, fmt.Errorf("marker not found in content")
+	}
+
+	// For headers like "# Tools", find the end of the line
+	if strings.HasPrefix(marker, "#") {
+		lineEnd := strings.Index(content[markerIndex:], "\n")
+		if lineEnd == -1 {
+			lineEnd = len(content) - markerIndex
+		}
+		insertPos := markerIndex + lineEnd + 1
+		return content[:insertPos] + "\n" + newContent + content[insertPos:], nil
+	}
+
+	// For other markers, insert immediately after the marker
+	insertPos := markerIndex + len(marker)
+	return content[:insertPos] + newContent + content[insertPos:], nil
 }

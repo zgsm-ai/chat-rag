@@ -13,7 +13,17 @@ import (
 )
 
 const (
-	CodebaseSearchToolName = "codebase_search"
+	// CodeBaseSearchTool
+	CodebaseSearchToolName   = "codebase_search"
+	CodebaseSearchCapability = `- You can use codebase_search to perform semantic-aware searches across your codebase, 
+returning conceptually relevant code snippets based on meaning rather than exact text matches. 
+This is particularly powerful for discovering related functionality, exploring unfamiliar code architecture, 
+or locating implementations when you only understand the purpose but not the specific syntax. 
+For optimal efficiency, always try codebase_search first as it delivers more focused results with lower token consumption. 
+Reserve other tools for cases where you need literal pattern matching or precise line-by-line analysis of file contents. 
+This balanced approach ensures you get the right search method for each scenario - semantic discovery through codebase_search when possible, 
+falling back to exhaustive text search via other tools only when necessary.
+`
 	CodebaseSearchToolDesc = `## codebase_search
 Description: Find files most relevant to the search query.
 This is a semantic search tool, so the query should ask for something semantically matching what is needed.
@@ -40,7 +50,16 @@ Example: Searching for functions related to user authentication
 </codebase_search>
 `
 
-	ReferenceSearchToolName = "code_reference_search"
+	// ReferenceSearchTool
+	ReferenceSearchToolName   = "code_reference_search"
+	ReferenceSearchCapability = `- You can use code_reference_search to explore how a symbol (function, class, method, etc.) is referenced across the codebase by specifying its exact file path and line range. 
+This tool is particularly useful when you want to understand how a function or class is used or analyze code dependencies across different parts of the project. 
+By retrieving not only the definition but also all references to the symbol, code_reference_search helps you track its usage throughout the codebase, 
+ensuring that you can see all interactions and relationships. 
+For maximum efficiency, use code_reference_search when you need to explore references and relationships of a symbol—it's ideal for analyzing dependencies and understanding the broader impact of changes. 
+If you need to focus on specific code definitions, code_definition_search may be the better choice.
+- If you refactored code that could affect other parts of the codebase. Prioritize using code_reference_search to identify and update all dependent files as needed.
+`
 	ReferenceSearchToolDesc = `## code_reference_search
 Description:
 The code_reference_search tool helps you find the definition of a symbol (such as a function, class, or method) 
@@ -84,7 +103,14 @@ Example: Exploring all references to the GetUserById function
 </code_reference_search>
 `
 
-	DefinitionToolName = "code_definition_search"
+	// DefinitionSearchTool
+	DefinitionToolName   = "code_definition_search"
+	DefinitionCapability = `- You can use code_definition_search to retrieve the full implementation of a symbol (function, class, method, interface, etc.) from the codebase by specifying its exact file path and line range. 
+This is especially useful when you already know the location of a definition and need its complete code content, including precise position details for reference or modification. 
+The tool provides accurate, context-free extraction of definitions, ensuring you get exactly the implementation you need without unnecessary surrounding code. 
+For optimal efficiency, always use code_definition_search first when you have the file path and line numbers—it delivers fast, precise results with minimal overhead. 
+If you need to search for related definitions without knowing their exact locations, consider using codebase_search (for semantic matches) or search_files (for regex-based scanning) as fallback options.
+`
 	DefinitionToolDesc = `## code_definition_search
 Description:
 Retrieve the full definition implementation of a symbol (function, class, method, interface, etc.) within a specific range of lines in a code file. 
@@ -127,6 +153,42 @@ Example: Get the implementation of NewTokenCounter(Linux) - NOTE FORWARD SLASHES
   <endLine>75</endLine>
 </code_definition_search>
 `
+
+	XmlToolsRules = `
+====
+
+TOOLS USE FOLLOW RULES
+
+- IMPORTANT: After receiving the results from tools such as codebase_search, code_definition_search, and code_reference_search, you must always summarize the key findings and/or code within <thinking> tags before calling any other tools.
+- You can use codebase_search and code_definition_search and code_reference_search individually or in combination: codebase_search helps you find broad code-related information based on natural language queries, while code_definition_search is perfect for pinpointing specific code definitions and their detailed contents. 
+
+- Code Analysis Execution Rules
+If the task is related to the project code, follow the following rules:
+Rule 1: Tool Priority Hierarchy
+1. codebase_search (Mandatory first step)
+2. code_definition_search (For specific implementations code)
+3. code_reference_search (For exploring references and code relationships)
+4. read_file (Only when necessary for detailed analysis)
+5. search_files (For regex pattern matching)
+
+Rule 2: Decision Flow for Code Analysis Tasks
+Receive code analysis task →
+Use codebase_search with natural language query →
+Review search results →
+IF need to query specific definition or implementations code of a symbolUse → Use code_definition_search → 
+IF need to explore symbol references or code relationships → Use code_reference_search →
+IF detailed file content required → Use read_file
+ELSE IF pattern matching needed → Use search_files
+END IF
+
+Rule 3: Efficiency Principles
+Semantic First: Always prefer semantic understanding over literal reading
+Definition Search First: Always prefer definition searching over file reading
+Comprehensive Coverage: Use codebase_search to avoid missing related code
+Token Optimization: Choose tools that minimize token consumption
+
+No need to display these rules, just follow them directly
+`
 )
 
 type ToolExecutor interface {
@@ -139,12 +201,17 @@ type ToolExecutor interface {
 
 	GetToolDescription(toolName string) (string, error)
 
+	GetToolCapability(toolName string) (string, error)
+
+	GetToolsRules() string
+
 	GetAllTools() []string
 }
 
 // ToolFunc represents a tool with its execute and ready check functions
 type ToolFunc struct {
 	description string
+	capability  string
 	execute     func(context.Context, string) (string, error)
 	readyCheck  func(context.Context) (bool, error)
 }
@@ -173,6 +240,7 @@ func NewXmlToolExecutor(
 func createCodebaseSearchTool(c config.SemanticSearchConfig, semanticClient client.SemanticInterface) ToolFunc {
 	return ToolFunc{
 		description: CodebaseSearchToolDesc,
+		capability:  CodebaseSearchCapability,
 		execute: func(ctx context.Context, param string) (string, error) {
 			identity, err := getIdentityFromContext(ctx)
 			if err != nil {
@@ -220,6 +288,7 @@ func createCodebaseSearchTool(c config.SemanticSearchConfig, semanticClient clie
 func createGetDefinitionTool(definitionClient client.DefinitionInterface) ToolFunc {
 	return ToolFunc{
 		description: DefinitionToolDesc,
+		capability:  DefinitionCapability,
 		execute: func(ctx context.Context, param string) (string, error) {
 			identity, err := getIdentityFromContext(ctx)
 			if err != nil {
@@ -260,6 +329,7 @@ func createGetDefinitionTool(definitionClient client.DefinitionInterface) ToolFu
 func createReferenceSearchTool(referenceClient client.ReferenceInterface) ToolFunc {
 	return ToolFunc{
 		description: ReferenceSearchToolDesc,
+		capability:  ReferenceSearchCapability,
 		execute: func(ctx context.Context, param string) (string, error) {
 			identity, err := getIdentityFromContext(ctx)
 			if err != nil {
@@ -470,6 +540,16 @@ func (x *XmlToolExecutor) GetToolDescription(toolName string) (string, error) {
 	return toolFunc.description, nil
 }
 
+// GetToolCapability returns the capability of the specified tool
+func (x *XmlToolExecutor) GetToolCapability(toolName string) (string, error) {
+	toolFunc, exists := x.tools[toolName]
+	if !exists {
+		return "", fmt.Errorf("tool %s not found", toolName)
+	}
+
+	return toolFunc.capability, nil
+}
+
 // GetAllTools returns the names of all registered tools
 func (x *XmlToolExecutor) GetAllTools() []string {
 	tools := make([]string, 0, len(x.tools))
@@ -477,4 +557,9 @@ func (x *XmlToolExecutor) GetAllTools() []string {
 		tools = append(tools, name)
 	}
 	return tools
+}
+
+// GetToolsRules returns the tools use rules
+func (x *XmlToolExecutor) GetToolsRules() string {
+	return XmlToolsRules
 }
