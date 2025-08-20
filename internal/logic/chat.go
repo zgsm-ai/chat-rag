@@ -422,6 +422,9 @@ func (l *ChatCompletionLogic) handleToolExecution(
 				}, {
 					Type: model.ContTypeText,
 					Text: result,
+				}, {
+					Type: model.ContTypeText,
+					Text: "Please summarize the key findings and/or code within <thinking> tags before calling any other tools.",
 				},
 			},
 		},

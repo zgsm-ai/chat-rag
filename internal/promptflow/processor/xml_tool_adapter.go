@@ -178,7 +178,7 @@ func (x *XmlToolAdapter) insertToolsIntoSystemContent(content string) (string, e
 		const modesSection = "\n\n====\n\nMODES"
 		modesIndex := strings.Index(result, modesSection)
 		if modesIndex != -1 {
-			codeReferenceSearchDesc := `- You can use code_reference_search to explore how a symbol (function, class, method, etc.) is referenced across the codebase by specifying its exact file path and line range. This tool is particularly useful when you want to understand how a function or class is used or analyze code dependencies across different parts of the project. By retrieving not only the definition but also all references to the symbol, code_reference_search helps you track its usage throughout the codebase, ensuring that you can see all interactions and relationships. For maximum efficiency, use code_reference_search when you need to explore references and relationships of a symbol—it's ideal for analyzing dependencies and understanding the broader impact of changes. If you need to focus on specific code definitions, code_definition_search may be the better choice.`
+			codeReferenceSearchDesc := `- You can use code_reference_search to explore how a symbol (function, class, method, etc.) is referenced across the codebase by specifying its exact file path and line range. This tool is particularly useful when you want to understand how a function or class is used or analyze code dependencies across different parts of the project. By retrieving not only the definition but also all references to the symbol, code_reference_search helps you track its usage throughout the codebase, ensuring that you can see all interactions and relationships. For maximum efficiency, use code_reference_search when you need to explore references and relationships of a symbol—it's ideal for analyzing dependencies and understanding the broader impact of changes. If you need to focus on specific code definitions, code_definition_search may be the better choice.\n- If you refactored code that could affect other parts of the codebase. Prioritize using code_reference_search to identify and update all dependent files as needed.`
 			result = result[:modesIndex] + "\n" + codeReferenceSearchDesc + result[modesIndex:]
 		}
 	}
@@ -188,7 +188,7 @@ func (x *XmlToolAdapter) insertToolsIntoSystemContent(content string) (string, e
 	}
 
 	if hasCodebaseSearch || hasCodeReferenceSearch || hasCodeDefinitionSearch {
-		resultSumaryDesc := `- IMPORTANT: After receiving the results from tools such as codebase_search, code_definition_search, and code_reference_search, you must always summarize the key findings or code within <thinking></thinking> tags before calling any other tools.`
+		resultSumaryDesc := `- IMPORTANT: After receiving the results from tools such as codebase_search, code_definition_search, and code_reference_search, you must always summarize the key findings and/or code within <thinking> tags before calling any other tools.`
 		result = result + "\n" + resultSumaryDesc
 	}
 
