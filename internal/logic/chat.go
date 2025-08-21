@@ -424,7 +424,7 @@ func (l *ChatCompletionLogic) handleToolExecution(
 					Text: result,
 				}, {
 					Type: model.ContTypeText,
-					Text: "Please summarize the key findings and/or code from the results above within the <thinking></thinking> tags, unless the results indicate a failure. If the failure was due to a network timeout, try invoking the tool again.",
+					Text: "Please summarize the key findings and/or code from the results above within the <thinking></thinking> tags, unless the results indicate a failure.",
 				},
 			},
 		},
