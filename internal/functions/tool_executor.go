@@ -173,14 +173,20 @@ Rule 1: Tool Priority Hierarchy
 4. read_file (Only when necessary for detailed analysis)
 5. search_files (For regex pattern matching)
 
-Rule 2: Decision Flow for Code Analysis Tasks
-Receive code analysis task →
+Rule 2: Decision Flow for Code Analysis
+Receive code analysis →
 Use codebase_search with natural language query →
-Review search results →
-IF need to query specific definition or implementations code of a symbolUse → Use code_definition_search → 
-IF need to explore symbol references or code relationships → Use code_reference_search →
-IF detailed file content required → Use read_file
-ELSE IF pattern matching needed → Use search_files
+IF need to query specific definition or implementations code of a symbolUse:
+	Use code_definition_search → 
+END IF
+IF need to explore symbol references or code relationships:
+	Use code_reference_search →
+END IF
+Review search results → 
+IF detailed file content required:
+	Use read_file
+ELSE IF pattern matching needed:
+	Use search_files
 END IF
 
 Rule 3: Efficiency Principles
