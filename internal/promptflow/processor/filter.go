@@ -2,6 +2,7 @@ package processor
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/zgsm-ai/chat-rag/internal/logger"
 	"github.com/zgsm-ai/chat-rag/internal/types"
@@ -102,10 +103,11 @@ func (u *UserMsgFilter) filterAssistantToolPatterns(promptMsg *PromptMsg) {
 	}
 }
 
-// removeToolExecutionPatterns removes strings that start with "#### 🔍 " and end with "工具执行中......."
+// removeToolExecutionPatterns removes strings that executing tool
+// Temporarily hardcoded
 func (u *UserMsgFilter) removeToolExecutionPatterns(content string) string {
-	startPattern := "#### 🔍 "
-	endPattern := "工具执行中......."
+	startPattern := "\n#### 🔍 "
+	endPattern := "工具检索中....."
 
 	result := content
 	for {
@@ -126,6 +128,13 @@ func (u *UserMsgFilter) removeToolExecutionPatterns(content string) string {
 		// Remove the pattern
 		result = result[:startIndex] + result[endIndex:]
 		logger.Info("removed tool executing... content", zap.String("method", "removeToolExecutionPatterns"))
+	}
+
+	// Remove the specific string "\n#### 💡 检索已完成，思考中..."
+	thinkPattern := "\n#### 💡 检索已完成，思考中..."
+	result = strings.ReplaceAll(result, thinkPattern, "")
+	if result != content {
+		logger.Info("removed thinking... content", zap.String("method", "removeToolExecutionPatterns"))
 	}
 
 	return result

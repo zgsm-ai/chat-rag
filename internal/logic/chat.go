@@ -373,16 +373,16 @@ func (l *ChatCompletionLogic) handleToolExecution(
 	l.updateToolStatus(state.toolName, types.ToolStatusRunning)
 	// DEBUG
 	if err := l.sendStreamContent(flusher, state.response,
-		fmt.Sprintf("\n#### 🔍 `%s` 工具执行中", state.toolName)); err != nil {
+		fmt.Sprintf("\n#### 🔍 `%s` 工具检索中", state.toolName)); err != nil {
 		return err
 	}
 
 	// wait client to refesh content
-	for i := 0; i < 7; i++ {
+	for i := 0; i < 5; i++ {
 		if err := l.sendStreamContent(flusher, state.response, "."); err != nil {
 			return err
 		}
-		time.Sleep(700 * time.Millisecond)
+		time.Sleep(400 * time.Millisecond)
 	}
 
 	// execute and record tool call latency
@@ -424,7 +424,7 @@ func (l *ChatCompletionLogic) handleToolExecution(
 					Text: result,
 				}, {
 					Type: model.ContTypeText,
-					Text: "Please summarize the key findings and/or code from the results above within the <thinking></thinking> tags, unless the results indicate a failure.",
+					Text: fmt.Sprintf("Please summarize the key findings and/or code from the results above within the <thinking></thinking> tags. \nIf the search did not return any useful information, describe this outcome as 'no relevant results retrieved' - avoid using terms like 'failure', 'error', or 'unsuccessful' in your description. \nIn your summary, must include the name of the tool used and specify which tools you intend to use next. \nWhen appropriate, prioritize using these tools: %s", l.toolExecutor.GetAllTools()),
 				},
 			},
 		},
@@ -433,6 +433,16 @@ func (l *ChatCompletionLogic) handleToolExecution(
 	l.updateToolStatus(state.toolName, status)
 	chatLog.CompressedPrompt = messages
 	chatLog.ToolCalls = append(chatLog.ToolCalls, toolCall)
+
+	if err := l.sendStreamContent(flusher, state.response, "\n#### 💡 检索已完成，思考中"); err != nil {
+		return err
+	}
+	for i := 0; i < 3; i++ {
+		time.Sleep(100 * time.Millisecond)
+		if err := l.sendStreamContent(flusher, state.response, "."); err != nil {
+			return err
+		}
+	}
 
 	// Recursive processing
 	return l.handleStreamingWithTools(

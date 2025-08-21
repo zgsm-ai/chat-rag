@@ -170,8 +170,6 @@ Rule 1: Tool Priority Hierarchy
 1. codebase_search (Mandatory first step)
 2. code_definition_search (For specific implementations code)
 3. code_reference_search (For exploring references and code relationships)
-4. read_file (Only when necessary for detailed analysis)
-5. search_files (For regex pattern matching)
 
 Rule 2: Decision Flow for Code Analysis
 Receive code analysis →
@@ -182,12 +180,7 @@ END IF
 IF need to explore symbol references or code relationships:
 	Use code_reference_search →
 END IF
-Review search results → 
-IF detailed file content required:
-	Use read_file
-ELSE IF pattern matching needed:
-	Use search_files
-END IF
+Review search results
 
 Rule 3: Efficiency Principles
 Semantic First: Always prefer semantic understanding over literal reading
