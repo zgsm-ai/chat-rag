@@ -532,7 +532,7 @@ func (ls *LoggerRecordService) saveLogToPermanentStorage(chatLog *model.ChatLog)
 		return
 	}
 
-	logger.Info("Log saved in storage", zap.String("name", filename))
+	logger.Info("Log saved in storage", zap.String("fileName", logFile))
 }
 
 // deleteTempLogFile deletes a single temp log file
