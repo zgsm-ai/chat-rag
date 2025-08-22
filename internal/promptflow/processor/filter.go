@@ -106,8 +106,8 @@ func (u *UserMsgFilter) filterAssistantToolPatterns(promptMsg *PromptMsg) {
 // removeToolExecutionPatterns removes strings that executing tool
 // Temporarily hardcoded
 func (u *UserMsgFilter) removeToolExecutionPatterns(content string) string {
-	startPattern := "\n#### 🔍 "
-	endPattern := "工具检索中....."
+	startPattern := types.StrFilterToolSearchStart
+	endPattern := types.StrFilterToolSearchEnd + "....."
 
 	result := content
 	for {
@@ -130,8 +130,8 @@ func (u *UserMsgFilter) removeToolExecutionPatterns(content string) string {
 		logger.Info("removed tool executing... content", zap.String("method", "removeToolExecutionPatterns"))
 	}
 
-	// Remove the specific string "\n#### 💡 检索已完成，思考中..."
-	thinkPattern := "\n#### 💡 检索已完成，思考中..."
+	// Remove the specific string
+	thinkPattern := types.StrFilterToolAnalyzing + "..."
 	result = strings.ReplaceAll(result, thinkPattern, "")
 	if result != content {
 		logger.Info("removed thinking... content", zap.String("method", "removeToolExecutionPatterns"))

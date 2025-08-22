@@ -57,6 +57,11 @@ const (
 // Redis key prefix for tool status
 const ToolStatusRedisKeyPrefix = "tool_status:"
 
+// Tool string filter
+const StrFilterToolAnalyzing = "\n#### 💡 检索已完成，分析中"
+const StrFilterToolSearchStart = "\n#### 🔍 "
+const StrFilterToolSearchEnd = "工具检索中"
+
 type ChatCompletionRequest struct {
 	Model         string        `json:"model"`
 	Messages      []Message     `json:"messages"`
