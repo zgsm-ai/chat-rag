@@ -529,6 +529,7 @@ func (ls *LoggerRecordService) saveLogToPermanentStorage(chatLog *model.ChatLog)
 		logger.Error("Failed to write log to permanent storage",
 			zap.Error(err),
 		)
+		return
 	}
 
 	logger.Info("Log saved in storage", zap.String("name", filename))
