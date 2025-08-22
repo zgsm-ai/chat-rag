@@ -19,19 +19,20 @@ const (
 )
 
 type Identity struct {
-	TaskID      string    `json:"task_id"`
-	RequestID   string    `json:"request_id"`
-	ClientID    string    `json:"client_id"`
-	ClientIDE   string    `json:"client_ide"`
-	ClientOS    string    `json:"client_os"`
-	UserName    string    `json:"user_name"`
-	ProjectPath string    `json:"project_path"`
-	AuthToken   string    `json:"auth_token"`
-	LoginFrom   string    `json:"login_from"`
-	Caller      string    `json:"caller"` // ide, code-review, ...
-	Sender      string    `json:"sender"` // user, system, ...
-	Language    string    `json:"language"`
-	UserInfo    *UserInfo `json:"user_info"`
+	TaskID        string    `json:"task_id"`
+	RequestID     string    `json:"request_id"`
+	ClientID      string    `json:"client_id"`
+	ClientIDE     string    `json:"client_ide"`
+	ClientVersion string    `json:"client_version"`
+	ClientOS      string    `json:"client_os"`
+	UserName      string    `json:"user_name"`
+	ProjectPath   string    `json:"project_path"`
+	AuthToken     string    `json:"auth_token"`
+	LoginFrom     string    `json:"login_from"`
+	Caller        string    `json:"caller"` // ide, code-review, ...
+	Sender        string    `json:"sender"` // user, system, ...
+	Language      string    `json:"language"`
+	UserInfo      *UserInfo `json:"user_info"`
 }
 
 // UserInfo defines the user information structure

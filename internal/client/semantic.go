@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/zgsm-ai/chat-rag/internal/config"
+	"github.com/zgsm-ai/chat-rag/internal/types"
 )
 
 // SemanticInterface defines the interface for semantic search client
@@ -24,6 +25,7 @@ type SemanticRequest struct {
 	TopK          int     `json:"topK"`
 	Authorization string  `json:"authorization"`
 	Score         float64 `json:"scoreThreshold"`
+	ClientVersion string  `json:"clientVersion"`
 }
 
 // ReadyRequest represents the request structure for checking service availability
@@ -31,6 +33,7 @@ type ReadyRequest struct {
 	ClientId      string `json:"clientId"`
 	CodebasePath  string `json:"codebasePath"`
 	Authorization string `json:"authorization"`
+	ClientVersion string `json:"clientVersion"`
 }
 
 // SemanticResponseWrapper represents the API standard response wrapper for semantic search
@@ -93,6 +96,9 @@ type SemanticRequestBuilder struct{}
 
 func (b *SemanticRequestBuilder) BuildRequest(req SemanticRequest) Request {
 	return Request{
+		Headers: map[string]string{
+			types.HeaderClientVersion: req.ClientVersion,
+		},
 		Method:        http.MethodPost,
 		Authorization: req.Authorization,
 		Body:          req,
@@ -101,6 +107,9 @@ func (b *SemanticRequestBuilder) BuildRequest(req SemanticRequest) Request {
 
 func (b *SemanticRequestBuilder) BuildReadyRequest(req ReadyRequest) Request {
 	return Request{
+		Headers: map[string]string{
+			types.HeaderClientVersion: req.ClientVersion,
+		},
 		Method: http.MethodGet,
 		QueryParams: map[string]string{
 			"clientId":     req.ClientId,

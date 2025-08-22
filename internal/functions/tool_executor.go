@@ -260,6 +260,7 @@ func createCodebaseSearchTool(c config.SemanticSearchConfig, semanticClient clie
 				TopK:          c.TopK,
 				Authorization: identity.AuthToken,
 				Score:         c.ScoreThreshold,
+				ClientVersion: identity.ClientVersion,
 			})
 			if err != nil {
 				return "", fmt.Errorf("semantic search failed: %w", err)
@@ -280,6 +281,7 @@ func createCodebaseSearchTool(c config.SemanticSearchConfig, semanticClient clie
 				ClientId:      identity.ClientID,
 				CodebasePath:  identity.ProjectPath,
 				Authorization: identity.AuthToken,
+				ClientVersion: identity.ClientVersion,
 			})
 		},
 	}
@@ -321,6 +323,7 @@ func createGetDefinitionTool(definitionClient client.DefinitionInterface) ToolFu
 				ClientId:      identity.ClientID,
 				CodebasePath:  identity.ProjectPath,
 				Authorization: identity.AuthToken,
+				ClientVersion: identity.ClientVersion,
 			})
 		},
 	}
@@ -362,6 +365,7 @@ func createReferenceSearchTool(referenceClient client.ReferenceInterface) ToolFu
 				ClientId:      identity.ClientID,
 				CodebasePath:  identity.ProjectPath,
 				Authorization: identity.AuthToken,
+				ClientVersion: identity.ClientVersion,
 			})
 		},
 	}
@@ -373,6 +377,7 @@ func buildDefinitionRequest(identity *model.Identity, param string) (client.Defi
 		ClientId:      identity.ClientID,
 		CodebasePath:  identity.ProjectPath,
 		Authorization: identity.AuthToken,
+		ClientVersion: identity.ClientVersion,
 	}
 
 	var err error
@@ -413,6 +418,7 @@ func buildRerenceRequest(identity *model.Identity, param string) (client.Referen
 		ClientId:      identity.ClientID,
 		CodebasePath:  identity.ProjectPath,
 		Authorization: identity.AuthToken,
+		ClientVersion: identity.ClientVersion,
 	}
 
 	var err error

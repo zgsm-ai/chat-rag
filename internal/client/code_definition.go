@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/zgsm-ai/chat-rag/internal/config"
+	"github.com/zgsm-ai/chat-rag/internal/types"
 )
 
 // DefinitionInterface defines the interface for code definition search client
@@ -26,6 +27,7 @@ type DefinitionRequest struct {
 	EndLine       *int   `json:"endLine,omitempty"`
 	CodeSnippet   string `json:"codeSnippet,omitempty"`
 	Authorization string `json:"authorization"`
+	ClientVersion string `json:"clientVersion"`
 }
 
 // DefinitionResponseWrapper represents the API standard response wrapper for code definition search
@@ -114,6 +116,9 @@ func (b *DefinitionRequestBuilder) BuildRequest(req DefinitionRequest) Request {
 	}
 
 	return Request{
+		Headers: map[string]string{
+			types.HeaderClientVersion: req.ClientVersion,
+		},
 		Method:        http.MethodGet,
 		QueryParams:   queryParams,
 		Authorization: req.Authorization,
@@ -122,6 +127,9 @@ func (b *DefinitionRequestBuilder) BuildRequest(req DefinitionRequest) Request {
 
 func (b *DefinitionRequestBuilder) BuildReadyRequest(req ReadyRequest) Request {
 	return Request{
+		Headers: map[string]string{
+			types.HeaderClientVersion: req.ClientVersion,
+		},
 		Method: http.MethodGet,
 		QueryParams: map[string]string{
 			"clientId":     req.ClientId,

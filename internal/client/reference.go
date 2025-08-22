@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/zgsm-ai/chat-rag/internal/config"
+	"github.com/zgsm-ai/chat-rag/internal/types"
 )
 
 // ReferenceInterface defines the interface for relation search client
@@ -26,6 +27,7 @@ type ReferenceRequest struct {
 	EndLine       int    `json:"endLine"`
 	SymbolName    string `json:"symbolName,omitempty"`
 	Authorization string `json:"authorization"`
+	ClientVersion string `json:"clientVersion"`
 }
 
 // ReferenceResponseWrapper represents the API standard response wrapper for relation search
@@ -110,6 +112,9 @@ func (b *ReferenceRequestBuilder) BuildRequest(req ReferenceRequest) Request {
 	}
 
 	return Request{
+		Headers: map[string]string{
+			types.HeaderClientVersion: req.ClientVersion,
+		},
 		Method:        http.MethodGet,
 		QueryParams:   queryParams,
 		Authorization: req.Authorization,
@@ -118,6 +123,9 @@ func (b *ReferenceRequestBuilder) BuildRequest(req ReferenceRequest) Request {
 
 func (b *ReferenceRequestBuilder) BuildReadyRequest(req ReadyRequest) Request {
 	return Request{
+		Headers: map[string]string{
+			types.HeaderClientVersion: req.ClientVersion,
+		},
 		Method: http.MethodGet,
 		QueryParams: map[string]string{
 			"clientId":     req.ClientId,

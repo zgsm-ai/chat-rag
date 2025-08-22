@@ -43,6 +43,7 @@ const (
 	HeaderLanguage      = "Accept-Language"
 	HeaderAuthorization = "authorization"
 	HeaderProjectPath   = "zgsm-project-path"
+	HeaderClientVersion = "X-Costrict-Version"
 )
 
 // ToolStatus defines the status of the tool
