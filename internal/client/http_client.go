@@ -117,10 +117,6 @@ func (c *HTTPClient) DoRequest(ctx context.Context, req Request) (*http.Response
 		httpReq.Header.Set(key, value)
 	}
 
-	for key, values := range httpReq.Header {
-		fmt.Printf("  %s: %v\n", key, values)
-	}
-
 	// Execute request
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
