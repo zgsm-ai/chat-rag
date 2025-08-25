@@ -490,7 +490,7 @@ func (l *ChatCompletionLogic) completeStreamResponse(
 
 		endContent := strings.Join(state.window, "")
 
-		if state.response != nil {
+		if state.response != nil && l.usage != nil {
 			state.response.Usage = *l.usage
 			if err := l.sendStreamContent(flusher, state.response, endContent); err != nil {
 				return err
