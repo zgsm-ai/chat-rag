@@ -489,10 +489,16 @@ func (l *ChatCompletionLogic) completeStreamResponse(
 		}
 
 		endContent := strings.Join(state.window, "")
-		state.response.Usage = *l.usage
-		if err := l.sendStreamContent(flusher, state.response, endContent); err != nil {
-			return err
+
+		if state.response != nil {
+			state.response.Usage = *l.usage
+			if err := l.sendStreamContent(flusher, state.response, endContent); err != nil {
+				return err
+			}
+		} else {
+			logger.WarnC(l.ctx, "state.response is nil when sending remaining content")
 		}
+
 		if err := l.sendRawLine(flusher, "[DONE]"); err != nil {
 			return err
 		}

@@ -58,9 +58,6 @@ func handleStreamResponse(c *gin.Context, l *logic.ChatCompletionLogic) {
 	c.Status(http.StatusOK)
 
 	flusher, _ := c.Writer.(http.Flusher)
-	if flusher != nil {
-		flusher.Flush()
-	}
 
 	if err := l.ChatCompletionStream(); err != nil {
 		sendStreamError(c, err, flusher)
