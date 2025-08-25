@@ -72,6 +72,7 @@ func (x *XmlToolAdapter) insertToolsIntoSystemContent(content string) (string, e
 	// Combine all tools into a single string
 	var toolsContent strings.Builder
 	var capabilitiesContent strings.Builder
+	var hasTools bool
 
 	for _, toolName := range x.toolExecutor.GetAllTools() {
 		ready, err := x.toolExecutor.CheckToolReady(x.ctx, toolName)
@@ -80,6 +81,7 @@ func (x *XmlToolAdapter) insertToolsIntoSystemContent(content string) (string, e
 				zap.String("method", method), zap.Error(err))
 			continue
 		}
+		hasTools = true
 
 		desc, err := x.toolExecutor.GetToolDescription(toolName)
 		if err != nil {
@@ -113,8 +115,11 @@ func (x *XmlToolAdapter) insertToolsIntoSystemContent(content string) (string, e
 	}
 
 	// Insert tools rules at the end
-	toolsRules := x.toolExecutor.GetToolsRules()
-	result = result + "\n" + toolsRules
+	if hasTools {
+		toolsRules := x.toolExecutor.GetToolsRules()
+		result = result + "\n" + toolsRules
+		logger.InfoC(x.ctx, "Tool Rules adapted in system prompt")
+	}
 
 	return result, nil
 }
