@@ -87,7 +87,7 @@ type ChatCompletionResponse struct {
 	Created int64    `json:"created"`
 	Model   string   `json:"model"`
 	Choices []Choice `json:"choices"`
-	Usage   Usage    `json:"usage,omitempty"`
+	Usage   Usage    `json:"usage"`
 }
 
 type ChatLLMRequest struct {
