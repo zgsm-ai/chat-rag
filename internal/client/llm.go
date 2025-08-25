@@ -23,11 +23,16 @@ type LLMInterface interface {
 	// GenerateContent directly generates non-streaming content with system prompts and user prompts
 	GenerateContent(ctx context.Context, systemPrompt string, userMessages []types.Message) (string, error)
 	// ChatLLMWithMessagesStreamRaw directly calls the API using HTTP client to get raw streaming response
-	ChatLLMWithMessagesStreamRaw(ctx context.Context, messages []types.Message, callback func(string) error) error
+	ChatLLMWithMessagesStreamRaw(ctx context.Context, messages []types.Message, callback func(LLMResponse) error) error
 	//ChatLLMWithMessagesRaw directly calls the API using HTTP client to get raw non-streaming response
 	ChatLLMWithMessagesRaw(ctx context.Context, messages []types.Message) (types.ChatCompletionResponse, error)
 	// SetTools sets the tools for the LLM client
 	SetTools(tools []types.Function)
+}
+
+type LLMResponse struct {
+	Header      *http.Header
+	ResonseLine string
 }
 
 // LLMClient handles communication with language models
@@ -130,7 +135,7 @@ func (c *LLMClient) handleAPIError(resp *http.Response, logMessage string) error
 }
 
 // ChatLLMWithMessagesStreamRaw directly calls the API using HTTP client to get raw streaming response
-func (c *LLMClient) ChatLLMWithMessagesStreamRaw(ctx context.Context, messages []types.Message, callback func(string) error) error {
+func (c *LLMClient) ChatLLMWithMessagesStreamRaw(ctx context.Context, messages []types.Message, callback func(LLMResponse) error) error {
 	if callback == nil {
 		return fmt.Errorf("callback function cannot be nil")
 	}
@@ -184,6 +189,11 @@ func (c *LLMClient) ChatLLMWithMessagesStreamRaw(ctx context.Context, messages [
 		return c.handleAPIError(resp, "LLMClient get straming error response")
 	}
 
+	headers := resp.Header
+	llmResp := LLMResponse{
+		Header: &headers,
+	}
+
 	// Read streaming response line by line
 	scanner := bufio.NewScanner(resp.Body)
 	// Increase buffer size to handle long response lines
@@ -194,7 +204,8 @@ func (c *LLMClient) ChatLLMWithMessagesStreamRaw(ctx context.Context, messages [
 
 		// Arrange non-empty lines, including empty data lines
 		if line != "" || strings.HasPrefix(line, "data:") {
-			if err := callback(line); err != nil {
+			llmResp.ResonseLine = line
+			if err := callback(llmResp); err != nil {
 				return fmt.Errorf("callback error: %w", err)
 			}
 		}

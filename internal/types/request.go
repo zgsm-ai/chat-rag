@@ -33,6 +33,7 @@ const (
 )
 
 const (
+	// Request Headers
 	HeaderQuotaIdentity = "x-quota-identity"
 	HeaderRequestId     = "x-request-id"
 	HeaderCaller        = "x-caller"
@@ -44,6 +45,10 @@ const (
 	HeaderAuthorization = "authorization"
 	HeaderProjectPath   = "zgsm-project-path"
 	HeaderClientVersion = "X-Costrict-Version"
+
+	// Response Headers
+	HeaderUserInput = "x-user-input"
+	HeaderSelectLLm = "x-select-llm"
 )
 
 // ToolStatus defines the status of the tool

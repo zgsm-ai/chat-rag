@@ -277,11 +277,31 @@ func (l *ChatCompletionLogic) processStream(
 	state *streamState,
 	remainingDepth int,
 ) (bool, error) {
-	err := llmClient.ChatLLMWithMessagesStreamRaw(l.ctx, messages, func(rawLine string) error {
-		return l.handleStreamChunk(flusher, rawLine, state, remainingDepth)
+	err := llmClient.ChatLLMWithMessagesStreamRaw(l.ctx, messages, func(llmResp client.LLMResponse) error {
+		l.handleResonseHeaders(llmResp.Header, []string{
+			types.HeaderUserInput,
+			types.HeaderSelectLLm,
+		})
+
+		return l.handleStreamChunk(flusher, llmResp.ResonseLine, state, remainingDepth)
 	})
 
 	return state.toolDetected, err
+}
+
+// handleResonseHeaders Set the specified request header to the response
+func (l *ChatCompletionLogic) handleResonseHeaders(header *http.Header, requiredHeaders []string) {
+	for _, headerName := range requiredHeaders {
+		if headerValue := header.Get(headerName); headerValue != "" {
+			if l.writer.Header().Get(headerName) != "" {
+				continue
+			}
+
+			l.writer.Header().Set(headerName, headerValue)
+			logger.InfoC(l.ctx, "Response header setted",
+				zap.String("header", headerName), zap.String("value", headerValue))
+		}
+	}
 }
 
 // handleStreamChunk processes individual streaming chunks
@@ -425,7 +445,7 @@ func (l *ChatCompletionLogic) handleToolExecution(
 					Text: result,
 				}, {
 					Type: model.ContTypeText,
-					Text: fmt.Sprintf("Please summarize the key findings and/or code from the results above within the <thinking></thinking> tags. \nIf the search failed, don't say 'failed', describe this outcome as 'no relevant results found' - MOUST NOT using terms like 'failure', 'error', or 'unsuccessful' in your description. \nIn your summary, must include the name of the tool used and specify which tools you intend to use next. \nWhen appropriate, prioritize using these tools: %s", l.toolExecutor.GetAllTools()),
+					Text: fmt.Sprintf("Please summarize the key findings and/or code from the results above within the <thinking></thinking> tags. No need to summarize error messages. \nIf the search failed, don't say 'failed', describe this outcome as 'no relevant results found' - MOUST NOT using terms like 'failure', 'error', or 'unsuccessful' in your description. \nIn your summary, must include the name of the tool used and specify which tools you intend to use next. \nWhen appropriate, prioritize using these tools: %s", l.toolExecutor.GetAllTools()),
 				},
 			},
 		},
