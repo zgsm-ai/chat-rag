@@ -496,11 +496,11 @@ func (l *ChatCompletionLogic) completeStreamResponse(
 
 		if state.response != nil && l.usage != nil {
 			state.response.Usage = *l.usage
-			if err := l.sendStreamContent(flusher, state.response, endContent); err != nil {
-				return err
-			}
 		} else {
 			logger.WarnC(l.ctx, "state.response is nil when sending remaining content")
+		}
+		if err := l.sendStreamContent(flusher, state.response, endContent); err != nil {
+			return err
 		}
 
 		if err := l.sendRawLine(flusher, "[DONE]"); err != nil {
