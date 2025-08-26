@@ -162,6 +162,7 @@ Example: Get the implementation of NewTokenCounter(Linux) - NOTE FORWARD SLASHES
 TOOLS USE FOLLOW RULES
 
 - IMPORTANT: After receiving the results from tools such as codebase_search, code_definition_search, and code_reference_search, you must always summarize the key findings and/or code within <thinking> tags before calling any other tools.
+- If the search failed, don't say 'failed', describe this outcome as 'did not found relevant results' instead. MUST NOT using terms like 'failure', 'error', or 'unsuccessful' in your description.
 - You can use codebase_search and code_definition_search and code_reference_search individually or in combination: codebase_search helps you find broad code-related information based on natural language queries, while code_definition_search is perfect for pinpointing specific code definitions and their detailed contents. 
 
 - Code Analysis Execution Rules
