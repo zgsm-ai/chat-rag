@@ -40,18 +40,20 @@ func getIdentityFromHeaders(c *gin.Context) *model.Identity {
 	logger.Info("User info:", zap.Any("userInfo", userInfo))
 
 	return &model.Identity{
-		RequestID:   c.GetHeader(types.HeaderRequestId),
-		TaskID:      c.GetHeader(types.HeaderTaskId),
-		ClientID:    c.GetHeader(types.HeaderTaskId),
-		ClientIDE:   clientIDE,
-		ProjectPath: projectPath,
-		AuthToken:   jwtToken,
-		UserName:    userInfo.Name,
-		LoginFrom:   userInfo.ExtractLoginFromToken(),
-		Caller:      caller,
-		Language:    c.GetHeader(types.HeaderLanguage),
-		Sender:      sender,
-		UserInfo:    userInfo,
+		RequestID:     c.GetHeader(types.HeaderRequestId),
+		TaskID:        c.GetHeader(types.HeaderTaskId),
+		ClientID:      c.GetHeader(types.HeaderClientId),
+		ClientIDE:     clientIDE,
+		ClientVersion: c.GetHeader(types.HeaderClientVersion),
+		ClientOS:      c.GetHeader(types.HeaderClientOS),
+		ProjectPath:   projectPath,
+		AuthToken:     jwtToken,
+		UserName:      userInfo.Name,
+		LoginFrom:     userInfo.ExtractLoginFromToken(),
+		Caller:        caller,
+		Language:      c.GetHeader(types.HeaderLanguage),
+		Sender:        sender,
+		UserInfo:      userInfo,
 	}
 }
 

@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"github.com/zgsm-ai/chat-rag/internal/client"
 	"github.com/zgsm-ai/chat-rag/internal/config"
+	"github.com/zgsm-ai/chat-rag/internal/functions"
 	"github.com/zgsm-ai/chat-rag/internal/service"
 	"github.com/zgsm-ai/chat-rag/internal/tokenizer"
 )
@@ -12,7 +13,9 @@ type ServiceContext struct {
 	Config config.Config
 
 	// Clients
-	SemanticClient client.SemanticInterface
+	SemanticClient   client.SemanticInterface
+	FunctionsManager *functions.ToolManager
+	RedisClient      client.RedisInterface
 
 	// Services
 	LoggerService  service.LogRecordInterface
@@ -20,12 +23,23 @@ type ServiceContext struct {
 
 	// Utilities
 	TokenCounter *tokenizer.TokenCounter
+
+	ToolExecutor functions.ToolExecutor
 }
 
 // NewServiceContext creates a new service context with all dependencies
 func NewServiceContext(c config.Config) *ServiceContext {
 	// Initialize semantic client
-	semanticClient := client.NewSemanticClient(c.SemanticApiEndpoint)
+	semanticClient := client.NewSemanticClient(c.Tools.SemanticSearch)
+	referenceClient := client.NewReferenceClient(c.Tools.ReferenceSearch)
+	definitionClient := client.NewDefinitionClient(c.Tools.DefinitionSearch)
+	// functionManager := functions.NewToolManager("etc/functions.yaml")
+	xmlToolExecutor := functions.NewXmlToolExecutor(
+		c.Tools.SemanticSearch,
+		semanticClient,
+		referenceClient,
+		definitionClient,
+	)
 
 	// Initialize token counter
 	tokenCounter, err := tokenizer.NewTokenCounter()
@@ -48,12 +62,18 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		panic("Failed to start logger service:" + err.Error())
 	}
 
+	// Initialize Redis client
+	redisClient := client.NewRedisClient(c.Redis)
+
 	return &ServiceContext{
 		Config:         c,
 		SemanticClient: semanticClient,
+		// FunctionsManager: functionManager,
 		LoggerService:  loggerService,
 		MetricsService: metricsService,
 		TokenCounter:   tokenCounter,
+		ToolExecutor:   xmlToolExecutor,
+		RedisClient:    redisClient,
 	}
 }
 

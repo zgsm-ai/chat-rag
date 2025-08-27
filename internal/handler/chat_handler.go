@@ -7,8 +7,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/zgsm-ai/chat-rag/internal/bootstrap"
+	"github.com/zgsm-ai/chat-rag/internal/logger"
 	"github.com/zgsm-ai/chat-rag/internal/logic"
+	"github.com/zgsm-ai/chat-rag/internal/model"
 	"github.com/zgsm-ai/chat-rag/internal/types"
+	"go.uber.org/zap"
 )
 
 // ChatCompletionHandler handles chat completion requests
@@ -21,8 +24,12 @@ func ChatCompletionHandler(svcCtx *bootstrap.ServiceContext) gin.HandlerFunc {
 			return
 		}
 
-		// 2. Arrange identity from headers
-		identity := getIdentityFromHeaders(c)
+		// 2. Get identity from context (set by middleware)
+		identity, exists := model.GetIdentityFromContext(c.Request.Context())
+		if !exists {
+			logger.Warn("failed to get identity from context")
+			return
+		}
 
 		// 3. Initialize logic
 		l := logic.NewChatCompletionLogic(
@@ -33,6 +40,8 @@ func ChatCompletionHandler(svcCtx *bootstrap.ServiceContext) gin.HandlerFunc {
 			&c.Request.Header,
 			identity,
 		)
+
+		c.Header(types.HeaderRequestId, identity.RequestID)
 
 		// 4. Handle stream and non-stream cases separately
 		if req.Stream {
@@ -49,9 +58,6 @@ func handleStreamResponse(c *gin.Context, l *logic.ChatCompletionLogic) {
 	c.Status(http.StatusOK)
 
 	flusher, _ := c.Writer.(http.Flusher)
-	if flusher != nil {
-		flusher.Flush()
-	}
 
 	if err := l.ChatCompletionStream(); err != nil {
 		sendStreamError(c, err, flusher)
@@ -70,10 +76,21 @@ func handleNonStreamResponse(c *gin.Context, l *logic.ChatCompletionLogic) {
 
 // sendErrorResponse sends a structured error response
 func sendErrorResponse(c *gin.Context, statusCode int, err error) {
+	fmt.Printf("==> sendErrorResponse: %+v\n", err)
+	message := err.Error()
+	errType := "server_error"
+
+	// Check if the error is an APIError with a specific status code
+	if apiErr, ok := err.(*types.APIError); ok {
+		statusCode = apiErr.StatusCode
+		message = apiErr.Message
+		errType = apiErr.Type
+	}
+
 	c.AbortWithStatusJSON(statusCode, gin.H{
 		"error": gin.H{
-			"message": err.Error(),
-			"type":    "api_error",
+			"message": message,
+			"type":    errType,
 			"code":    statusCode,
 		},
 	})
@@ -85,15 +102,23 @@ func sendStreamError(c *gin.Context, err error, flusher http.Flusher) {
 		Error struct {
 			Message string `json:"message"`
 			Type    string `json:"type"`
+			Code    int    `json:"code"`
 		} `json:"error"`
 	}{
 		Error: struct {
 			Message string `json:"message"`
 			Type    string `json:"type"`
+			Code    int    `json:"code"`
 		}{
 			Message: err.Error(),
 			Type:    "api_error",
+			Code:    http.StatusInternalServerError,
 		},
+	}
+
+	// Check if the error is an APIError with a specific status code
+	if apiErr, ok := err.(*types.APIError); ok && apiErr.StatusCode != 0 {
+		errorMsg.Error.Code = apiErr.StatusCode
 	}
 
 	errorData, _ := json.Marshal(errorMsg)
@@ -102,5 +127,53 @@ func sendStreamError(c *gin.Context, err error, flusher http.Flusher) {
 
 	if flusher != nil {
 		flusher.Flush()
+	}
+}
+
+// ChatStatusHandler handles tool status query requests
+func ChatStatusHandler(svcCtx *bootstrap.ServiceContext) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Validate requestId parameter
+		requestId := c.Param("requestId")
+		if requestId == "" {
+			c.JSON(http.StatusBadRequest, types.ToolStatusResponse{
+				Code:    http.StatusBadRequest,
+				Data:    types.ToolStatusData{},
+				Message: "requestId is required",
+			})
+			return
+		}
+
+		// Get tool status from Redis
+		toolStatusKey := types.ToolStatusRedisKeyPrefix + requestId
+		toolStatusData, err := svcCtx.RedisClient.GetHash(c.Request.Context(), toolStatusKey)
+		if err != nil {
+			logger.Warn("Error fetching tool status from Redis", zap.Error(err))
+			// Return 404 if requestID not found in Redis
+			c.JSON(http.StatusNotFound, types.ToolStatusResponse{
+				Code:    http.StatusNotFound,
+				Data:    types.ToolStatusData{},
+				Message: "request-id not found",
+			})
+			return
+		}
+
+		// Build tools map from Redis data
+		tools := make(map[string]types.ToolStatusDetail)
+		for toolName, status := range toolStatusData {
+			tools[toolName] = types.ToolStatusDetail{
+				Status: status,
+				Result: nil, // For now, result is always null
+			}
+		}
+
+		logger.Info("Tool status fetched from Redis", zap.Any("tools", tools))
+
+		// Return success response with tools data
+		c.JSON(http.StatusOK, types.ToolStatusResponse{
+			Code:    http.StatusOK,
+			Data:    types.ToolStatusData{Tools: tools},
+			Message: "success",
+		})
 	}
 }

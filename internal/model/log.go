@@ -17,6 +17,15 @@ type TokenStats struct {
 	All          int `json:"all"`
 }
 
+type ToolCall struct {
+	ToolName     string `json:"tool_name"`
+	ToolInput    string `json:"tool_input"`
+	ToolOutput   string `json:"tool_output"`
+	ResultStatus string `json:"result_status"`
+	Latency      int64  `json:"latency"`
+	Error        string `json:"error"`
+}
+
 // ChatLog represents a single chat completion log entry
 type ChatLog struct {
 	Identity   Identity  `json:"identity"`
@@ -40,7 +49,8 @@ type ChatLog struct {
 	TotalLatency     int64 `json:"total_latency_ms"`
 
 	// Semantic context
-	SemanticContext any `json:"semantic_context"`
+	SemanticContext any        `json:"semantic_context"`
+	ToolCalls       []ToolCall `json:"tool_calls"`
 
 	// Content samples (truncated for logging)
 	OriginalPrompt   []types.Message `json:"original_prompt"`

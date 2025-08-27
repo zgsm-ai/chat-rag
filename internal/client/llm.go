@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/zgsm-ai/chat-rag/internal/config"
 	"github.com/zgsm-ai/chat-rag/internal/logger"
 	"github.com/zgsm-ai/chat-rag/internal/types"
 	"github.com/zgsm-ai/chat-rag/internal/utils"
@@ -22,23 +23,31 @@ type LLMInterface interface {
 	// GenerateContent directly generates non-streaming content with system prompts and user prompts
 	GenerateContent(ctx context.Context, systemPrompt string, userMessages []types.Message) (string, error)
 	// ChatLLMWithMessagesStreamRaw directly calls the API using HTTP client to get raw streaming response
-	ChatLLMWithMessagesStreamRaw(ctx context.Context, messages []types.Message, callback func(string) error) error
+	ChatLLMWithMessagesStreamRaw(ctx context.Context, messages []types.Message, callback func(LLMResponse) error) error
 	//ChatLLMWithMessagesRaw directly calls the API using HTTP client to get raw non-streaming response
 	ChatLLMWithMessagesRaw(ctx context.Context, messages []types.Message) (types.ChatCompletionResponse, error)
+	// SetTools sets the tools for the LLM client
+	SetTools(tools []types.Function)
+}
+
+type LLMResponse struct {
+	Header      *http.Header
+	ResonseLine string
 }
 
 // LLMClient handles communication with language models
 type LLMClient struct {
 	modelName  string
 	endpoint   string
+	tools      []types.Function
 	headers    *http.Header
 	httpClient *http.Client
 }
 
 // NewLLMClient creates a new LLM client instance
-func NewLLMClient(endpoint string, modelName string, headers *http.Header) (LLMInterface, error) {
+func NewLLMClient(config config.LLMConfig, modelName string, headers *http.Header) (LLMInterface, error) {
 	// Check for empty endpoint
-	if endpoint == "" || headers == nil {
+	if config.Endpoint == "" || headers == nil {
 		return nil, fmt.Errorf("NewLLMClient llmEndpoint cannot be empty")
 	}
 
@@ -47,7 +56,7 @@ func NewLLMClient(endpoint string, modelName string, headers *http.Header) (LLMI
 
 	return &LLMClient{
 		modelName:  modelName,
-		endpoint:   endpoint,
+		endpoint:   config.Endpoint,
 		httpClient: httpClient,
 		headers:    headers,
 	}, nil
@@ -55,6 +64,10 @@ func NewLLMClient(endpoint string, modelName string, headers *http.Header) (LLMI
 
 func (c *LLMClient) GetModelName() string {
 	return c.modelName
+}
+
+func (c *LLMClient) SetTools(tools []types.Function) {
+	c.tools = tools
 }
 
 // GenerateContent generate content using a structured message format
@@ -85,8 +98,44 @@ func (c *LLMClient) GenerateContent(ctx context.Context, systemPrompt string, us
 	return content, nil
 }
 
+// handleAPIError handles common API error processing for both streaming and non-streaming responses
+func (c *LLMClient) handleAPIError(resp *http.Response, logMessage string) error {
+	body, _ := io.ReadAll(resp.Body)
+	bodyStr := string(body)
+	logger.Warn(logMessage,
+		zap.Int("status code", resp.StatusCode),
+		zap.String("body", bodyStr),
+	)
+
+	// parse err
+	var apiError types.APIError
+	if err := json.Unmarshal([]byte(bodyStr), &apiError); err == nil {
+		apiError.StatusCode = resp.StatusCode
+		if strings.Contains(apiError.Code, string(types.ErrQuotaCheck)) {
+			apiError.Type = string(types.ErrQuotaCheck)
+			return &apiError
+		}
+
+		if strings.Contains(apiError.Code, string(types.ErrQuotaManager)) {
+			apiError.Type = string(types.ErrQuotaManager)
+			return &apiError
+		}
+
+		if strings.Contains(apiError.Code, string(types.ErrAiGateway)) {
+			apiError.Type = string(types.ErrAiGateway)
+			return &apiError
+		}
+	}
+
+	if bodyStr == "" {
+		bodyStr = "None"
+	}
+
+	return types.NewHTTPStatusError(resp.StatusCode, bodyStr)
+}
+
 // ChatLLMWithMessagesStreamRaw directly calls the API using HTTP client to get raw streaming response
-func (c *LLMClient) ChatLLMWithMessagesStreamRaw(ctx context.Context, messages []types.Message, callback func(string) error) error {
+func (c *LLMClient) ChatLLMWithMessagesStreamRaw(ctx context.Context, messages []types.Message, callback func(LLMResponse) error) error {
 	if callback == nil {
 		return fmt.Errorf("callback function cannot be nil")
 	}
@@ -99,6 +148,11 @@ func (c *LLMClient) ChatLLMWithMessagesStreamRaw(ctx context.Context, messages [
 		StreamOptions: types.StreamOptions{
 			IncludeUsage: true,
 		},
+	}
+
+	if len(c.tools) > 0 {
+		requestPayload.Tools = c.tools
+		requestPayload.ToolChoice = "required"
 	}
 
 	// Create request
@@ -126,18 +180,18 @@ func (c *LLMClient) ChatLLMWithMessagesStreamRaw(ctx context.Context, messages [
 	// Send request
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to make request: %w", err)
+		logger.ErrorC(ctx, "Failed to connect to LLM service", zap.Error(err))
+		return types.NewModelServiceUnavailableError()
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		bodyStr := string(body)
-		logger.Warn("LLMClient get straming error response",
-			zap.Int("status code", resp.StatusCode),
-			zap.String("body", bodyStr),
-		)
-		return fmt.Errorf("%s", bodyStr)
+		return c.handleAPIError(resp, "LLMClient get straming error response")
+	}
+
+	headers := resp.Header
+	llmResp := LLMResponse{
+		Header: &headers,
 	}
 
 	// Read streaming response line by line
@@ -150,7 +204,8 @@ func (c *LLMClient) ChatLLMWithMessagesStreamRaw(ctx context.Context, messages [
 
 		// Arrange non-empty lines, including empty data lines
 		if line != "" || strings.HasPrefix(line, "data:") {
-			if err := callback(line); err != nil {
+			llmResp.ResonseLine = line
+			if err := callback(llmResp); err != nil {
 				return fmt.Errorf("callback error: %w", err)
 			}
 		}
@@ -200,19 +255,15 @@ func (c *LLMClient) ChatLLMWithMessagesRaw(ctx context.Context, messages []types
 	// Send request
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil_resp, fmt.Errorf("failed to make request: %w", err)
+		logger.Error("Failed to connect to LLM service", zap.Error(err))
+		return nil_resp, types.NewModelServiceUnavailableError()
 	}
 	defer resp.Body.Close()
 
 	// Check response status code
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		bodyStr := string(body)
-		logger.Warn("LLMClient get error response",
-			zap.Int("status code", resp.StatusCode),
-			zap.String("body", bodyStr),
-		)
-		return nil_resp, fmt.Errorf("%s", bodyStr)
+		err := c.handleAPIError(resp, "LLMClient get error response")
+		return nil_resp, err
 	}
 
 	// Read response body

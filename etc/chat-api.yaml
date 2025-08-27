@@ -2,26 +2,20 @@ Name: chat-rag
 Host: 0.0.0.0
 Port: 8888
 
-# Model endpoints configuration
-LLMEndpoint: "https://zgsm.sangfor.com/v1/chat/completions"
-
 # Token processing configuration
-TokenThreshold: 5_000
-
-# Semantic API configuration
-SemanticApiEndpoint: "http://localhost:8002/codebase-indexer/api/v1/semantics"
-TopK: 5
-SemanticScoreThreshold: 0.5
+TokenThreshold: 50_000
 
 # Logging configuration
-LogFilePath: "logs/"
-LokiEndpoint: "http://localhost:3100/loki/api/v1/push"
-LogScanIntervalSec: 10
+Log:
+  LogFilePath: "logs/"
+  LokiEndpoint: "http://localhost:3100/loki/api/v1/push"
+  LogScanIntervalSec: 10
+  EnableClassification: false
 
 # Model configuration
 SummaryModel: "deepseek-v3"
 SummaryModelTokenThreshold: 64_000
-ClassifyModel: "deepseek-v3"
+ClassifyModel: "gpt-oss-120b"
 
 # Split system prompt, used to compress system prompt
 SystemPromptSplitStr: "====\n\nRULES"
@@ -31,3 +25,30 @@ RecentUserMsgUsedNums: 3
 
 # Department configuration
 DepartmentApiEndpoint: "http://localhost:1234/work_id?work_id="
+
+# Models supported by function calling
+LLM:
+  # Endpoint: "https://zgsm.sangfor.com/chat-rag/api/v1/chat/completions"
+  Endpoint: "http://127.0.0.1:32732/v1/chat/completions"
+  # Endpoint: "http://127.0.0.1:32325/model/glm-4.5-fp8/v1/chat/completions"
+  FuncCallingModels:
+    - "deepseek-v3"
+    - "qwen3*"
+    - "claude*"
+
+Redis:
+  Addr: "127.0.0.1:6379"
+
+# Semantic API configuration
+Tools:
+  SemanticSearch:
+    SearchEndpoint: "http://123.58.64.57:30080/codebase-embedder/api/v1/search/semantic"
+    ApiReadyEndpoint: "http://123.58.64.57:30080/codebase-embedder/api/v1/embeddings/summary"
+    TopK: 50
+    ScoreThreshold: 0.7
+  DefinitionSearch:
+    SearchEndpoint: "http://123.58.64.57:30080/codebase-indexer/api/v1/search/definition"
+    ApiReadyEndpoint: "http://123.58.64.57:30080/codebase-indexer/api/v1/index/summary"
+  ReferenceSearch:
+    SearchEndpoint: "http://123.58.64.57:30080/codebase-indexer/api/v1/search/reference"
+    ApiReadyEndpoint: "http://123.58.64.57:30080/codebase-indexer/api/v1/index/summary"

@@ -33,16 +33,40 @@ const (
 )
 
 const (
+	// Request Headers
 	HeaderQuotaIdentity = "x-quota-identity"
 	HeaderRequestId     = "x-request-id"
 	HeaderCaller        = "x-caller"
 	HeaderTaskId        = "zgsm-task-id"
 	HeaderClientId      = "zgsm-client-id"
 	HeaderClientIde     = "zgsm-client-ide"
+	HeaderClientOS      = "X-Stainless-OS"
 	HeaderLanguage      = "Accept-Language"
 	HeaderAuthorization = "authorization"
 	HeaderProjectPath   = "zgsm-project-path"
+	HeaderClientVersion = "X-Costrict-Version"
+
+	// Response Headers
+	HeaderUserInput = "x-user-input"
+	HeaderSelectLLm = "x-select-llm"
 )
+
+// ToolStatus defines the status of the tool
+type ToolStatus string
+
+const (
+	ToolStatusRunning ToolStatus = "running"
+	ToolStatusSuccess ToolStatus = "success"
+	ToolStatusFailed  ToolStatus = "failed"
+)
+
+// Redis key prefix for tool status
+const ToolStatusRedisKeyPrefix = "tool_status:"
+
+// Tool string filter
+const StrFilterToolAnalyzing = "\n#### 💡 检索已完成，分析中"
+const StrFilterToolSearchStart = "\n#### 🔍 "
+const StrFilterToolSearchEnd = "工具检索中"
 
 type ChatCompletionRequest struct {
 	Model         string        `json:"model"`
@@ -63,7 +87,7 @@ type ChatCompletionResponse struct {
 	Created int64    `json:"created"`
 	Model   string   `json:"model"`
 	Choices []Choice `json:"choices"`
-	Usage   Usage    `json:"usage,omitempty"`
+	Usage   Usage    `json:"usage"`
 }
 
 type ChatLLMRequest struct {
@@ -74,22 +98,31 @@ type ChatLLMRequest struct {
 
 type ChatLLMRequestStream struct {
 	Model         string        `json:"model"`
+	Temperature   float64       `json:"temperature"`
 	Messages      []Message     `json:"messages"`
+	Tools         []Function    `json:"tools,omitempty"`
+	ToolChoice    string        `json:"tool_choice,omitempty"`
 	Stream        bool          `json:"stream,omitempty"`
-	Temperature   float64       `json:"temperature,omitempty"`
 	StreamOptions StreamOptions `json:"stream_options,omitempty"`
 }
 
 type Choice struct {
 	Index        int     `json:"index"`
 	Message      Message `json:"message,omitempty"`
-	Delta        Message `json:"delta,omitempty"`
+	Delta        Delta   `json:"delta,omitempty"`
 	FinishReason string  `json:"finish_reason,omitempty"`
 }
 
 type Message struct {
 	Role    string `json:"role"`
 	Content any    `json:"content"`
+}
+
+type Delta struct {
+	Role             string `json:"role,omitempty"`
+	Content          string `json:"content"`
+	ReasoningContent string `json:"reasoning_content,omitempty"`
+	ToolCalls        []any  `json:"tool_calls,omitempty"`
 }
 
 type StreamOptions struct {
@@ -100,4 +133,51 @@ type Usage struct {
 	PromptTokens     int `json:"prompt_tokens"`
 	CompletionTokens int `json:"completion_tokens"`
 	TotalTokens      int `json:"total_tokens"`
+}
+
+// FunctionCall is the structure of the function called by the LLM.
+type Function struct {
+	Type     string             `json:"type"`
+	Function FunctionDefinition `json:"function"`
+}
+
+type FunctionDefinition struct {
+	Name        string             `json:"name"`
+	Description string             `json:"description"`
+	Parameters  FunctionParameters `json:"parameters"`
+}
+
+type FunctionParameters struct {
+	Type       string                     `json:"type"`
+	Properties map[string]PropertyDetails `json:"properties"`
+	Required   []string                   `json:"required"`
+}
+
+type PropertyDetails struct {
+	Type        string      `json:"type"`
+	Description string      `json:"description"`
+	Default     interface{} `json:"default,omitempty"`
+	Items       *Items      `json:"items,omitempty"` // 用于array类型
+}
+
+type Items struct {
+	Type string `json:"type"`
+}
+
+// ToolStatusResponse defines tool status response structure
+type ToolStatusResponse struct {
+	Code    int            `json:"code"`
+	Data    ToolStatusData `json:"data"`
+	Message string         `json:"message"`
+}
+
+// ToolStatusData defines tool status data structure
+type ToolStatusData struct {
+	Tools map[string]ToolStatusDetail `json:"tools,omitempty"`
+}
+
+// ToolStatusDetail defines tool status detail structure
+type ToolStatusDetail struct {
+	Status string      `json:"status"`
+	Result interface{} `json:"result,omitempty"`
 }

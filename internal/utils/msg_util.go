@@ -1,7 +1,9 @@
 package utils
 
 import (
+	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/zgsm-ai/chat-rag/internal/logger"
 	"github.com/zgsm-ai/chat-rag/internal/model"
@@ -184,4 +186,22 @@ func GetRecentUserMsgsWithNum(messages []types.Message, num int) []types.Message
 
 	// Return messages from the position onwards
 	return messages[position:]
+}
+
+// MarshalJSONWithoutEscapeHTML marshals object to JSON string without escaping HTML characters
+func MarshalJSONWithoutEscapeHTML(v interface{}) (string, error) {
+	// Create a custom JSON encoder with EscapeHTML set to false to avoid escaping HTML characters
+	builder := &strings.Builder{}
+	encoder := json.NewEncoder(builder)
+	encoder.SetEscapeHTML(false)
+	err := encoder.Encode(v)
+	if err != nil {
+		return "", err
+	}
+	jsonResult := builder.String()
+	// Remove the newline character automatically added by Encode
+	if len(jsonResult) > 0 && jsonResult[len(jsonResult)-1] == '\n' {
+		jsonResult = jsonResult[:len(jsonResult)-1]
+	}
+	return jsonResult, nil
 }

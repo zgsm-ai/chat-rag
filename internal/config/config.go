@@ -1,26 +1,63 @@
 package config
 
+// LLMConfig
+type LLMConfig struct {
+	Endpoint          string
+	FuncCallingModels []string
+}
+
+// RedisConfig holds Redis configuration
+type RedisConfig struct {
+	Addr     string
+	Password string
+	DB       int
+}
+
+type ToolConfig struct {
+	SemanticSearch   SemanticSearchConfig
+	DefinitionSearch DefinitionSearchConfig
+	ReferenceSearch  ReferenceSearchConfig
+}
+
+type SemanticSearchConfig struct {
+	SearchEndpoint   string
+	ApiReadyEndpoint string
+	TopK             int
+	ScoreThreshold   float64
+}
+
+type ReferenceSearchConfig struct {
+	SearchEndpoint   string
+	ApiReadyEndpoint string
+}
+
+type DefinitionSearchConfig struct {
+	SearchEndpoint   string
+	ApiReadyEndpoint string
+}
+
+// LogConfig holds logging configuration
+type LogConfig struct {
+	LogFilePath          string
+	LokiEndpoint         string
+	LogScanIntervalSec   int
+	EnableClassification bool
+}
+
 // Config holds all service configuration
 type Config struct {
 	// Server configuration
 	Host string
 	Port int
 
-	// Model endpoints configuration
-	LLMEndpoint string
-
 	// Token processing configuration
 	TokenThreshold int
 
-	// Semantic API configuration
-	SemanticApiEndpoint    string
-	TopK                   int
-	SemanticScoreThreshold float64
+	// Tools configuration
+	Tools ToolConfig
 
 	// Logging configuration
-	LogFilePath        string
-	LokiEndpoint       string
-	LogScanIntervalSec int
+	Log LogConfig
 
 	// Model configuration
 	SummaryModel               string
@@ -35,4 +72,9 @@ type Config struct {
 
 	//Department configuration
 	DepartmentApiEndpoint string
+
+	// Redis configuration
+	Redis RedisConfig
+
+	LLM LLMConfig
 }

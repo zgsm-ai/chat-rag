@@ -8,6 +8,7 @@ import (
 	"github.com/zgsm-ai/chat-rag/internal/bootstrap"
 	"github.com/zgsm-ai/chat-rag/internal/client"
 	"github.com/zgsm-ai/chat-rag/internal/config"
+	"github.com/zgsm-ai/chat-rag/internal/functions"
 	"github.com/zgsm-ai/chat-rag/internal/model"
 	"github.com/zgsm-ai/chat-rag/internal/promptflow/ds"
 	"github.com/zgsm-ai/chat-rag/internal/promptflow/processor"
@@ -16,16 +17,21 @@ import (
 )
 
 type RagCompressProcessor struct {
-	ctx            context.Context
-	semanticClient client.SemanticInterface
-	llmClient      client.LLMInterface
-	tokenCounter   *tokenizer.TokenCounter
-	config         config.Config
-	identity       *model.Identity
+	ctx          context.Context
+	llmClient    client.LLMInterface
+	tokenCounter *tokenizer.TokenCounter
+	config       config.Config
+	identity     *model.Identity
+	// functionsManager *functions.ToolManager
+	modelName     string
+	toolsExecutor functions.ToolExecutor
 
 	// systemCompressor *processor.SystemCompressor
-	semanticSearch *processor.SemanticSearch
+	userMsgFilter *processor.UserMsgFilter
+	// functionAdapter *processor.FunctionAdapter
 	userCompressor *processor.UserCompressor
+	xmlToolAdapter *processor.XmlToolAdapter
+	start          *processor.Start
 	end            *processor.End
 }
 
@@ -45,9 +51,10 @@ func NewRagCompressProcessor(
 	svcCtx *bootstrap.ServiceContext,
 	headers *http.Header,
 	identity *model.Identity,
+	modelName string,
 ) (*RagCompressProcessor, error) {
 	llmClient, err := client.NewLLMClient(
-		svcCtx.Config.LLMEndpoint,
+		svcCtx.Config.LLM,
 		svcCtx.Config.SummaryModel,
 		copyAndSetQuotaIdentity(headers),
 	)
@@ -56,12 +63,16 @@ func NewRagCompressProcessor(
 	}
 
 	return &RagCompressProcessor{
-		ctx:            ctx,
-		semanticClient: client.NewSemanticClient(svcCtx.Config.SemanticApiEndpoint),
-		llmClient:      llmClient,
-		config:         svcCtx.Config,
-		tokenCounter:   svcCtx.TokenCounter,
-		identity:       identity,
+		ctx:          ctx,
+		modelName:    modelName,
+		llmClient:    llmClient,
+		config:       svcCtx.Config,
+		tokenCounter: svcCtx.TokenCounter,
+		identity:     identity,
+		// functionsManager: svcCtx.FunctionsManager,
+		toolsExecutor: svcCtx.ToolExecutor,
+		start:         processor.NewStartPoint(),
+		end:           processor.NewEndpoint(),
 	}, nil
 }
 
@@ -80,8 +91,7 @@ func (p *RagCompressProcessor) Arrange(messages []types.Message) (*ds.ProcessedP
 		}, fmt.Errorf("build processor chain: %w", err)
 	}
 
-	// p.systemCompressor.Execute(promptMsg)
-	p.semanticSearch.Execute(promptMsg)
+	p.start.Execute(promptMsg)
 
 	return p.createProcessedPrompt(promptMsg), nil
 }
@@ -92,23 +102,25 @@ func (p *RagCompressProcessor) buildProcessorChain() error {
 	// 	p.config.SystemPromptSplitStr,
 	// 	p.llmClient,
 	// )
-	p.semanticSearch = processor.NewSemanticSearch(
-		p.ctx,
-		p.config,
-		p.semanticClient,
-		p.identity,
-	)
+	p.userMsgFilter = processor.NewUserMsgFilter()
+	p.xmlToolAdapter = processor.NewXmlToolAdapter(p.ctx, p.toolsExecutor)
+	// p.functionAdapter = processor.NewFunctionAdapter(
+	// 	p.modelName,
+	// 	p.config.LLM.FuncCallingModels,
+	// 	p.functionsManager,
+	// )
 	p.userCompressor = processor.NewUserCompressor(
 		p.ctx,
 		p.config,
 		p.llmClient,
 		p.tokenCounter,
 	)
-	p.end = processor.NewEndpoint()
 
-	// chain order: system -> semantic -> user
-	// p.systemCompressor.SetNext(p.semanticSearch)
-	p.semanticSearch.SetNext(p.userCompressor)
+	// execute chain
+	p.start.SetNext(p.userMsgFilter)
+	p.userMsgFilter.SetNext(p.xmlToolAdapter)
+	// p.userMsgFilter.SetNext(p.functionAdapter)
+	p.xmlToolAdapter.SetNext(p.userCompressor)
 	p.userCompressor.SetNext(p.end)
 
 	return nil
@@ -121,11 +133,9 @@ func (p *RagCompressProcessor) createProcessedPrompt(
 	processedMsgs := processor.SetLanguage(p.identity.Language, promptMsg.AssemblePrompt())
 	return &ds.ProcessedPrompt{
 		Messages:               processedMsgs,
-		SemanticLatency:        p.semanticSearch.Latency,
-		SemanticContext:        p.semanticSearch.SemanticResult,
-		SemanticErr:            p.semanticSearch.Err,
 		SummaryLatency:         p.userCompressor.Latency,
 		SummaryErr:             p.userCompressor.Err,
 		IsUserPromptCompressed: p.userCompressor.Handled,
+		Tools:                  promptMsg.GetTools(),
 	}
 }

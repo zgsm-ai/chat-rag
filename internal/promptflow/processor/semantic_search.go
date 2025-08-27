@@ -19,18 +19,18 @@ type SemanticSearch struct {
 	Recorder
 	ctx            context.Context
 	semanticClient client.SemanticInterface
-	config         config.Config
+	config         config.SemanticSearchConfig
 	identity       *model.Identity
 
 	next Processor
 
 	// SemanticResult is the result of the semantic search.
-	SemanticResult *client.SemanticData
+	SemanticResult string
 }
 
 func NewSemanticSearch(
 	ctx context.Context,
-	config config.Config,
+	config config.SemanticSearchConfig,
 	semanticClient client.SemanticInterface,
 	identity *model.Identity,
 ) *SemanticSearch {
@@ -136,18 +136,20 @@ func (s *SemanticSearch) searchSemanticContext(query string) (string, error) {
 	}
 	s.SemanticResult = resp
 
-	contextStr := s.buildContextString(resp.Results)
-	if contextStr == "" {
+	// Since resp is now a string (JSON), we need to parse it to extract results
+	// For now, we'll return the raw JSON response as context
+	if resp == "" {
 		logger.Info("no results above score threshold",
 			zap.String("method", method),
 		)
 		return "", nil
 	}
 
+	// Return the raw JSON response as context
 	logger.Info("semantic context built successfully",
 		zap.String("method", method),
 	)
-	return contextStr, nil
+	return resp, nil
 }
 
 func (s *SemanticSearch) filterQuery(query string) string {
@@ -174,7 +176,7 @@ func (s *SemanticSearch) buildContextString(results []client.SemanticResult) str
 	var contextParts []string
 
 	for _, result := range results {
-		if result.Score < s.config.SemanticScoreThreshold {
+		if result.Score < s.config.ScoreThreshold {
 			continue
 		}
 
