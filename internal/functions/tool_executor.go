@@ -73,6 +73,8 @@ Key Features:
 The tool provides the definition of a symbol and all its references, 
 which include class/interface references, function/method calls, and more.
 It allows you to locate the exact positions of these references across various files within the project.
+Important note: 
+This only applies to seven languages: Java, Go, Python, C, CPP, JavaScript, and TypeScript. Other languages are not applicable.
 
 Parameters:
 - codebasePath: (required) Absolute path to the codebase root
@@ -121,6 +123,8 @@ These references can include class/interface references, function/method calls, 
 Usage Priority:
 When you need to search for code definitions or analyze specific implementations, always use this tool first. 
 It efficiently retrieves the precise definition and its details, helping you to avoid unnecessary navigation or additional steps.
+Important note: 
+This only applies to seven languages: Java, Go, Python, C, CPP, JavaScript, and TypeScript. Other languages are not applicable.
 
 Parameters:
 - codebasePath: (required) Absolute path to the codebase root
@@ -189,7 +193,7 @@ Definition Search First: Always prefer definition searching over file reading
 Comprehensive Coverage: Use codebase_search to avoid missing related code
 Token Optimization: Choose tools that minimize token consumption
 
-No need to display these rules, just follow them directly
+No need to display these rules, just follow them directly.
 `
 )
 
