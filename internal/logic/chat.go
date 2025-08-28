@@ -55,7 +55,7 @@ func NewChatCompletionLogic(
 	}
 }
 
-const MaxToolCallDepth = 5
+const MaxToolCallDepth = 10
 
 // processRequest handles common request processing logic
 func (l *ChatCompletionLogic) processRequest() (*model.ChatLog, *ds.ProcessedPrompt, error) {
@@ -179,7 +179,7 @@ func (l *ChatCompletionLogic) ChatCompletion() (resp *types.ChatCompletionRespon
 		}
 
 		chatLog.AddError(types.ErrApiError, err)
-		return nil, fmt.Errorf("failed to generate completion: %w", err)
+		return nil, err
 	}
 
 	chatLog.MainModelLatency = time.Since(modelStart).Milliseconds()
@@ -236,7 +236,7 @@ type streamState struct {
 
 func newStreamState() *streamState {
 	return &streamState{
-		windowSize: 15,
+		windowSize: 6,
 		modelStart: time.Now(),
 	}
 }
@@ -277,11 +277,31 @@ func (l *ChatCompletionLogic) processStream(
 	state *streamState,
 	remainingDepth int,
 ) (bool, error) {
-	err := llmClient.ChatLLMWithMessagesStreamRaw(l.ctx, messages, func(rawLine string) error {
-		return l.handleStreamChunk(flusher, rawLine, state, remainingDepth)
+	err := llmClient.ChatLLMWithMessagesStreamRaw(l.ctx, messages, func(llmResp client.LLMResponse) error {
+		l.handleResonseHeaders(llmResp.Header, []string{
+			types.HeaderUserInput,
+			types.HeaderSelectLLm,
+		})
+
+		return l.handleStreamChunk(flusher, llmResp.ResonseLine, state, remainingDepth)
 	})
 
 	return state.toolDetected, err
+}
+
+// handleResonseHeaders Set the specified request header to the response
+func (l *ChatCompletionLogic) handleResonseHeaders(header *http.Header, requiredHeaders []string) {
+	for _, headerName := range requiredHeaders {
+		if headerValue := header.Get(headerName); headerValue != "" {
+			if l.writer.Header().Get(headerName) != "" {
+				continue
+			}
+
+			l.writer.Header().Set(headerName, headerValue)
+			logger.InfoC(l.ctx, "Response header setted",
+				zap.String("header", headerName), zap.String("value", headerValue))
+		}
+	}
 }
 
 // handleStreamChunk processes individual streaming chunks
@@ -373,12 +393,20 @@ func (l *ChatCompletionLogic) handleToolExecution(
 	}
 
 	l.updateToolStatus(state.toolName, types.ToolStatusRunning)
+	// Send tool use information to client page
+	if err := l.sendStreamContent(flusher, state.response,
+		fmt.Sprintf("%s`%s` %s", types.StrFilterToolSearchStart, state.toolName,
+			types.StrFilterToolSearchEnd)); err != nil {
+		return err
+	}
 
-	// // DEBUG
-	// if err := l.sendStreamContent(flusher, state.response,
-	// 	fmt.Sprintf("# TOOL DEBUG\n[%s] 开始调用....\n\n## 输入:\n%s\n\n", state.toolName, toolContent)); err != nil {
-	// 	return err
-	// }
+	// wait client to refesh content
+	for i := 0; i < 5; i++ {
+		if err := l.sendStreamContent(flusher, state.response, "."); err != nil {
+			return err
+		}
+		time.Sleep(600 * time.Millisecond)
+	}
 
 	// execute and record tool call latency
 	toolStart := time.Now()
@@ -392,20 +420,21 @@ func (l *ChatCompletionLogic) handleToolExecution(
 		logger.WarnC(l.ctx, "tool execute failed", zap.String("tool", state.toolName), zap.Error(err))
 		status = types.ToolStatusFailed
 		result = fmt.Sprintf("%s execute failed, err: %v", state.toolName, err)
-		toolCall.ResultStatus = string(status)
 		toolCall.Error = err.Error()
 	} else {
-		logger.InfoC(l.ctx, "tool execute succeed", zap.String("tool", state.toolName))
+		logResult := result
+		if len(logResult) > 400 {
+			logResult = logResult[:400] + "..."
+		}
+		logger.InfoC(l.ctx, "tool execute succeed", zap.String("tool", state.toolName),
+			zap.String("result", logResult))
 	}
-	// if err := l.sendStreamContent(flusher, state.response,
-	// 	fmt.Sprintf("## [%s] 执行完成\n\n## 结果：\n%s\n# END\n\n--- \n", state.toolName, result)); err != nil {
-	// 	return err
-	// }
+	toolCall.ResultStatus = string(status)
 
 	messages = append(messages,
 		types.Message{
 			Role:    types.RoleAssistant,
-			Content: toolContent,
+			Content: state.fullContent.String(),
 		},
 		types.Message{
 			Role: types.RoleUser,
@@ -416,6 +445,9 @@ func (l *ChatCompletionLogic) handleToolExecution(
 				}, {
 					Type: model.ContTypeText,
 					Text: result,
+				}, {
+					Type: model.ContTypeText,
+					Text: fmt.Sprintf("Please summarize the key findings and/or code from the results above within the <thinking></thinking> tags. No need to summarize error messages. \nIf the search failed, don't say 'failed', describe this outcome as 'did not found relevant results' instead - MUST NOT using terms like 'failure', 'error', or 'unsuccessful' in your description. \nIn your summary, must include the name of the tool used and specify which tools you intend to use next. \nWhen appropriate, prioritize using these tools: %s", l.toolExecutor.GetAllTools()),
 				},
 			},
 		},
@@ -424,6 +456,20 @@ func (l *ChatCompletionLogic) handleToolExecution(
 	l.updateToolStatus(state.toolName, status)
 	chatLog.CompressedPrompt = messages
 	chatLog.ToolCalls = append(chatLog.ToolCalls, toolCall)
+
+	// sending tool call ending response to client page
+	if err := l.sendStreamContent(flusher, state.response, types.StrFilterToolAnalyzing); err != nil {
+		return err
+	}
+	for i := 0; i < 3; i++ {
+		time.Sleep(100 * time.Millisecond)
+		if err := l.sendStreamContent(flusher, state.response, "."); err != nil {
+			return err
+		}
+	}
+	if err := l.sendStreamContent(flusher, state.response, "\n"); err != nil {
+		return err
+	}
 
 	// Recursive processing
 	return l.handleStreamingWithTools(
@@ -449,10 +495,22 @@ func (l *ChatCompletionLogic) completeStreamResponse(
 		}
 
 		endContent := strings.Join(state.window, "")
-		state.response.Usage = *l.usage
+
+		if state.response == nil {
+			logger.WarnC(l.ctx, "state.response is nil when sending remaining content")
+			state.response = &types.ChatCompletionResponse{}
+		}
+
+		if l.usage != nil {
+			state.response.Usage = *l.usage
+		} else {
+			logger.WarnC(l.ctx, "usage is nil when content ending")
+		}
+
 		if err := l.sendStreamContent(flusher, state.response, endContent); err != nil {
 			return err
 		}
+
 		if err := l.sendRawLine(flusher, "[DONE]"); err != nil {
 			return err
 		}
@@ -529,11 +587,11 @@ func (l *ChatCompletionLogic) sendStreamContent(flusher http.Flusher, response *
 // Helper methods
 
 func (l *ChatCompletionLogic) updateToolStatus(toolName string, status types.ToolStatus) {
-	toolStatusKey := l.identity.RequestID
-	if toolStatusKey == "" {
+	if l.identity.RequestID == "" {
 		logger.Warn("requestID is empty, skip updating tool status")
 		return
 	}
+	toolStatusKey := types.ToolStatusRedisKeyPrefix + l.identity.RequestID
 
 	if err := l.svcCtx.RedisClient.SetHashField(l.ctx, toolStatusKey, toolName, string(status), 5*time.Minute); err != nil {
 		logger.Error("failed to update tool status in redis",
@@ -541,6 +599,9 @@ func (l *ChatCompletionLogic) updateToolStatus(toolName string, status types.Too
 			zap.String("status", string(status)),
 			zap.Error(err))
 	}
+
+	logger.Info("Tool execute status updated", zap.String("tool", toolName),
+		zap.String("execute status", string(status)))
 }
 
 // isContextLengthError checks if the error is due to context length exceeded

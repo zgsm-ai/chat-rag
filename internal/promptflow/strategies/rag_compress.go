@@ -17,23 +17,23 @@ import (
 )
 
 type RagCompressProcessor struct {
-	ctx              context.Context
-	llmClient        client.LLMInterface
-	tokenCounter     *tokenizer.TokenCounter
-	config           config.Config
-	identity         *model.Identity
-	functionsManager *functions.ToolManager
-	modelName        string
-	toolsExecutor    functions.ToolExecutor
+	ctx          context.Context
+	llmClient    client.LLMInterface
+	tokenCounter *tokenizer.TokenCounter
+	config       config.Config
+	identity     *model.Identity
+	// functionsManager *functions.ToolManager
+	modelName     string
+	toolsExecutor functions.ToolExecutor
 
 	// systemCompressor *processor.SystemCompressor
-	userMsgFilter   *processor.UserMsgFilter
-	functionAdapter *processor.FunctionAdapter
-	userCompressor  *processor.UserCompressor
-	xmlToolAdapter  *processor.XmlToolAdapter
-	ruleInjector    *processor.RulesInjector
-	start           *processor.Start
-	end             *processor.End
+	userMsgFilter *processor.UserMsgFilter
+	// functionAdapter *processor.FunctionAdapter
+	userCompressor *processor.UserCompressor
+	xmlToolAdapter *processor.XmlToolAdapter
+	ruleInjector   *processor.RulesInjector
+	start          *processor.Start
+	end            *processor.End
 }
 
 // copyAndSetQuotaIdentity
@@ -64,16 +64,16 @@ func NewRagCompressProcessor(
 	}
 
 	return &RagCompressProcessor{
-		ctx:              ctx,
-		modelName:        modelName,
-		llmClient:        llmClient,
-		config:           svcCtx.Config,
-		tokenCounter:     svcCtx.TokenCounter,
-		identity:         identity,
-		functionsManager: svcCtx.FunctionsManager,
-		toolsExecutor:    svcCtx.ToolExecutor,
-		start:            processor.NewStartPoint(),
-		end:              processor.NewEndpoint(),
+		ctx:          ctx,
+		modelName:    modelName,
+		llmClient:    llmClient,
+		config:       svcCtx.Config,
+		tokenCounter: svcCtx.TokenCounter,
+		identity:     identity,
+		// functionsManager: svcCtx.FunctionsManager,
+		toolsExecutor: svcCtx.ToolExecutor,
+		start:         processor.NewStartPoint(),
+		end:           processor.NewEndpoint(),
 	}, nil
 }
 
@@ -106,11 +106,11 @@ func (p *RagCompressProcessor) buildProcessorChain() error {
 	p.userMsgFilter = processor.NewUserMsgFilter()
 	p.xmlToolAdapter = processor.NewXmlToolAdapter(p.ctx, p.toolsExecutor)
 	p.ruleInjector = processor.NewRulesInjector()
-	p.functionAdapter = processor.NewFunctionAdapter(
-		p.modelName,
-		p.config.LLM.FuncCallingModels,
-		p.functionsManager,
-	)
+	// p.functionAdapter = processor.NewFunctionAdapter(
+	// 	p.modelName,
+	// 	p.config.LLM.FuncCallingModels,
+	// 	p.functionsManager,
+	// )
 	p.userCompressor = processor.NewUserCompressor(
 		p.ctx,
 		p.config,

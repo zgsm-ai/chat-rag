@@ -71,39 +71,77 @@ func (x *XmlToolAdapter) insertToolsIntoSystemContent(content string) (string, e
 
 	// Combine all tools into a single string
 	var toolsContent strings.Builder
+	var capabilitiesContent strings.Builder
+	var hasTools bool
+
 	for _, toolName := range x.toolExecutor.GetAllTools() {
 		ready, err := x.toolExecutor.CheckToolReady(x.ctx, toolName)
 		if !ready {
-			logger.WarnC(x.ctx, "Tool is not ready, skip adapt", zap.String("method", method),
-				zap.String("tool", toolName), zap.Error(err))
+			logger.WarnC(x.ctx, "Tool is not ready, skip adapt", zap.String("tool", toolName),
+				zap.String("method", method), zap.Error(err))
 			continue
 		}
+		hasTools = true
 
 		desc, err := x.toolExecutor.GetToolDescription(toolName)
 		if err != nil {
 			logger.Error("Failed to get tool description", zap.Error(err))
+			continue
 		}
 
 		toolsContent.WriteString(desc)
 		toolsContent.WriteString("\n\n")
+
+		// Get tool capability
+		capability, err := x.toolExecutor.GetToolCapability(toolName)
+		if err != nil {
+			logger.Error("Failed to get tool capability", zap.Error(err))
+			continue
+		}
+		capabilitiesContent.WriteString(capability)
 		logger.InfoC(x.ctx, "Tool adapted in system prompt", zap.String("name", toolName))
 	}
 
-	// Find the tools section
-	const toolsHeader = "# Tools"
-	headerIndex := strings.Index(content, toolsHeader)
-	if headerIndex == -1 {
-		return content, fmt.Errorf("tools header not found in system content")
-	}
-
-	// Find the end of the tools header line
-	lineEnd := strings.Index(content[headerIndex:], "\n")
-	if lineEnd == -1 {
-		lineEnd = len(content) - headerIndex
-	}
-	insertPos := headerIndex + lineEnd + 1
-
 	// Insert the tools content after the tools header
-	result := content[:insertPos] + "\n" + toolsContent.String() + content[insertPos:]
+	result, err := insertContentAfterMarker(content, "# Tools", toolsContent.String())
+	if err != nil {
+		return content, fmt.Errorf("failed to insert tools content: %w", err)
+	}
+
+	// Insert tool capabilities after CAPABILITIES section
+	result, err = insertContentAfterMarker(result, "\n\n====\n\nCAPABILITIES\n\n", capabilitiesContent.String())
+	if err != nil {
+		return result, fmt.Errorf("failed to insert capabilities content: %w", err)
+	}
+
+	// Insert tools rules at the end
+	if hasTools {
+		toolsRules := x.toolExecutor.GetToolsRules()
+		result = result + "\n" + toolsRules
+		logger.InfoC(x.ctx, "Tool Rules adapted in system prompt")
+	}
+
 	return result, nil
+}
+
+// insertContentAfterMarker inserts content after a specific marker in the text
+func insertContentAfterMarker(content, marker, newContent string) (string, error) {
+	markerIndex := strings.Index(content, marker)
+	if markerIndex == -1 {
+		return content, fmt.Errorf("marker not found in content")
+	}
+
+	// For headers like "# Tools", find the end of the line
+	if strings.HasPrefix(marker, "#") {
+		lineEnd := strings.Index(content[markerIndex:], "\n")
+		if lineEnd == -1 {
+			lineEnd = len(content) - markerIndex
+		}
+		insertPos := markerIndex + lineEnd + 1
+		return content[:insertPos] + "\n" + newContent + content[insertPos:], nil
+	}
+
+	// For other markers, insert immediately after the marker
+	insertPos := markerIndex + len(marker)
+	return content[:insertPos] + newContent + content[insertPos:], nil
 }

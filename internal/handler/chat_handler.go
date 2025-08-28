@@ -41,6 +41,8 @@ func ChatCompletionHandler(svcCtx *bootstrap.ServiceContext) gin.HandlerFunc {
 			identity,
 		)
 
+		c.Header(types.HeaderRequestId, identity.RequestID)
+
 		// 4. Handle stream and non-stream cases separately
 		if req.Stream {
 			handleStreamResponse(c, l)
@@ -56,9 +58,6 @@ func handleStreamResponse(c *gin.Context, l *logic.ChatCompletionLogic) {
 	c.Status(http.StatusOK)
 
 	flusher, _ := c.Writer.(http.Flusher)
-	if flusher != nil {
-		flusher.Flush()
-	}
 
 	if err := l.ChatCompletionStream(); err != nil {
 		sendStreamError(c, err, flusher)
@@ -77,15 +76,21 @@ func handleNonStreamResponse(c *gin.Context, l *logic.ChatCompletionLogic) {
 
 // sendErrorResponse sends a structured error response
 func sendErrorResponse(c *gin.Context, statusCode int, err error) {
+	fmt.Printf("==> sendErrorResponse: %+v\n", err)
+	message := err.Error()
+	errType := "server_error"
+
 	// Check if the error is an APIError with a specific status code
-	if apiErr, ok := err.(*types.APIError); ok && apiErr.StatusCode != 0 {
+	if apiErr, ok := err.(*types.APIError); ok {
 		statusCode = apiErr.StatusCode
+		message = apiErr.Message
+		errType = apiErr.Type
 	}
 
 	c.AbortWithStatusJSON(statusCode, gin.H{
 		"error": gin.H{
-			"message": err.Error(),
-			"type":    "api_error",
+			"message": message,
+			"type":    errType,
 			"code":    statusCode,
 		},
 	})
@@ -140,9 +145,10 @@ func ChatStatusHandler(svcCtx *bootstrap.ServiceContext) gin.HandlerFunc {
 		}
 
 		// Get tool status from Redis
-		toolStatusData, err := svcCtx.RedisClient.GetHash(c.Request.Context(), requestId)
+		toolStatusKey := types.ToolStatusRedisKeyPrefix + requestId
+		toolStatusData, err := svcCtx.RedisClient.GetHash(c.Request.Context(), toolStatusKey)
 		if err != nil {
-			logger.Error("Error fetching tool status from Redis", zap.Error(err))
+			logger.Warn("Error fetching tool status from Redis", zap.Error(err))
 			// Return 404 if requestID not found in Redis
 			c.JSON(http.StatusNotFound, types.ToolStatusResponse{
 				Code:    http.StatusNotFound,

@@ -158,14 +158,18 @@ func (h *ResponseHandler) sendSSEError(w http.ResponseWriter, err error) {
 	// Default error code
 	errorCode := types.ErrCodeInernalError
 	message := types.ErrMsgInernalError
+	errType := "server_error"
 
 	// Check if the error is an APIError with a specific status code
-	if apiErr, ok := err.(*types.APIError); ok && apiErr.StatusCode != 0 {
-		errorCode = fmt.Sprintf("%d", apiErr.StatusCode)
+	if apiErr, ok := err.(*types.APIError); ok {
+		errorCode = apiErr.Code
+		if apiErr.Type != "" {
+			errType = apiErr.Type
+		}
 		if apiErr.Message != "" {
 			message = apiErr.Message
 		} else {
-			message = fmt.Sprintf("status code: %s", errorCode)
+			message = fmt.Sprintf("status code: %d", apiErr.StatusCode)
 		}
 	}
 
@@ -173,7 +177,7 @@ func (h *ResponseHandler) sendSSEError(w http.ResponseWriter, err error) {
 	errorResponse := map[string]interface{}{
 		"error": map[string]interface{}{
 			"message": message,
-			"type":    "server_error",
+			"type":    errType,
 			"code":    errorCode,
 		},
 	}

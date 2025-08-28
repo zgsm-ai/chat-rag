@@ -14,8 +14,9 @@ type RedisConfig struct {
 }
 
 type ToolConfig struct {
-	SemanticSearch SemanticSearchConfig
-	RelationSearch RelationSearchConfig
+	SemanticSearch   SemanticSearchConfig
+	DefinitionSearch DefinitionSearchConfig
+	ReferenceSearch  ReferenceSearchConfig
 }
 
 type SemanticSearchConfig struct {
@@ -25,8 +26,22 @@ type SemanticSearchConfig struct {
 	ScoreThreshold   float64
 }
 
-type RelationSearchConfig struct {
-	SearchEndpoint string
+type ReferenceSearchConfig struct {
+	SearchEndpoint   string
+	ApiReadyEndpoint string
+}
+
+type DefinitionSearchConfig struct {
+	SearchEndpoint   string
+	ApiReadyEndpoint string
+}
+
+// LogConfig holds logging configuration
+type LogConfig struct {
+	LogFilePath          string
+	LokiEndpoint         string
+	LogScanIntervalSec   int
+	EnableClassification bool
 }
 
 // Config holds all service configuration
@@ -42,9 +57,7 @@ type Config struct {
 	Tools ToolConfig
 
 	// Logging configuration
-	LogFilePath        string
-	LokiEndpoint       string
-	LogScanIntervalSec int
+	Log LogConfig
 
 	// Model configuration
 	SummaryModel               string

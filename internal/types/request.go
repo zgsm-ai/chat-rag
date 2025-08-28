@@ -33,15 +33,22 @@ const (
 )
 
 const (
+	// Request Headers
 	HeaderQuotaIdentity = "x-quota-identity"
 	HeaderRequestId     = "x-request-id"
 	HeaderCaller        = "x-caller"
 	HeaderTaskId        = "zgsm-task-id"
 	HeaderClientId      = "zgsm-client-id"
 	HeaderClientIde     = "zgsm-client-ide"
+	HeaderClientOS      = "X-Stainless-OS"
 	HeaderLanguage      = "Accept-Language"
 	HeaderAuthorization = "authorization"
 	HeaderProjectPath   = "zgsm-project-path"
+	HeaderClientVersion = "X-Costrict-Version"
+
+	// Response Headers
+	HeaderUserInput = "x-user-input"
+	HeaderSelectLLm = "x-select-llm"
 )
 
 // ToolStatus defines the status of the tool
@@ -52,6 +59,14 @@ const (
 	ToolStatusSuccess ToolStatus = "success"
 	ToolStatusFailed  ToolStatus = "failed"
 )
+
+// Redis key prefix for tool status
+const ToolStatusRedisKeyPrefix = "tool_status:"
+
+// Tool string filter
+const StrFilterToolAnalyzing = "\n#### 💡 检索已完成，分析中"
+const StrFilterToolSearchStart = "\n#### 🔍 "
+const StrFilterToolSearchEnd = "工具检索中"
 
 type ChatCompletionRequest struct {
 	Model         string        `json:"model"`
@@ -72,7 +87,7 @@ type ChatCompletionResponse struct {
 	Created int64    `json:"created"`
 	Model   string   `json:"model"`
 	Choices []Choice `json:"choices"`
-	Usage   Usage    `json:"usage,omitempty"`
+	Usage   Usage    `json:"usage"`
 }
 
 type ChatLLMRequest struct {

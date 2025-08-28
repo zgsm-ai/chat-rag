@@ -6,14 +6,16 @@ Port: 8888
 TokenThreshold: 100_000
 
 # Logging configuration
-LogFilePath: "logs/"
-LokiEndpoint: "http://localhost:3100/loki/api/v1/push"
-LogScanIntervalSec: 10
+Log:
+  LogFilePath: "logs/"
+  LokiEndpoint: "http://localhost:3100/loki/api/v1/push"
+  LogScanIntervalSec: 10
+  EnableClassification: false
 
 # Model configuration
 SummaryModel: "qwen2.5-coder-32b"
 SummaryModelTokenThreshold: 64_000
-ClassifyModel: "qwen2.5-coder-32b"
+ClassifyModel: "gpt-oss-120b"
 
 # Split system prompt, used to compress system prompt
 SystemPromptSplitStr: "====\n\nRULES"
@@ -27,7 +29,8 @@ DepartmentApiEndpoint: "http://localhost:1234/work_id?work_id="
 # Models supported by function calling
 LLM:
   # Endpoint: "https://zgsm.sangfor.com/chat-rag/api/v1/chat/completions"
-  Endpoint: "http://127.0.0.1:30616/v1/chat/completions"
+  Endpoint: "http://127.0.0.1:32732/v1/chat/completions"
+  # Endpoint: "http://127.0.0.1:32325/model/glm-4.5-fp8/v1/chat/completions"
   FuncCallingModels:
     - "deepseek-v3"
     - "qwen3*"
@@ -39,7 +42,13 @@ Redis:
 # Semantic API configuration
 Tools:
   SemanticSearch:
-    SearchEndpoint: "http://127.0.0.1:18888/codebase-embedder/api/v1/search/semantic"
-    ApiReadyEndpoint: "http://127.0.0.1:18888/codebase-embedder/api/v1/embeddings/summary"
-    TopK: 10
+    SearchEndpoint: "http://123.58.64.57:30080/codebase-embedder/api/v1/search/semantic"
+    ApiReadyEndpoint: "http://123.58.64.57:30080/codebase-embedder/api/v1/embeddings/summary"
+    TopK: 50
     ScoreThreshold: 0.7
+  DefinitionSearch:
+    SearchEndpoint: "http://123.58.64.57:30080/codebase-indexer/api/v1/search/definition"
+    ApiReadyEndpoint: "http://123.58.64.57:30080/codebase-indexer/api/v1/index/summary"
+  ReferenceSearch:
+    SearchEndpoint: "http://123.58.64.57:30080/codebase-indexer/api/v1/search/reference"
+    ApiReadyEndpoint: "http://123.58.64.57:30080/codebase-indexer/api/v1/index/summary"

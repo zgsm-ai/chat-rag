@@ -63,16 +63,16 @@ type LogRecordInterface interface {
 
 // LoggerRecordService handles logging operations
 type LoggerRecordService struct {
-	logFilePath     string // Permanent storage log directory path
-	tempLogFilePath string // Temporary log file path
-	lokiEndpoint    string
-	scanInterval    time.Duration
-	metricsService  MetricsInterface
-	llmConfig       config.LLMConfig
-	classifyModel   string
-	llmClient       client.LLMInterface
-	deptClient      client.DepartmentInterface
-	instanceID      string
+	logFilePath          string // Permanent storage log directory path
+	tempLogFilePath      string // Temporary log file path
+	scanInterval         time.Duration
+	metricsService       MetricsInterface
+	llmConfig            config.LLMConfig
+	classifyModel        string
+	llmClient            client.LLMInterface
+	deptClient           client.DepartmentInterface
+	instanceID           string
+	enableClassification bool
 
 	logChan  chan *model.ChatLog
 	stopChan chan struct{}
@@ -85,7 +85,7 @@ type LoggerRecordService struct {
 // NewLogRecordService creates a new logger service
 func NewLogRecordService(config config.Config) LogRecordInterface {
 	// Create temp directory under logFilePath for temporary log files
-	tempLogDir := filepath.Join(config.LogFilePath, "temp")
+	tempLogDir := filepath.Join(config.Log.LogFilePath, "temp")
 
 	instanceID := os.Getenv("HOSTNAME")
 	if instanceID == "" {
@@ -98,16 +98,16 @@ func NewLogRecordService(config config.Config) LogRecordInterface {
 	}
 
 	return &LoggerRecordService{
-		logFilePath:     config.LogFilePath, // Permanent storage directory
-		tempLogFilePath: tempLogDir,         // Temporary logs directory
-		lokiEndpoint:    config.LokiEndpoint,
-		scanInterval:    time.Duration(config.LogScanIntervalSec) * time.Second,
-		llmConfig:       config.LLM,
-		classifyModel:   config.ClassifyModel,
-		logChan:         make(chan *model.ChatLog, 1000),
-		stopChan:        make(chan struct{}),
-		instanceID:      instanceID,
-		deptClient:      deptClient,
+		logFilePath:          config.Log.LogFilePath, // Permanent storage directory
+		tempLogFilePath:      tempLogDir,             // Temporary logs directory
+		scanInterval:         time.Duration(config.Log.LogScanIntervalSec) * time.Second,
+		llmConfig:            config.LLM,
+		classifyModel:        config.ClassifyModel,
+		enableClassification: config.Log.EnableClassification,
+		logChan:              make(chan *model.ChatLog, 1000),
+		stopChan:             make(chan struct{}),
+		instanceID:           instanceID,
+		deptClient:           deptClient,
 	}
 }
 
@@ -365,12 +365,14 @@ func (ls *LoggerRecordService) processSingleFile(file os.DirEntry) {
 	}
 
 	// 3. Arrange classification
-	if err := ls.processClassification(chatLog, filePath); err != nil {
-		logger.Error("Failed to process classification",
-			zap.String("filename", file.Name()),
-			zap.Error(err),
-		)
-		return
+	if ls.enableClassification {
+		if err := ls.processClassification(chatLog, filePath); err != nil {
+			logger.Error("Failed to process classification",
+				zap.String("filename", file.Name()),
+				zap.Error(err),
+			)
+			return
+		}
 	}
 
 	// 4. Get department info
@@ -465,6 +467,7 @@ func (ls *LoggerRecordService) classifyLog(logs *model.ChatLog) string {
 	validatedCategory := ls.validateCategory(category)
 	logger.Info("Log classification result",
 		zap.String("category", validatedCategory),
+		zap.String("model", ls.llmClient.GetModelName()),
 	)
 
 	return validatedCategory
@@ -526,7 +529,10 @@ func (ls *LoggerRecordService) saveLogToPermanentStorage(chatLog *model.ChatLog)
 		logger.Error("Failed to write log to permanent storage",
 			zap.Error(err),
 		)
+		return
 	}
+
+	logger.Info("Log saved in storage", zap.String("fileName", logFile))
 }
 
 // deleteTempLogFile deletes a single temp log file
