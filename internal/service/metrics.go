@@ -186,11 +186,6 @@ func (ms *MetricsService) recordTokenMetrics(log *model.ChatLog, labels promethe
 
 	// Record compressed tokens
 	ms.recordTokenCount(ms.compressedTokensTotal, log.CompressedTokens, labels)
-
-	// Record compression ratio
-	if log.CompressionRatio > 0 {
-		ms.compressionRatio.With(labels).Observe(log.CompressionRatio)
-	}
 }
 
 // recordTokenCount records token count
@@ -218,12 +213,6 @@ func (ms *MetricsService) recordTokenCount(metric *prometheus.CounterVec, tokens
 
 // recordLatencyMetrics records latency related metrics
 func (ms *MetricsService) recordLatencyMetrics(log *model.ChatLog, labels prometheus.Labels) {
-	if log.SemanticLatency > 0 {
-		ms.semanticLatency.With(labels).Observe(float64(log.SemanticLatency))
-	}
-	if log.SummaryLatency > 0 {
-		ms.summaryLatency.With(labels).Observe(float64(log.SummaryLatency))
-	}
 	if log.MainModelLatency > 0 {
 		ms.mainModelLatency.With(labels).Observe(float64(log.MainModelLatency))
 	}
