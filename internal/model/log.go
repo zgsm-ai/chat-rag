@@ -36,29 +36,26 @@ type ChatLog struct {
 	// Token statistics
 	OriginalTokens   TokenStats `json:"original_tokens"`
 	CompressedTokens TokenStats `json:"compressed_tokens"`
-	CompressionRatio float64    `json:"compression_ratio"`
 
 	// Processing flags
 	IsPromptProceed        bool `json:"is_prompt_proceed"`
 	IsUserPromptCompressed bool `json:"is_user_prompt_compressed"`
 
 	// Latency metrics (in milliseconds)
-	SemanticLatency  int64 `json:"semantic_latency_ms"`
-	SummaryLatency   int64 `json:"summary_latency_ms"`
 	MainModelLatency int64 `json:"main_model_latency_ms"`
 	TotalLatency     int64 `json:"total_latency_ms"`
 
-	// Semantic context
-	SemanticContext any        `json:"semantic_context"`
-	ToolCalls       []ToolCall `json:"tool_calls"`
+	// Tools
+	ToolCalls []ToolCall `json:"tool_calls"`
 
 	// Content samples (truncated for logging)
 	OriginalPrompt   []types.Message `json:"original_prompt"`
 	CompressedPrompt []types.Message `json:"compressed_prompt"`
 
 	// Response information
-	ResponseContent string      `json:"response_content,omitempty"`
-	Usage           types.Usage `json:"usage,omitempty"`
+	ResponseContent string              `json:"response_content,omitempty"`
+	ResponseHeaders []map[string]string `json:"response_headers,omitempty"`
+	Usage           types.Usage         `json:"usage,omitempty"`
 
 	// Classification (will be filled by async processor)
 	Category string `json:"category,omitempty"`

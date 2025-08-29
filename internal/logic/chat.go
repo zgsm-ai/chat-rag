@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -103,11 +102,6 @@ func (l *ChatCompletionLogic) newChatLog(startTime time.Time) *model.ChatLog {
 
 // updateChatLog updates the chat log with information from the processed prompt
 func (l *ChatCompletionLogic) updateChatLog(chatLog *model.ChatLog, processedPrompt *ds.ProcessedPrompt) {
-	// Record timing information from processed prompt
-	chatLog.SemanticLatency = processedPrompt.SemanticLatency
-	chatLog.SummaryLatency = processedPrompt.SummaryLatency
-	chatLog.SemanticContext = processedPrompt.SemanticContext
-
 	// Update log with processed prompt info
 	chatLog.IsUserPromptCompressed = processedPrompt.IsUserPromptCompressed
 	allTokens := l.countTokensInMessages(processedPrompt.Messages)
@@ -117,12 +111,6 @@ func (l *ChatCompletionLogic) updateChatLog(chatLog *model.ChatLog, processedPro
 		SystemTokens: allTokens - userTokens,
 		UserTokens:   userTokens,
 		All:          allTokens,
-	}
-
-	// Calculate compression ratio
-	if chatLog.OriginalTokens.All > 0 {
-		ratio := float64(allTokens) / float64(chatLog.OriginalTokens.All)
-		chatLog.CompressionRatio, _ = strconv.ParseFloat(strconv.FormatFloat(ratio, 'f', 2, 64), 64)
 	}
 
 	chatLog.CompressedPrompt = processedPrompt.Messages
@@ -256,7 +244,7 @@ func (l *ChatCompletionLogic) handleStreamingWithTools(
 	state := newStreamState()
 
 	// Phase 1: Process streaming response
-	toolDetected, err := l.processStream(llmClient, flusher, messages, state, remainingDepth)
+	toolDetected, err := l.processStream(llmClient, flusher, messages, state, remainingDepth, chatLog)
 	if err != nil {
 		return l.handleStreamError(err, chatLog)
 	}
@@ -276,12 +264,13 @@ func (l *ChatCompletionLogic) processStream(
 	messages []types.Message,
 	state *streamState,
 	remainingDepth int,
+	chatLog *model.ChatLog,
 ) (bool, error) {
 	err := llmClient.ChatLLMWithMessagesStreamRaw(l.ctx, messages, func(llmResp client.LLMResponse) error {
 		l.handleResonseHeaders(llmResp.Header, []string{
 			types.HeaderUserInput,
 			types.HeaderSelectLLm,
-		})
+		}, chatLog)
 
 		return l.handleStreamChunk(flusher, llmResp.ResonseLine, state, remainingDepth)
 	})
@@ -290,7 +279,7 @@ func (l *ChatCompletionLogic) processStream(
 }
 
 // handleResonseHeaders Set the specified request header to the response
-func (l *ChatCompletionLogic) handleResonseHeaders(header *http.Header, requiredHeaders []string) {
+func (l *ChatCompletionLogic) handleResonseHeaders(header *http.Header, requiredHeaders []string, chatLog *model.ChatLog) {
 	for _, headerName := range requiredHeaders {
 		if headerValue := header.Get(headerName); headerValue != "" {
 			if l.writer.Header().Get(headerName) != "" {
@@ -298,6 +287,10 @@ func (l *ChatCompletionLogic) handleResonseHeaders(header *http.Header, required
 			}
 
 			l.writer.Header().Set(headerName, headerValue)
+			chatLog.ResponseHeaders = append(
+				chatLog.ResponseHeaders,
+				map[string]string{headerName: headerValue},
+			)
 			logger.InfoC(l.ctx, "Response header setted",
 				zap.String("header", headerName), zap.String("value", headerValue))
 		}
