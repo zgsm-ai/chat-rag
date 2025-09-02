@@ -52,3 +52,8 @@ Tools:
   ReferenceSearch:
     SearchEndpoint: "http://123.58.64.57:30080/codebase-indexer/api/v1/search/reference"
     ApiReadyEndpoint: "http://123.58.64.57:30080/codebase-indexer/api/v1/index/summary"
+  KnowledgeSearch:
+    SearchEndpoint: "http://123.58.64.57:30080/codebase-embedder/api/v1/search/document"
+    ApiReadyEndpoint: "http://123.58.64.57:30080/codebase-embedder/api/v1/documents/summary"
+    TopK: 20
+    ScoreThreshold: 0.7
