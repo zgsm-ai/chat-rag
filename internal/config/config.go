@@ -64,9 +64,6 @@ type Config struct {
 	SummaryModelTokenThreshold int
 	ClassifyModel              string
 
-	// Split system prompt
-	SystemPromptSplitStr string
-
 	// used recent user prompt messages nums
 	RecentUserMsgUsedNums int
 

@@ -17,9 +17,6 @@ SummaryModel: "qwen2.5-coder-32b"
 SummaryModelTokenThreshold: 64_000
 ClassifyModel: "gpt-oss-120b"
 
-# Split system prompt, used to compress system prompt
-SystemPromptSplitStr: "====\n\nRULES"
-
 # used recent user prompt messages nums
 RecentUserMsgUsedNums: 3
 
