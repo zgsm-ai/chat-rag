@@ -159,15 +159,58 @@ Example: Get the implementation of NewTokenCounter(Linux) - NOTE FORWARD SLASHES
   <endLine>75</endLine>
 </code_definition_search>
 `
+	// DefinitionSearchTool
+	KnowledgeSearchToolName   = "knowledge_base_search"
+	KnowledgeSearchCapability = `- You can use knowledge_base_search to semantically search project-specific documentation including Markdown files and API documentation, 
+extracting precise contextual knowledge for AI-assisted programming while filtering out generic information. 
+This tool is essential when you need to generate code requiring project-specific implementations, custom tool classes/interfaces, or code template reuse where syntax details or parameter rules are unclear; 
+troubleshoot project-specific errors such as custom exceptions, module call failures, or environment configuration issues; 
+follow project-local coding conventions including naming prefixes, comment formats, and directory structures; 
+or query project-developed APIs and third-party integrated APIs to confirm parameter constraints, return value formats, and calling permissions. 
+Always include project context and module names in your queries for accurate matching against specialized terminology. 
+Reserve this for project-specific knowledge while using codebase_search for actual code implementations.
+`
+	KnowledgeSearchToolDesc = `## knowledge_base_search
+Description: Semantically search project-specific documentation including Markdown files and API documentation to extract precise project context and specifications.
+This tool is designed to retrieve project-unique information such as development manuals, module documentation, interface comments, and proprietary API specifications.
+It uses semantic matching to focus on project-specific content while filtering out generic programming information.
+
+Parameters:
+query: (required) Search query containing "project dimension + core requirement". Must include module names and document types (e.g., "Project X Order Module Custom Payment API Parameters")
+topK: (required) Number of results to return. Set to 1 for simple queries (single parameter explanation), 2-3 for complex queries (troubleshooting processes, multi-API comparisons)
+scoreThreshold: (required) Similarity score threshold ≥0.75 (higher threshold avoids matching generic content due to project-specific terminology/abbreviations)
+
+Usage:
+<knowledge_base_search>
+<query>Your query with project context and module names</query>
+<topK>Number of results (1-50, default 10)</topK>
+<scoreThreshold>Minimum similarity score (≥0.75)</scoreThreshold>
+</knowledge_base_search>
+
+Examples:
+Searching for pagination interface parameters in Project A user module:
+<knowledge_base_search>
+<query>Project A User Module Pagination API Parameters</query>
+<topK>5</topK>
+<scoreThreshold>0.75</scoreThreshold>
+</knowledge_base_search>
+
+Searching for Java class naming rules in Project B development standards:
+<knowledge_base_search>
+<query>Project B Development Specification Java Class Naming</query>
+<topK>10</topK>
+<scoreThreshold>0.75</scoreThreshold>
+</knowledge_base_search>
+`
 
 	XmlToolsRules = `
 ====
 
 TOOLS USE FOLLOW RULES
 
-- IMPORTANT: After receiving the results from tools such as codebase_search, code_definition_search, and code_reference_search, you must always summarize the key findings and/or code within <thinking> tags before calling any other tools.
+- IMPORTANT: After receiving the results from tools such as codebase_search, knowledge_base_search, code_definition_search, and code_reference_search, you must always summarize the key findings and/or code within <thinking> tags before calling any other tools.
 - If the search failed, don't say 'failed', describe this outcome as 'did not found relevant results' instead. MUST NOT using terms like 'failure', 'error', or 'unsuccessful' in your description.
-- You can use codebase_search and code_definition_search and code_reference_search individually or in combination: codebase_search helps you find broad code-related information based on natural language queries, while code_definition_search is perfect for pinpointing specific code definitions and their detailed contents. 
+- You can use codebase_search and knowledge_base_search and code_definition_search and code_reference_search individually or in combination: codebase_search helps you find broad code-related information based on natural language queries, while code_definition_search is perfect for pinpointing specific code definitions and their detailed contents. 
 
 - Code Analysis Execution Rules
 If the task is related to the project code, follow the following rules:
@@ -175,6 +218,7 @@ Rule 1: Tool Priority Hierarchy
 1. codebase_search (Mandatory first step)
 2. code_definition_search (For specific implementations code)
 3. code_reference_search (For exploring references and code relationships)
+3. knowledge_base_search (For exploring documentation)
 
 Rule 2: Decision Flow for Code Analysis
 Receive code analysis →
@@ -184,6 +228,9 @@ IF need to query specific definition or implementations code of a symbolUse:
 END IF
 IF need to explore symbol references or code relationships:
 	Use code_reference_search →
+END IF
+IF need to query development manuals, module documentation, interface comments:
+	Use knowledge_base_search →
 END IF
 Review search results
 
@@ -228,14 +275,16 @@ type XmlToolExecutor struct {
 
 // NewXmlToolExecutor creates a new XmlToolExecutor instance
 func NewXmlToolExecutor(
-	c config.SemanticSearchConfig,
+	c config.ToolConfig,
 	semanticClient client.SemanticInterface,
 	relationClient client.ReferenceInterface,
 	definitionClient client.DefinitionInterface,
+	knowledgeClient client.KnowledgeInterface,
 ) *XmlToolExecutor {
 	return &XmlToolExecutor{
 		tools: map[string]ToolFunc{
-			CodebaseSearchToolName:  createCodebaseSearchTool(c, semanticClient),
+			CodebaseSearchToolName:  createCodebaseSearchTool(c.SemanticSearch, semanticClient),
+			KnowledgeSearchToolName: createKnowledgeSearchTool(c.KnowledgeSearch, knowledgeClient),
 			ReferenceSearchToolName: createReferenceSearchTool(relationClient),
 			DefinitionToolName:      createGetDefinitionTool(definitionClient),
 		},
@@ -367,6 +416,56 @@ func createReferenceSearchTool(referenceClient client.ReferenceInterface) ToolFu
 			}
 
 			return referenceClient.CheckReady(context.Background(), client.ReadyRequest{
+				ClientId:      identity.ClientID,
+				CodebasePath:  identity.ProjectPath,
+				Authorization: identity.AuthToken,
+				ClientVersion: identity.ClientVersion,
+			})
+		},
+	}
+}
+
+// createKnowledgeSearchTool creates the knowledge base search tool function
+func createKnowledgeSearchTool(c config.KnowledgeSearchConfig, knowledgeClient client.KnowledgeInterface) ToolFunc {
+	return ToolFunc{
+		description: KnowledgeSearchToolDesc,
+		capability:  KnowledgeSearchCapability,
+		execute: func(ctx context.Context, param string) (string, error) {
+			identity, err := getIdentityFromContext(ctx)
+			if err != nil {
+				return "", err
+			}
+
+			query, err := extractXmlParam(param, "query")
+			if err != nil {
+				return "", fmt.Errorf("failed to extract query: %w", err)
+			}
+
+			result, err := knowledgeClient.Search(ctx, client.KnowledgeRequest{
+				ClientId:      identity.ClientID,
+				CodebasePath:  identity.ProjectPath,
+				Query:         query,
+				TopK:          c.TopK,
+				Score:         c.ScoreThreshold,
+				Authorization: identity.AuthToken,
+				ClientVersion: identity.ClientVersion,
+			})
+			if err != nil {
+				return "", fmt.Errorf("knowledge base search failed: %w", err)
+			}
+
+			return result, nil
+		},
+		readyCheck: func(ctx context.Context) (bool, error) {
+			identity, err := getIdentityFromContext(ctx)
+			if err != nil {
+				return false, err
+			}
+			if identity.ClientID == "" {
+				return false, fmt.Errorf("get none clientId")
+			}
+
+			return knowledgeClient.CheckReady(context.Background(), client.ReadyRequest{
 				ClientId:      identity.ClientID,
 				CodebasePath:  identity.ProjectPath,
 				Authorization: identity.AuthToken,

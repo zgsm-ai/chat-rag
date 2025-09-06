@@ -17,6 +17,7 @@ type ToolConfig struct {
 	SemanticSearch   SemanticSearchConfig
 	DefinitionSearch DefinitionSearchConfig
 	ReferenceSearch  ReferenceSearchConfig
+	KnowledgeSearch  KnowledgeSearchConfig
 }
 
 type SemanticSearchConfig struct {
@@ -34,6 +35,13 @@ type ReferenceSearchConfig struct {
 type DefinitionSearchConfig struct {
 	SearchEndpoint   string
 	ApiReadyEndpoint string
+}
+
+type KnowledgeSearchConfig struct {
+	SearchEndpoint   string
+	ApiReadyEndpoint string
+	TopK             int
+	ScoreThreshold   float64
 }
 
 // LogConfig holds logging configuration

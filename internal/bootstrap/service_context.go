@@ -33,12 +33,14 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	semanticClient := client.NewSemanticClient(c.Tools.SemanticSearch)
 	referenceClient := client.NewReferenceClient(c.Tools.ReferenceSearch)
 	definitionClient := client.NewDefinitionClient(c.Tools.DefinitionSearch)
+	knowledgeClient := client.NewKnowledgeClient(c.Tools.KnowledgeSearch)
 	// functionManager := functions.NewToolManager("etc/functions.yaml")
 	xmlToolExecutor := functions.NewXmlToolExecutor(
-		c.Tools.SemanticSearch,
+		c.Tools,
 		semanticClient,
 		referenceClient,
 		definitionClient,
+		knowledgeClient,
 	)
 
 	// Initialize token counter
