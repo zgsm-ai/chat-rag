@@ -79,41 +79,62 @@ This only applies to seven languages: Java, Go, Python, C, CPP, JavaScript, and 
 Parameters:
 - codebasePath: (required) Absolute path to the codebase root
 - filePath: (required) The full absolute path to the file to which the code belongs. Must match the path separator style of the current operating system.
-- startLine: (required) The line number where the symbol starts.
-- endLine: (required) The line number where the symbol ends.
-- symbolName: (optional) The name of the symbol (e.g., function name, class name). Use this only if you're confident about the symbol.
+- startLine: (optional) The line number where the symbol starts.
+- endLine: (optional) The line number where the symbol ends.
+- symbolName: (optional) The name of the symbol (e.g., function name, class name).
+- maxLayer: (optional) Maximum call chain depth to search (default: 10, maximum: 10)
 
 Important Path Requirements:
 ABSOLUTE PATHS REQUIRED: The filePath parameter must be a full absolute system path (not relative paths or workspace-relative paths)
 
 Usage:
+Two usage modes are available:
+1. File location mode: Provide filePath with startLine and endLine to search references from specific location
+2. Symbol search mode: Provide symbolName to search for references by symbol name
+
 <code_reference_search>
   <codebasePath>Absolute path to the codebase root</codebasePath>
   <filePath>The full absolute path to the file to which the code belongs. (With correct OS path separators.)</filePath>
+  <!-- Option 1: Use file location parameters -->
   <startLine>Start line number of the symbol (1-based)</startLine>
   <endLine>End line number of the symbol (1-based)</endLine>
-  <symbolName>Symbol name (optional)</symbolName>
+  <!-- Option 2: Use symbol name parameter -->
+  <symbolName>Symbol name</symbolName>
+  <!-- Optional: Control call chain depth -->
+  <maxLayer>Maximum call chain depth (1-10)</maxLayer>
 </code_reference_search>
 
+Note: Either file location parameters (startLine + endLine) OR symbolName must be provided.
 
-Example: Exploring all references to the GetUserById function
+Example: Exploring all references to the GetUserById function with max depth
 <code_reference_search>
   <codebasePath>d:\workspace\project\</codebasePath>
   <filePath>d:\workspace\project\internal\tokenizer\tokenizer.go</filePath>
   <startLine>12</startLine>
   <endLine>14</endLine>
   <symbolName>GetUserById</symbolName>
+  <maxLayer>5</maxLayer>
+</code_reference_search>
+
+Example: Searching references by symbol name only
+<code_reference_search>
+  <codebasePath>/home/user/project</codebasePath>
+  <filePath>/home/user/project/internal/tokenizer/tokenizer.go</filePath>
+  <symbolName>CalculateScore</symbolName>
+  <maxLayer>3</maxLayer>
 </code_reference_search>
 `
 
 	// DefinitionSearchTool
 	DefinitionToolName   = "code_definition_search"
-	DefinitionCapability = `- You can use code_definition_search to retrieve the full implementation of a symbol (function, class, method, interface, etc.) from the codebase by specifying its exact file path and line range. 
-This is especially useful when you already know the location of a definition and need its complete code content, including precise position details for reference or modification. 
-The tool provides accurate, context-free extraction of definitions, ensuring you get exactly the implementation you need without unnecessary surrounding code. 
-For optimal efficiency, always use code_definition_search first when you have the file path and line numbers—it delivers fast, precise results with minimal overhead.
-This tool can obtain the definition and implementation of the code faster and more accurately than through the directory file structure and directly reading the file content. 
-If you need to search for related definitions without knowing their exact locations, consider using codebase_search (for semantic matches) or search_files (for regex-based scanning) as fallback options.
+	DefinitionCapability = `- You can use code_definition_search to retrieve the full implementation of a symbol (function, class, method, interface, etc.) from the codebase using two different approaches:
+1. By specifying its exact file path and line range when you know the location
+2. By providing the symbol name when you know the symbol but not its exact location
+This is especially useful when you need complete code content for reference or modification.
+The tool provides accurate, context-free extraction of definitions, ensuring you get exactly the implementation you need without unnecessary surrounding code.
+For optimal efficiency, always use code_definition_search first when you have either the file path and line numbers or the symbol name—it delivers fast, precise results with minimal overhead.
+This tool can obtain the definition and implementation of the code faster and more accurately than through the directory file structure and directly reading the file content.
+If you need to search for related definitions without knowing the symbol name or location, consider using codebase_search (for semantic matches) or search_files (for regex-based scanning) as fallback options.
 `
 	DefinitionToolDesc = `## code_definition_search
 Description:
@@ -128,22 +149,32 @@ This only applies to seven languages: Java, Go, Python, C, CPP, JavaScript, and 
 
 Parameters:
 - codebasePath: (required) Absolute path to the codebase root
-- filePath: (required) Full path to the file within the codebase. Must match the path separator style of the current operating system.
-- startLine: (required) Start line number of the definition (1-based).
-- endLine: (required) End line number of the definition (1-based).
+- filePath: (optional) Full path to the file within the codebase. Must match the path separator style of the current operating system.
+- startLine: (optional) Start line number of the definition (1-based).
+- endLine: (optional) End line number of the definition (1-based).
+- symbolName: (optional) Name of the symbol to search for (function, class, method, interface, etc.)
 
 Important Path Requirements:
 ABSOLUTE PATHS REQUIRED: The filePath parameter must be a full absolute system path (not relative paths or workspace-relative paths)
 
 Usage:
+Two usage modes are available:
+1. File location mode: Provide filePath with startLine and endLine to retrieve definition from specific location
+2. Symbol search mode: Provide symbolName to search for the definition by symbol name
+
 <code_definition_search>
   <codebasePath>Absolute path to the codebase root</codebasePath>
+  <!-- Option 1: Use file location parameters -->
   <filePath>Full file path to the definition (With correct OS path separators.)</filePath>
-  <startLine>Start line number (required)</startLine>
-  <endLine>End line number (required)</endLine>
+  <startLine>Start line number</startLine>
+  <endLine>End line number</endLine>
+  <!-- Option 2: Use symbol name parameter -->
+  <symbolName>Name of symbol to search for</symbolName>
 </code_definition_search>
 
-Example: Get the implementation of NewTokenCounter(Windows) - NOTE BACKSLASHES
+Note: Either file location parameters (filePath + startLine + endLine) OR symbolName must be provided.
+
+Example: Get implementation by file location
 <code_definition_search>
   <codebasePath>d:\workspace\project\</codebasePath>
   <filePath>d:\workspace\project\internal\tokenizer\tokenizer.go</filePath>
@@ -151,12 +182,10 @@ Example: Get the implementation of NewTokenCounter(Windows) - NOTE BACKSLASHES
   <endLine>75</endLine>
 </code_definition_search>
 
-Example: Get the implementation of NewTokenCounter(Linux) - NOTE FORWARD SLASHES
+Example: Get implementation by symbol name
 <code_definition_search>
   <codebasePath>/home/user/project</codebasePath>
-  <filePath>/home/user/project/internal/tokenizer/tokenizer.go</filePath>
-  <startLine>57</startLine>
-  <endLine>75</endLine>
+  <symbolName>NewTokenCounter</symbolName>
 </code_definition_search>
 `
 	// DefinitionSearchTool
@@ -484,6 +513,13 @@ func buildDefinitionRequest(identity *model.Identity, param string) (client.Defi
 		ClientVersion: identity.ClientVersion,
 	}
 
+	// 检查是否使用 symbolName 查询方式
+	if symbolName, err := extractXmlParam(param, "symbolName"); err == nil {
+		req.SymbolName = symbolName
+		return req, nil
+	}
+
+	// 使用文件路径和行号查询方式
 	var err error
 	if req.FilePath, err = extractXmlParam(param, "filePath"); err != nil {
 		return req, fmt.Errorf("filePath: %w", err)
@@ -509,10 +545,6 @@ func buildDefinitionRequest(identity *model.Identity, param string) (client.Defi
 		req.EndLine = &endLine
 	}
 
-	if codeSnippet, err := extractXmlParam(param, "codeSnippet"); err == nil {
-		req.CodeSnippet = codeSnippet
-	}
-
 	return req, nil
 }
 
@@ -525,36 +557,65 @@ func buildRerenceRequest(identity *model.Identity, param string) (client.Referen
 		ClientVersion: identity.ClientVersion,
 	}
 
-	var err error
-	if req.FilePath, err = extractXmlParam(param, "filePath"); err != nil {
-		return req, fmt.Errorf("filePath: %w", err)
+	// Process required parameters: filePath and symbolName (at least one is needed)
+	symbolName, _ := extractXmlParam(param, "symbolName")
+	if symbolName != "" {
+		req.SymbolName = symbolName
 	}
 
+	// filePath is required
+	if err := processFilePath(&req, identity, param); err != nil {
+		return req, err
+	}
+
+	// Process optional parameters
+	processOptionalParams(&req, param)
+
+	return req, nil
+}
+
+// processFilePath handles file path related logic
+func processFilePath(req *client.ReferenceRequest, identity *model.Identity, param string) error {
+	var err error
+	if req.FilePath, err = extractXmlParam(param, "filePath"); err != nil {
+		return fmt.Errorf("filePath: %w", err)
+	}
+
+	// Process file path separators
 	codebasePath := req.CodebasePath
-	// Check the operating system type and convert the file path separator if it is a Windows system
 	if strings.Contains(strings.ToLower(identity.ClientOS), "windows") {
 		req.FilePath = strings.ReplaceAll(req.FilePath, "/", "\\")
 		codebasePath = strings.ReplaceAll(codebasePath, "/", "\\")
 	}
 
+	// Validate file path
 	if !strings.Contains(req.FilePath, codebasePath) {
-		return req, fmt.Errorf("filePath must be full absolute path, please try again")
+		return fmt.Errorf("filePath must be full absolute path, please try again")
 	}
 
-	if req.StartLine, err = extractXmlIntParam(param, "startLine"); err != nil {
-		return req, fmt.Errorf("startLine: %w", err)
+	return nil
+}
+
+// processOptionalParams handles optional parameters
+func processOptionalParams(req *client.ReferenceRequest, param string) {
+	// Process startLine and endLine
+	if startLine, err := extractXmlIntParam(param, "startLine"); err == nil {
+		req.StartLine = &startLine
 	}
 
-	if req.EndLine, err = extractXmlIntParam(param, "endLine"); err != nil {
-		return req, fmt.Errorf("endLine: %w", err)
+	if endLine, err := extractXmlIntParam(param, "endLine"); err == nil {
+		req.EndLine = &endLine
 	}
 
-	// Optional parameters
-	if symbolName, err := extractXmlParam(param, "symbolName"); err == nil {
-		req.SymbolName = symbolName
+	// Process maxLayer, default is 10
+	if maxLayer, err := extractXmlIntParam(param, "maxLayer"); err == nil {
+		if maxLayer > 0 && maxLayer <= 10 {
+			req.MaxLayer = &maxLayer
+		}
+	} else {
+		defaultMaxLayer := 10
+		req.MaxLayer = &defaultMaxLayer
 	}
-
-	return req, nil
 }
 
 // Helper functions
