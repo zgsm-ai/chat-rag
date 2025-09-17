@@ -22,10 +22,10 @@ type DefinitionInterface interface {
 type DefinitionRequest struct {
 	ClientId      string `json:"clientId"`
 	CodebasePath  string `json:"codebasePath"`
-	FilePath      string `json:"filePath"`
+	FilePath      string `json:"filePath,omitempty"`
 	StartLine     *int   `json:"startLine,omitempty"`
 	EndLine       *int   `json:"endLine,omitempty"`
-	CodeSnippet   string `json:"codeSnippet,omitempty"`
+	SymbolName    string `json:"symbolName,omitempty"`
 	Authorization string `json:"authorization"`
 	ClientVersion string `json:"clientVersion"`
 }
@@ -102,17 +102,22 @@ func (b *DefinitionRequestBuilder) BuildRequest(req DefinitionRequest) Request {
 	queryParams := map[string]string{
 		"clientId":     req.ClientId,
 		"codebasePath": req.CodebasePath,
-		"filePath":     req.FilePath,
 	}
 
-	if req.StartLine != nil {
-		queryParams["startLine"] = fmt.Sprintf("%d", *req.StartLine)
-	}
-	if req.EndLine != nil {
-		queryParams["endLine"] = fmt.Sprintf("%d", *req.EndLine)
-	}
-	if req.CodeSnippet != "" {
-		queryParams["codeSnippet"] = req.CodeSnippet
+	// 根据查询方式添加参数
+	if req.SymbolName != "" {
+		queryParams["symbolName"] = req.SymbolName
+	} else {
+		// 使用文件路径和行号方式查询
+		if req.FilePath != "" {
+			queryParams["filePath"] = req.FilePath
+		}
+		if req.StartLine != nil {
+			queryParams["startLine"] = fmt.Sprintf("%d", *req.StartLine)
+		}
+		if req.EndLine != nil {
+			queryParams["endLine"] = fmt.Sprintf("%d", *req.EndLine)
+		}
 	}
 
 	return Request{

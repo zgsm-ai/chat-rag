@@ -23,9 +23,10 @@ type ReferenceRequest struct {
 	ClientId      string `json:"clientId"`
 	CodebasePath  string `json:"codebasePath"`
 	FilePath      string `json:"filePath"`
-	StartLine     int    `json:"startLine"`
-	EndLine       int    `json:"endLine"`
+	StartLine     *int   `json:"startLine,omitempty"`
+	EndLine       *int   `json:"endLine,omitempty"`
 	SymbolName    string `json:"symbolName,omitempty"`
+	MaxLayer      *int   `json:"maxLayer,omitempty"`
 	Authorization string `json:"authorization"`
 	ClientVersion string `json:"clientVersion"`
 }
@@ -103,12 +104,23 @@ func (b *ReferenceRequestBuilder) BuildRequest(req ReferenceRequest) Request {
 		"clientId":     req.ClientId,
 		"codebasePath": req.CodebasePath,
 		"filePath":     req.FilePath,
-		"startLine":    strconv.Itoa(req.StartLine),
-		"endLine":      strconv.Itoa(req.EndLine),
+	}
+
+	// Only add startLine and endLine if they are provided
+	if req.StartLine != nil {
+		queryParams["startLine"] = strconv.Itoa(*req.StartLine)
+	}
+	if req.EndLine != nil {
+		queryParams["endLine"] = strconv.Itoa(*req.EndLine)
 	}
 
 	if req.SymbolName != "" {
 		queryParams["symbolName"] = req.SymbolName
+	}
+
+	// Add maxLayer if provided
+	if req.MaxLayer != nil {
+		queryParams["maxLayer"] = strconv.Itoa(*req.MaxLayer)
 	}
 
 	return Request{
