@@ -104,7 +104,9 @@ Two usage modes are available:
   <maxLayer>Maximum call chain depth (1-10)</maxLayer>
 </code_reference_search>
 
-Note: Either file location parameters (startLine + endLine) OR symbolName must be provided.
+Note: 
+- Either file location parameters (startLine + endLine) OR symbolName must be provided.
+- Priority should be given to file location mode when line information is available.
 
 Example: Exploring all references to the GetUserById function with max depth
 <code_reference_search>
@@ -172,7 +174,9 @@ Two usage modes are available:
   <symbolName>Name of symbol to search for</symbolName>
 </code_definition_search>
 
-Note: Either file location parameters (filePath + startLine + endLine) OR symbolName must be provided.
+Note: 
+- Either file location parameters (filePath + startLine + endLine) OR symbolName must be provided.
+- Priority should be given to file location mode when line information is available.
 
 Example: Get implementation by file location
 <code_definition_search>
@@ -237,11 +241,12 @@ Searching for Java class naming rules in Project B development standards:
 
 TOOLS USE FOLLOW RULES
 
+- Before reading the file directly, you can try to use codebase_search, code_definition_search and code_reference_search tools to search the code.
 - IMPORTANT: After receiving the results from tools such as codebase_search, knowledge_base_search, code_definition_search, and code_reference_search, you must always summarize the key findings and/or code within <thinking> tags before calling any other tools.
 - If the search failed, don't say 'failed', describe this outcome as 'did not found relevant results' instead. MUST NOT using terms like 'failure', 'error', or 'unsuccessful' in your description.
-- You can use codebase_search and knowledge_base_search and code_definition_search and code_reference_search individually or in combination: codebase_search helps you find broad code-related information based on natural language queries, while code_definition_search is perfect for pinpointing specific code definitions and their detailed contents. 
+- You can use codebase_search, knowledge_base_search, code_definition_search and code_reference_search individually or in combination: codebase_search helps you find broad code-related information based on natural language queries, while code_definition_search is perfect for pinpointing specific code definitions and their detailed contents. 
 
-- Code Analysis Execution Rules
+- Code Search Execution Rules
 If the task is related to the project code, follow the following rules:
 Rule 1: Tool Priority Hierarchy
 1. codebase_search (Mandatory first step)
@@ -249,7 +254,7 @@ Rule 1: Tool Priority Hierarchy
 3. code_reference_search (For exploring references and code relationships)
 3. knowledge_base_search (For exploring documentation)
 
-Rule 2: Decision Flow for Code Analysis
+Rule 2: Decision Flow for Code Analysis and Search
 Receive code analysis →
 Use codebase_search with natural language query →
 IF need to query specific definition or implementations code of a symbolUse:
