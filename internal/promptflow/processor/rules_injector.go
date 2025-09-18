@@ -17,8 +17,8 @@ type RulesInjector struct {
 }
 
 type AgentConfig struct {
-	MatchKey string `mapstructure:"match_key"`
-	Rules    string `mapstructure:"rules"`
+	MatchKeys []string `mapstructure:"match_keys"`
+	Rules     string   `mapstructure:"rules"`
 }
 
 type RulesConfig struct {
@@ -30,16 +30,16 @@ func NewRulesInjector() *RulesInjector {
 }
 
 func (r *RulesInjector) loadRulesConfig() error {
-	// 获取项目根目录的路径
+	// Get the project root directory path
 	projectRoot, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("failed to get working directory: %w", err)
 	}
 
-	// 构建配置文件路径
+	// Build the configuration file path
 	configPath := filepath.Join(projectRoot, "etc", "rules.yaml")
 
-	// 使用config包加载YAML配置
+	// Load YAML configuration using config package
 	config, err := config.LoadYAML[RulesConfig](configPath)
 	if err != nil {
 		return fmt.Errorf("failed to load rules config: %w", err)
@@ -61,7 +61,7 @@ func (r *RulesInjector) Execute(promptMsg *PromptMsg) {
 		return
 	}
 
-	// 加载规则配置
+	// Load rules configuration
 	if err := r.loadRulesConfig(); err != nil {
 		logger.Warn("Failed to load rules configuration",
 			zap.String("method", method),
@@ -105,22 +105,24 @@ func (r *RulesInjector) injectRulesIntoSystemContent(content string) (string, er
 		content = content + "\n\nRules:\n"
 	}
 
-	// 提取开头第一段内容（以第一个换行符或空行分隔）
+	// Extract the first paragraph content (separated by the first newline or empty line)
 	firstParagraph := content
 	if idx := strings.IndexAny(content, "\n\r"); idx != -1 {
 		firstParagraph = content[:idx]
 	}
 
 	for agentName, agentConfig := range r.rulesConfig.Agents {
-		if strings.Contains(firstParagraph, agentConfig.MatchKey) {
-			logger.Info("Detected agent and adding rules", zap.String("agent_type", agentName))
-			// Add the rules to the end of the system content
-			result := content + "\n# Rules from " + agentName + "\n" + agentConfig.Rules
-			return result, nil
+		// Iterate through all match keys for each agent
+		for _, matchKey := range agentConfig.MatchKeys {
+			if strings.Contains(firstParagraph, matchKey) {
+				logger.Info("Detected agent and adding rules",
+					zap.String("agent_type", agentName),
+					zap.String("matched_key", matchKey))
+				// Add the rules to the end of the system content
+				content = content + "\n\n# Rules from " + agentName + "\n" + agentConfig.Rules
+			}
 		}
 	}
 
-	// No matching agent type found, return original content
-	logger.Info("No matching agent type found in first paragraph, skipping rules injection")
 	return content, nil
 }

@@ -1,7 +1,8 @@
 # Agent Rules Configuration
 agents:
   workflow:
-    match_key: "a strategic workflow controller"
+    match_keys:
+      - "a strategic workflow controller"
     rules: |
       # 开发流程
 
@@ -405,7 +406,8 @@ agents:
       通过这种自然、系统的协作方式，我们能确保每个功能都经过深思熟虑，从想法到代码的每一步都稳扎稳打，最终交付出色的产品。 
 
   software_engineer:
-    match_key: "a highly skilled software engineer"
+    match_keys:
+      - "a highly skilled software engineer"
     rules: |
       # 通用编码规则文档
 
