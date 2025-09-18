@@ -52,7 +52,7 @@ Example: Searching for functions related to user authentication
 
 	// ReferenceSearchTool
 	ReferenceSearchToolName   = "code_reference_search"
-	ReferenceSearchCapability = `- You can use code_reference_search to explore how a symbol (function, class, method, etc.) is referenced across the codebase by specifying its exact file path and line range. 
+	ReferenceSearchCapability = `- You can use code_reference_search to explore how a symbol (function, class, method, interface, constants, etc.) is referenced across the codebase by specifying its exact file path and line range. 
 This tool is particularly useful when you want to understand how a function or class is used or analyze code dependencies across different parts of the project. 
 By retrieving not only the definition but also all references to the symbol, code_reference_search helps you track its usage throughout the codebase, 
 ensuring that you can see all interactions and relationships. 
@@ -63,7 +63,7 @@ If you need to focus on specific code definitions, code_definition_search may be
 `
 	ReferenceSearchToolDesc = `## code_reference_search
 Description:
-The code_reference_search tool helps you find the definition of a symbol (such as a function, class, or method) 
+The code_reference_search tool helps you find the definition of a symbol (function, class, method, interface, constants, etc.) 
 and retrieve all reference relationships to that symbol across files in the project. 
 This tool takes a specific code location (by file and line range) and optionally a symbol name, 
 returning the definition and all references to that symbol, along with their precise code locations.
@@ -81,7 +81,7 @@ Parameters:
 - filePath: (required) The full absolute path to the file to which the code belongs. Must match the path separator style of the current operating system.
 - startLine: (optional) The line number where the symbol starts.
 - endLine: (optional) The line number where the symbol ends.
-- symbolName: (optional) The name of the symbol (e.g., function name, class name).
+- symbolName: (optional) The name of the symbol (e.g., function name, class name, method, interface, constants, etc.).
 - maxLayer: (optional) Maximum call chain depth to search (default: 10, maximum: 10)
 
 Important Path Requirements:
@@ -129,7 +129,7 @@ Example: Searching references by symbol name only
 
 	// DefinitionSearchTool
 	DefinitionToolName   = "code_definition_search"
-	DefinitionCapability = `- You can use code_definition_search to retrieve the full implementation of a symbol (function, class, method, interface, etc.) from the codebase using two different approaches:
+	DefinitionCapability = `- You can use code_definition_search to retrieve the full implementation of a symbol (function, class, method, interface, constants, etc.) from the codebase using two different approaches:
 1. By specifying its exact file path and line range when you know the location
 2. By providing the symbol name when you know the symbol but not its exact location
 This is especially useful when you need complete code content for reference or modification.
@@ -140,7 +140,7 @@ If you need to search for related definitions without knowing the symbol name or
 `
 	DefinitionToolDesc = `## code_definition_search
 Description:
-Retrieve the full definition implementation of a symbol (function, class, method, interface, etc.) within a specific range of lines in a code file. 
+Retrieve the full definition implementation of a symbol (function, class, method, interface, constants, etc.) within a specific range of lines in a code file. 
 This tool allows you to search for the original definition content of code that is referenced elsewhere (either within the same file or in other files across the project). 
 These references can include class/interface references, function/method calls, and more.
 Usage Priority:
