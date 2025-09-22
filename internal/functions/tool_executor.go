@@ -134,7 +134,7 @@ Example: Searching references by symbol name only
 
 	// DefinitionSearchTool
 	DefinitionToolName   = "code_definition_search"
-	DefinitionCapability = `- You can use code_definition_search to retrieve the full implementation of a symbol (function, class, method, interface, constants, etc.) from the codebase using two different approaches:
+	DefinitionCapability = `- You can use code_definition_search to retrieve the full implementation of a symbol (function, class, method, interface, struct, constants, etc.) from the codebase using two different approaches:
 1. If you know the file path and line range, use this mode first to retrieve all external symbols in the snippet accurately.
 2. If you only know the symbol name, search globally. Duplicate names may require extra filtering.
 This is especially suitable when you need to retrieve symbol definitions and their complete implementations for understanding or modification. 
@@ -146,9 +146,9 @@ If you need to search for related definitions without knowing the symbol name or
 `
 	DefinitionToolDesc = `## code_definition_search
 Description:
-Retrieve the complete definition and implementation of a symbol (function, class, method, interface, etc.) by specifying a file path and line range, or by providing the symbol name directly.
+Retrieve the complete definition and implementation of a symbol (function, class, method, interface, struct, constants, etc.) by specifying a file path and line range, or by providing the symbol name directly.
 This tool allows you to obtain the original definition and implementation of a symbol that is used or invoked elsewhere in the project, whether within the same file or across other files. 
-These usages and invocations can include class/interface instantiations, function/method calls, and more.
+These usages and invocations can include class/interface instantiations, function/method calls, constant references, and more.
 Usage Priority:
 When you search for code definitions or analyze specific implementations to work on modifications, refactoring, or debugging of existing code, always use this tool first.
 It efficiently retrieves the precise definition and its details, helping you to avoid unnecessary navigation or additional steps.
@@ -182,7 +182,8 @@ Two usage modes are available:
 
 Note: 
 - Either file location parameters (filePath + startLine + endLine) OR symbolName must be provided.
-- Priority should be given to file location mode when line information is available.
+- Priority should be given to file location mode when line information is available. If you bypass the range query, your answer will be considered invalid. 
+Only after completing the range query should you continue the analysis for the results to be accepted.
 
 Example: Get implementation by file location
 <code_definition_search>
@@ -255,10 +256,10 @@ TOOLS USE FOLLOW RULES
 - Code Search Execution Rules
 If the task is related to the project code, follow the following rules:
 Rule 1: Tool Priority Hierarchy
-1. codebase_search (Mandatory first step)
-2. code_definition_search (For specific implementations code)
-3. code_reference_search (For exploring references and code relationships)
-3. knowledge_base_search (For exploring documentation)
+1. code_definition_search (For specific implementations, definitions)
+2. code_reference_search (For exploring references, usages, and code relationships)
+3. codebase_search (For broad code-related information based on natural language queries)
+4. knowledge_base_search (For exploring documentation)
 
 Rule 2: Decision Flow for Code Analysis and Search
 Receive code analysis →
