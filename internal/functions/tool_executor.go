@@ -134,19 +134,19 @@ Example: Searching references by symbol name only
 
 	// DefinitionSearchTool
 	DefinitionToolName   = "code_definition_search"
-	DefinitionCapability = `- You can use code_definition_search to retrieve the full implementation of a symbol (function, class, method, interface, struct, constants, etc.) from the codebase using two different approaches:
-1. If you know the file path and line range, use this mode first to retrieve all external symbols in the snippet accurately.
-2. If you only know the symbol name, search globally. Duplicate names may require extra filtering.
-This is especially suitable when you need to retrieve symbol definitions and their complete implementations for understanding or modification. 
+	DefinitionCapability = `- You can use code_definition_search to retrieve the complete definitions and implementations in your codebase using two different approaches:
+1. If you know the file path and line range, prioritize using this mode instead of searching by name alone. This allows you to retrieve all external definitions within that code snippet more efficiently, while providing complete and rich information to help you better understand the code.
+2. If you only know the name (function, class, method, interface, struct, constant, etc.), you can perform a global search. Note that in cases of duplicate names, you need to apply additional filtering based on contextual information.
+This tool is particularly suitable for scenarios where you need to obtain symbol definitions and their complete implementations in order to understand, analyze, or modify code.
 The tool provides accurate, context-free extraction of definitions, ensuring you get exactly the implementation you need without unnecessary surrounding code.
 Please note that the results may include multiple matches, which should be distinguished using the file path or contextual information.
-For optimal efficiency, always use code_definition_search first when you have either the file path and line numbers or the symbol name—it delivers fast, precise results with minimal overhead.
+Whenever you need to parse a specific code segment (by providing the file path and line numbers) or query a symbol by name, you should always prioritize using code_definition_search — it delivers fast, precise, and minimal-overhead results.
 This tool can obtain the definition and implementation of the code faster and more accurately than through the directory file structure and directly reading the file content.
-If you need to search for related definitions without knowing the symbol name or location, and can only rely on semantic or content clues, consider using codebase_search (for semantic matches) or search_files (for regex-based scanning) as fallback options.
+If you need to search for related definitions without knowing the symbol name or location, consider using codebase_search (for semantic matches) or search_files (for regex-based scanning) as fallback options.
 `
 	DefinitionToolDesc = `## code_definition_search
 Description:
-Retrieve the complete definition and implementation of a symbol (function, class, method, interface, struct, constants, etc.) by specifying a file path and line range, or by providing the symbol name directly.
+Retrieve the complete definition and implementation of a symbol (function, class, method, interface, struct, constant, etc.) by specifying a file path and line range, or by providing the symbol name directly.
 This tool allows you to obtain the original definition and implementation of a symbol that is used or invoked elsewhere in the project, whether within the same file or across other files. 
 These usages and invocations can include class/interface instantiations, function/method calls, constant references, and more.
 Usage Priority:
