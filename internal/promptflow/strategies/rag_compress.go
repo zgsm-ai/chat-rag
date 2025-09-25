@@ -16,6 +16,11 @@ import (
 	"github.com/zgsm-ai/chat-rag/internal/types"
 )
 
+// ProcessorChainBuilder is an interface for building the processor chain
+type ProcessorChainBuilder interface {
+	buildProcessorChain() error
+}
+
 type RagCompressProcessor struct {
 	ctx          context.Context
 	llmClient    client.LLMInterface
@@ -26,14 +31,15 @@ type RagCompressProcessor struct {
 	modelName     string
 	toolsExecutor functions.ToolExecutor
 
-	// systemCompressor *processor.SystemCompressor
 	userMsgFilter *processor.UserMsgFilter
 	// functionAdapter *processor.FunctionAdapter
 	userCompressor *processor.UserCompressor
 	xmlToolAdapter *processor.XmlToolAdapter
-	ruleInjector   *processor.RulesInjector
 	start          *processor.Start
 	end            *processor.End
+
+	// chainBuilder used to build the processor chain
+	chainBuilder ProcessorChainBuilder
 }
 
 // copyAndSetQuotaIdentity
@@ -63,7 +69,7 @@ func NewRagCompressProcessor(
 		return nil, fmt.Errorf("create LLM client: %w", err)
 	}
 
-	return &RagCompressProcessor{
+	processor := &RagCompressProcessor{
 		ctx:          ctx,
 		modelName:    modelName,
 		llmClient:    llmClient,
@@ -74,7 +80,11 @@ func NewRagCompressProcessor(
 		toolsExecutor: svcCtx.ToolExecutor,
 		start:         processor.NewStartPoint(),
 		end:           processor.NewEndpoint(),
-	}, nil
+	}
+
+	processor.chainBuilder = processor
+
+	return processor, nil
 }
 
 // Arrange processes the prompt with RAG compression
@@ -86,7 +96,8 @@ func (p *RagCompressProcessor) Arrange(messages []types.Message) (*ds.ProcessedP
 		}, fmt.Errorf("create prompt message: %w", err)
 	}
 
-	if err := p.buildProcessorChain(); err != nil {
+	// use polymorphism to call the buildProcessorChain method of the subclass
+	if err := p.chainBuilder.buildProcessorChain(); err != nil {
 		return &ds.ProcessedPrompt{
 			Messages: messages,
 		}, fmt.Errorf("build processor chain: %w", err)
@@ -99,13 +110,8 @@ func (p *RagCompressProcessor) Arrange(messages []types.Message) (*ds.ProcessedP
 
 // buildProcessorChain constructs and connects the processor chain
 func (p *RagCompressProcessor) buildProcessorChain() error {
-	// p.systemCompressor = processor.NewSystemCompressor(
-	// 	p.config.SystemPromptSplitStr,
-	// 	p.llmClient,
-	// )
 	p.userMsgFilter = processor.NewUserMsgFilter()
 	p.xmlToolAdapter = processor.NewXmlToolAdapter(p.ctx, p.toolsExecutor)
-	p.ruleInjector = processor.NewRulesInjector()
 	// p.functionAdapter = processor.NewFunctionAdapter(
 	// 	p.modelName,
 	// 	p.config.LLM.FuncCallingModels,
@@ -119,8 +125,7 @@ func (p *RagCompressProcessor) buildProcessorChain() error {
 	)
 
 	// execute chain
-	p.start.SetNext(p.ruleInjector)
-	p.ruleInjector.SetNext(p.userMsgFilter)
+	p.start.SetNext(p.userMsgFilter)
 	p.userMsgFilter.SetNext(p.xmlToolAdapter)
 	// p.userMsgFilter.SetNext(p.functionAdapter)
 	p.xmlToolAdapter.SetNext(p.userCompressor)

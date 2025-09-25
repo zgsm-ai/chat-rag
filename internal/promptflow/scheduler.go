@@ -47,6 +47,12 @@ func NewPromptProcessor(
 			return strategies.NewRagOnlyProcessor(ctx, svcCtx, identity)
 		}
 
+	case types.Strict:
+		modeName = "Strict workflow mode"
+		creator = func() (PromptArranger, error) {
+			return strategies.NewStrictWorflowProcessor(ctx, svcCtx, headers, identity, modelName)
+		}
+
 	case types.Cost, types.Balanced, types.Auto:
 		fallthrough
 	default:
