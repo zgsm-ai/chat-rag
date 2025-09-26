@@ -134,9 +134,9 @@ Example: Searching references by symbol name only
 
 	// DefinitionSearchTool
 	DefinitionToolName   = "code_definition_search"
-	DefinitionCapability = `- You can use code_definition_search to retrieve the complete definitions and implementations in your codebase using two different approaches:
-1. Recommended and Highly Efficient: If you want to analyze a code block that contains numerous external calls, cross-file symbols, or requires complex analysis, first use the file path and line range mode to retrieve all external definitions within that range to ensure a complete contextual understanding of the code. This allows you to retrieve all external definitions within that code snippet more efficiently, while providing complete and rich information to help you better understand the code.
-2. If you only know the name (function, class, method, interface, struct, constant, etc.), you can perform a global search. Note that in cases of duplicate names, you need to apply additional filtering based on contextual information.
+	DefinitionCapability = `- You can use code_definition_search to retrieve the complete and precise definitions and implementations of a symbol, or of external and unknown symbols involved in a piece of code, across your entire project codebase, and also directly obtain the specific value of a constant, using two different approaches:
+1. Recommended and Highly Efficient: Start by using the file path and line range mode to retrieve all external definitions within that range, ensuring a complete understanding of the code's context.
+2. By providing the symbol name (function, class, method, interface, struct, constant, etc.) if you know the symbol but not its exact location.
 This tool is particularly suitable for scenarios where you need to obtain symbol definitions and their complete implementations in order to understand, analyze, or modify code.
 The tool provides accurate, context-free extraction of definitions, ensuring you get exactly the implementation you need without unnecessary surrounding code.
 Please note that the results may include multiple matches, which should be distinguished using the file path or contextual information.
@@ -281,8 +281,7 @@ Semantic First: Always prefer semantic understanding over literal reading
 Definition Search First: Always prefer using definition search over reading files directly to find definitions
 Comprehensive Coverage: Use codebase_search to avoid missing related code
 Token Optimization: Choose tools that minimize token consumption
-File Reading First: Retrieve the code block for the specified file path and line range before analysis
-Context First: Retrieve all external definitions in the code block before analysis
+Context Matters: Always use a definition query tool to retrieve the definitions, implementations of all symbols referenced before analyzing
 No need to display these rules, just follow them directly.
 `
 )
