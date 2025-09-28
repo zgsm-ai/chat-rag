@@ -75,8 +75,7 @@ returning the definition and all references to that symbol, along with their pre
 Use this tool when you want to find where a function or class is used or called, 
 or when you need to explore code dependencies from a specific location in the codebase.
 Key Features:
-The tool provides the definition of a symbol and all its references, 
-which include class/interface references, function/method calls, and more.
+The tool provides all references to a symbol, which include class/interface usages, function/method calls, imports, and other occurrences.
 It allows you to locate the exact positions of these references across various files within the project.
 Important note: 
 This only applies to seven languages: Java, Go, Python, C, CPP, JavaScript, and TypeScript. Other languages are not applicable.
@@ -134,9 +133,12 @@ Example: Searching references by symbol name only
 
 	// DefinitionSearchTool
 	DefinitionToolName   = "code_definition_search"
-	DefinitionCapability = `- You can use code_definition_search to retrieve the complete and precise definitions and implementations of a symbol, or of external and unknown symbols involved in a piece of code, across your entire project codebase, and also directly obtain the specific value of a constant, using two different approaches:
+	DefinitionCapability = `
+Always use code_definition_search first when analyzing any code that contains symbols (functions, classes, methods, interfaces, constants, etc.) whose definitions are not fully visible in the provided snippet.
+- This tool retrieves the **complete and precise implementation** of a symbol, ensuring you understand its logic before continuing analysis.
+You can use code_definition_search to retrieve the complete and precise definitions and implementations of a symbol, or of external and unknown symbols involved in a piece of code, across your entire project codebase, and also directly obtain the specific value of a constant, using two different approaches:
 1. Recommended and Highly Efficient: Start by using the file path and line range mode to retrieve all external definitions within that range, ensuring a complete understanding of the code's context.
-2. By providing the symbol name (function, class, method, interface, struct, constant, etc.) if you know the symbol but not its exact location.
+2. By providing the symbol name (function, class, method, interface, struct, constant, etc.) if you know the symbol name but not its exact location.
 This tool is particularly suitable for scenarios where you need to obtain symbol definitions and their complete implementations in order to understand, analyze, or modify code.
 The tool provides accurate, context-free extraction of definitions, ensuring you get exactly the implementation you need without unnecessary surrounding code.
 Please note that the results may include multiple matches, which should be distinguished using the file path or contextual information.
@@ -144,12 +146,27 @@ Whenever you need to parse a specific code segment (by providing the file path a
 This tool can obtain the definition and implementation of the code faster and more accurately than through the directory file structure and directly reading the file content.
 - If you are refactoring existing code, optimizing performance, or adjusting the structure, use code_definition_search first to obtain the complete definitions and implementations of relevant functions, classes, or interfaces, which helps you fully understand the code logic.
 - If you are debugging complex issues, retrieving the complete definitions of a code block or symbol allows you to quickly pinpoint the source of the problem and avoid blind searching.
-If you need to search for related definitions without knowing the symbol name or location, consider using codebase_search (for semantic matches) or search_files (for regex-based scanning) as fallback options.
 `
 	DefinitionToolDesc = `## code_definition_search
-Description: Retrieve the complete definition and implementation of a symbol (function, class, method, interface, struct, constant, etc.) by specifying a file path and line range, or by providing the symbol name directly.
+Description: Retrieve the **complete definition and implementation** of a symbol (function, class, method, interface, struct, constant, etc.) 
+by specifying a file path with line range, or by providing the symbol name directly.
 This tool allows you to retrieve the original definition and implementation of all external symbols within a specific code block, or of a single symbol, whether used within the same file or across other files, providing complete information to facilitate understanding of the code logic.
 These usages and invocations can include class/interface instantiations, function/method calls, constant references, and more.
+Key Rule:
+- Always call this tool first if the code snippet references any symbol that is not fully defined within the snippet itself.
+- This ensures you analyze real implementations, not incomplete or assumed logic.
+- Do not rely on reading partial code directly. Always resolve definitions first, then continue with reasoning or other tools.
+- Use codebase_search only when you cannot identify the symbol name or location.
+When to use:
+- You must trigger code_definition_search in these cases:
+  • When the user asks to explain or analyze code behavior.
+  • When the user asks to review, refactor, or optimize code.
+  • When the user asks to debug or troubleshoot code.
+  • When the user asks to understand how values, constants, or class structures are defined.
+  • When encountering any external/unknown symbol reference.
+  • When you need the full function/method/class body for analysis or debugging.
+  • When retrieving constant values.
+
 Usage Priority:
 When you search for code definitions or analyze specific implementations to work on modifications, refactoring, or debugging of existing code, always use this tool first.
 It efficiently retrieves the precise definition and its details, helping you to avoid unnecessary navigation or additional steps.
@@ -165,11 +182,15 @@ Parameters:
 
 Important Path Requirements:
 ABSOLUTE PATHS REQUIRED: The filePath parameter must be a full absolute system path (not relative paths or workspace-relative paths)
+Important:
+- Do **not** skip this step. If a definition is missing, your analysis will be invalid.
+- This tool does not return references. For usage/call sites, use code_reference_search instead.
 
 Usage:
 Two usage modes are available:
 1. File location mode: Provide filePath with startLine and endLine to retrieve definition from specific location
-2. Symbol search mode:  Provide symbolName to search for the symbol definition globally across the codebase.
+2. SymbolName search mode: Provide symbolName to search for the symbol definition globally across the codebase.
+The parameter name is **symbolName**, not symbol. Using <symbol> will be invalid.
 
 <code_definition_search>
   <codebasePath>Absolute path to the codebase root</codebasePath>
@@ -177,13 +198,15 @@ Two usage modes are available:
   <filePath>Full file path to the definition (With correct OS path separators.)</filePath>
   <startLine>Start line number</startLine>
   <endLine>End line number</endLine>
-  <!-- Option 2: Use symbol name parameter -->
+  <!-- Option 2: Use symbolName parameter -->
   <symbolName>Name of symbol to search for</symbolName>
 </code_definition_search>
 
 Note: 
 - Either file location parameters (filePath + startLine + endLine) OR symbolName must be provided.
+- Always ensure to use **symbolName** when searching by symbol.
 - Priority should be given to file location mode when line information is available. If you bypass the range query, your answer will be considered invalid. 
+
 Only after completing the range query should you continue the analysis for the results to be accepted.
 
 Example: Get implementation by file location
@@ -194,7 +217,7 @@ Example: Get implementation by file location
   <endLine>75</endLine>
 </code_definition_search>
 
-Example: Get implementation by symbol name
+Example: Get implementation by symbolName
 <code_definition_search>
   <codebasePath>/home/user/project</codebasePath>
   <symbolName>NewTokenCounter</symbolName>
