@@ -135,11 +135,12 @@ Example: Searching references by symbol name only
 	DefinitionToolName   = "code_definition_search"
 	DefinitionCapability = `
 Always use code_definition_search first when analyzing any code that contains symbols (functions, classes, methods, interfaces, constants, etc.) whose definitions are not fully visible in the provided snippet.
-- This tool retrieves the **complete and precise implementation** of a symbol, ensuring you understand its logic before continuing analysis.
+This tool retrieves the complete and precise definitions of all external symbols referenced within a code snippet (specified by filePath + startLine + endLine), ensuring you fully understand its logic and dependencies before continuing analysis.
 You can use code_definition_search to retrieve the complete and precise definitions and implementations of a symbol, or of external and unknown symbols involved in a piece of code, across your entire project codebase, and also directly obtain the specific value of a constant, using two different approaches:
 1. Recommended and Highly Efficient: Start by using the file path and line range mode to retrieve all external definitions within that range, ensuring a complete understanding of the code's context.
 2. By providing the symbol name (function, class, method, interface, struct, constant, etc.) if you know the symbol name but not its exact location.
-This tool is particularly suitable for scenarios where you need to obtain symbol definitions and their complete implementations in order to understand, analyze, or modify code.
+This tool is particularly suitable for scenarios where you need to obtain the definitions and complete implementations of all external symbols within a code snippet (specified by filePath + startLine + endLine), in order to understand, analyze, or modify the code.
+This tool is also particularly suitable for scenarios where you need to obtain the definition and complete implementation of a specific symbol (queried by symbolName), in order to understand, analyze, or modify the code.
 The tool provides accurate, context-free extraction of definitions, ensuring you get exactly the implementation you need without unnecessary surrounding code.
 Please note that the results may include multiple matches, which should be distinguished using the file path or contextual information.
 Whenever you need to parse a specific code segment (by providing the file path and line numbers) or query a symbol by name, you should always prioritize using code_definition_search — it delivers fast, precise, and minimal-overhead results.
@@ -154,11 +155,12 @@ This tool allows you to retrieve the original definition and implementation of a
 These usages and invocations can include class/interface instantiations, function/method calls, constant references, and more.
 Key Rule:
 - Always call this tool first if the code snippet references any symbol that is not fully defined within the snippet itself.
+- This tool is highly efficient, precise, and minimizes token consumption, making it far superior to directly reading files or using regex-based searches.
 - This ensures you analyze real implementations, not incomplete or assumed logic.
 - Do not rely on reading partial code directly. Always resolve definitions first, then continue with reasoning or other tools.
 - Use codebase_search only when you cannot identify the symbol name or location.
 When to use:
-- You must trigger code_definition_search in these cases:
+- In all of the following cases, you must trigger code_definition_search:
   • When the user asks to explain or analyze code behavior.
   • When the user asks to review, refactor, or optimize code.
   • When the user asks to debug or troubleshoot code.
@@ -166,6 +168,8 @@ When to use:
   • When encountering any external/unknown symbol reference.
   • When you need the full function/method/class body for analysis or debugging.
   • When retrieving constant values.
+  • When you need to understand the complete implementation of a symbol.
+  • When analyzing, refactoring, reviewing, or debugging a code snippet (specified by filePath + startLine + endLine), you must trigger a range query to retrieve the complete definitions of all external symbols it depends on.
 
 Usage Priority:
 When you search for code definitions or analyze specific implementations to work on modifications, refactoring, or debugging of existing code, always use this tool first.
@@ -304,7 +308,7 @@ Semantic First: Always prefer semantic understanding over literal reading
 Definition Search First: Always prefer using definition search over reading files directly to find definitions
 Comprehensive Coverage: Use codebase_search to avoid missing related code
 Token Optimization: Choose tools that minimize token consumption
-Context Matters: Always use a definition query tool to retrieve the definitions, implementations of all symbols referenced before analyzing
+Context Matters: Before analyzing code, make sure to gather enough information about all relevant symbols and their implementations.
 No need to display these rules, just follow them directly.
 `
 )
