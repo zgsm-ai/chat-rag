@@ -32,7 +32,7 @@ const (
 	Auto PromptMode = "auto"
 
 	// Strict mode: Strictly follow the workflow agent
-	Strict PromptMode = "strcict"
+	Strict PromptMode = "strict"
 )
 
 const (
