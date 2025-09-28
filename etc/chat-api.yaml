@@ -2,23 +2,21 @@ Name: chat-rag
 Host: 0.0.0.0
 Port: 8888
 
-# Token processing configuration
-TokenThreshold: 100_000
-
 # Logging configuration
 Log:
   LogFilePath: "logs/"
   LokiEndpoint: "http://localhost:3100/loki/api/v1/push"
   LogScanIntervalSec: 10
   EnableClassification: false
+  ClassifyModel: "gpt-oss-120b"
 
-# Model configuration
-SummaryModel: "qwen2.5-coder-32b"
-SummaryModelTokenThreshold: 64_000
-ClassifyModel: "gpt-oss-120b"
-
-# used recent user prompt messages nums
-RecentUserMsgUsedNums: 3
+# Context Compression
+ContextCompressConfig:
+  EnableCompress: false
+  TokenThreshold: 100_000
+  SummaryModel: "qwen2.5-coder-32b"
+  SummaryModelTokenThreshold: 64_000
+  RecentUserMsgUsedNums: 3
 
 # Department configuration
 DepartmentApiEndpoint: "http://localhost:1234/work_id?work_id="

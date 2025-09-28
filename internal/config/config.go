@@ -49,7 +49,20 @@ type LogConfig struct {
 	LogFilePath          string
 	LokiEndpoint         string
 	LogScanIntervalSec   int
+	ClassifyModel        string
 	EnableClassification bool
+}
+
+type ContextCompressConfig struct {
+	// Context compression enable flag
+	EnableCompress bool
+	// Context compression token threshold
+	TokenThreshold int
+	// Summary Model configuration
+	SummaryModel               string
+	SummaryModelTokenThreshold int
+	// used recent user prompt messages nums
+	RecentUserMsgUsedNums int
 }
 
 // Config holds all service configuration
@@ -58,22 +71,14 @@ type Config struct {
 	Host string
 	Port int
 
-	// Token processing configuration
-	TokenThreshold int
-
 	// Tools configuration
 	Tools ToolConfig
 
 	// Logging configuration
 	Log LogConfig
 
-	// Model configuration
-	SummaryModel               string
-	SummaryModelTokenThreshold int
-	ClassifyModel              string
-
-	// used recent user prompt messages nums
-	RecentUserMsgUsedNums int
+	// Context compression configuration
+	ContextCompressConfig ContextCompressConfig
 
 	//Department configuration
 	DepartmentApiEndpoint string

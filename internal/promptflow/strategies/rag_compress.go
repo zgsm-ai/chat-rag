@@ -62,7 +62,7 @@ func NewRagCompressProcessor(
 ) (*RagCompressProcessor, error) {
 	llmClient, err := client.NewLLMClient(
 		svcCtx.Config.LLM,
-		svcCtx.Config.SummaryModel,
+		svcCtx.Config.ContextCompressConfig.SummaryModel,
 		copyAndSetQuotaIdentity(headers),
 	)
 	if err != nil {

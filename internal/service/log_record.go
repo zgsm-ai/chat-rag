@@ -102,7 +102,7 @@ func NewLogRecordService(config config.Config) LogRecordInterface {
 		tempLogFilePath:      tempLogDir,             // Temporary logs directory
 		scanInterval:         time.Duration(config.Log.LogScanIntervalSec) * time.Second,
 		llmConfig:            config.LLM,
-		classifyModel:        config.ClassifyModel,
+		classifyModel:        config.Log.ClassifyModel,
 		enableClassification: config.Log.EnableClassification,
 		logChan:              make(chan *model.ChatLog, 1000),
 		stopChan:             make(chan struct{}),
