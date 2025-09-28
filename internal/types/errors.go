@@ -48,6 +48,9 @@ const (
 	ErrCodeUnauthorized = "chat-rag.model_services_unauthorized"
 	ErrMsgUnauthorized  = "Unauthorized access to model services. Please check your permissions."
 
+	ErrCodeTooManyRequests = "chat-rag.too_many_requests"
+	ErrMsgTooManyRequests  = "The number of requests to the model or the number of tokens has reached the official limit."
+
 	ErrCodeInernalError = "chat-rag.internal_error"
 	ErrMsgInernalError  = "Internal Server Error. Please try again later."
 )
@@ -91,6 +94,9 @@ func NewHTTPStatusError(statusCode int, bodyStr string) *APIError {
 	case http.StatusUnauthorized:
 		code = ErrCodeUnauthorized
 		msg = ErrMsgUnauthorized
+	case http.StatusTooManyRequests:
+		code = ErrCodeTooManyRequests
+		msg = ErrMsgTooManyRequests
 	default:
 		code = ErrCodeModelServiceUnavailable
 		msg = fmt.Sprintf("%s\n\n[Error Detail]:\nCode: %d\nMessage: %s",
