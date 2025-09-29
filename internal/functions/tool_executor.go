@@ -59,12 +59,6 @@ Please note that the returned references may include multiple matches, so you sh
 For maximum efficiency, use code_reference_search when you need to explore references and relationships of a symbol—it's ideal for analyzing dependencies and understanding the broader impact of changes. 
 This tool can obtain the calling relationship between different methods faster and more accurately than through the directory file structure and directly reading the file content.
 Note: code_reference_search does not provide any symbol definitions. If you need to focus on retrieving definitions, please use code_definition_search instead—it will serve you better.
-- If you refactored code that could affect other parts of the codebase. Prioritize using code_reference_search to identify and update all dependent files as needed.
-- If you suspect that a function is being called incorrectly or in inappropriate places, use code_reference_search to quickly locate all call sites and speed up troubleshooting. 
-- If you are analyzing performance issues. Prioritize using code_reference_search to discover how frequently and where a utility function is invoked.  
-- If you are reviewing a security-sensitive function. Prioritize using code_reference_search to audit all usages of that function across the codebase.  
-- If you are onboarding to a large project. Prioritize using code_reference_search to understand how a particular module interacts with other parts of the system.  
-- If you are migrating code to a new language or framework. Prioritize using code_reference_search to understand how a particular module interacts with other parts of the system.  
 `
 	ReferenceSearchToolDesc = `## code_reference_search
 Description:
@@ -77,7 +71,13 @@ or when you need to explore code dependencies from a specific location in the co
 Key Features:
 The tool provides all references to a symbol, which include class/interface usages, function/method calls, imports, and other occurrences.
 It allows you to locate the exact positions of these references across various files within the project.
-Important note: 
+In the following scenarios, you should prioritize using code_reference_search:
+- Code Refactoring: When refactored code may affect other parts of the system, use it to identify and update all related dependent files.
+- Troubleshooting Incorrect Calls: When you suspect that a function is being incorrectly or inappropriately invoked, use it to quickly locate all call sites and speed up issue resolution.
+- Performance Analysis: When analyzing performance issues, use it to discover where and how frequently a utility function is invoked.
+- Security Auditing: When reviewing security-sensitive functions, use it to check all usages of those functions across the codebase.
+- Project Onboarding: When getting familiar with a large project, use it to understand how a particular module interacts with other parts of the system.
+- Migration and Adaptation: When migrating to a new language or framework, use it to analyze module dependencies and interactions.Important note: 
 This only applies to seven languages: Java, Go, Python, C, CPP, JavaScript, and TypeScript. Other languages are not applicable.
 
 Parameters:
@@ -170,7 +170,7 @@ When to use:
   • When retrieving constant values.
   • When you need to understand the complete implementation of a symbol.
   • When analyzing, refactoring, reviewing, or debugging a code snippet (specified by filePath + startLine + endLine), you must trigger a range query to retrieve the complete definitions of all external symbols it depends on.
-
+  • When you want to look up the definitions of several symbols inside a code snippet, you must issue a range query that fetches the full definitions of every external symbol they depend on.
 Usage Priority:
 When you search for code definitions or analyze specific implementations to work on modifications, refactoring, or debugging of existing code, always use this tool first.
 It efficiently retrieves the precise definition and its details, helping you to avoid unnecessary navigation or additional steps.
@@ -292,7 +292,7 @@ Rule 1: Tool Priority Hierarchy
 Rule 2: Decision Flow for Code Analysis and Search
 Receive code analysis →
 Use codebase_search with natural language query →
-IF need to query specific definition or implementations code of a symbolUse:
+IF need to query definitions or implementations of all symbols referenced in a code snippet:
 	Use code_definition_search → 
 END IF
 IF need to explore symbol references or code relationships:
