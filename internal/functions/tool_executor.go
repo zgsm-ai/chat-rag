@@ -540,13 +540,13 @@ func buildDefinitionRequest(identity *model.Identity, param string) (client.Defi
 		ClientVersion: identity.ClientVersion,
 	}
 
-	// 检查是否使用 symbolName 查询方式
+	// Check if using symbolName query mode
 	if symbolName, err := extractXmlParam(param, "symbolName"); err == nil {
 		req.SymbolName = symbolName
 		return req, nil
 	}
 
-	// 使用文件路径和行号查询方式
+	// Use file path and line number query mode
 	var err error
 	if req.FilePath, err = extractXmlParam(param, "filePath"); err != nil {
 		return req, fmt.Errorf("filePath: %w", err)

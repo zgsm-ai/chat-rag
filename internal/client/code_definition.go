@@ -95,7 +95,7 @@ func (c *DefinitionClient) CheckReady(ctx context.Context, req ReadyRequest) (bo
 	return c.BaseClient.CheckReady(ctx, req)
 }
 
-// DefinitionRequestBuilder Definition请求构建策略
+// DefinitionRequestBuilder Definition request building strategy
 type DefinitionRequestBuilder struct{}
 
 func (b *DefinitionRequestBuilder) BuildRequest(req DefinitionRequest) Request {
@@ -104,11 +104,11 @@ func (b *DefinitionRequestBuilder) BuildRequest(req DefinitionRequest) Request {
 		"codebasePath": req.CodebasePath,
 	}
 
-	// 根据查询方式添加参数
+	// Add parameters based on query method
 	if req.SymbolName != "" {
 		queryParams["symbolName"] = req.SymbolName
 	} else {
-		// 使用文件路径和行号方式查询
+		// Use file path and line number query method
 		if req.FilePath != "" {
 			queryParams["filePath"] = req.FilePath
 		}
