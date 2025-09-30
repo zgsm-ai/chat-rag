@@ -22,10 +22,10 @@ type DefinitionInterface interface {
 type DefinitionRequest struct {
 	ClientId      string `json:"clientId"`
 	CodebasePath  string `json:"codebasePath"`
-	FilePath      string `json:"filePath"`
+	FilePath      string `json:"filePath,omitempty"`
 	StartLine     *int   `json:"startLine,omitempty"`
 	EndLine       *int   `json:"endLine,omitempty"`
-	CodeSnippet   string `json:"codeSnippet,omitempty"`
+	SymbolName    string `json:"symbolName,omitempty"`
 	Authorization string `json:"authorization"`
 	ClientVersion string `json:"clientVersion"`
 }
@@ -95,24 +95,29 @@ func (c *DefinitionClient) CheckReady(ctx context.Context, req ReadyRequest) (bo
 	return c.BaseClient.CheckReady(ctx, req)
 }
 
-// DefinitionRequestBuilder Definition请求构建策略
+// DefinitionRequestBuilder Definition request building strategy
 type DefinitionRequestBuilder struct{}
 
 func (b *DefinitionRequestBuilder) BuildRequest(req DefinitionRequest) Request {
 	queryParams := map[string]string{
 		"clientId":     req.ClientId,
 		"codebasePath": req.CodebasePath,
-		"filePath":     req.FilePath,
 	}
 
-	if req.StartLine != nil {
-		queryParams["startLine"] = fmt.Sprintf("%d", *req.StartLine)
-	}
-	if req.EndLine != nil {
-		queryParams["endLine"] = fmt.Sprintf("%d", *req.EndLine)
-	}
-	if req.CodeSnippet != "" {
-		queryParams["codeSnippet"] = req.CodeSnippet
+	// Add parameters based on query method
+	if req.SymbolName != "" {
+		queryParams["symbolName"] = req.SymbolName
+	} else {
+		// Use file path and line number query method
+		if req.FilePath != "" {
+			queryParams["filePath"] = req.FilePath
+		}
+		if req.StartLine != nil {
+			queryParams["startLine"] = fmt.Sprintf("%d", *req.StartLine)
+		}
+		if req.EndLine != nil {
+			queryParams["endLine"] = fmt.Sprintf("%d", *req.EndLine)
+		}
 	}
 
 	return Request{

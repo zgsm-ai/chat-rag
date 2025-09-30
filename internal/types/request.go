@@ -30,6 +30,9 @@ const (
 
 	// Auto select mode: Default is balanced mode
 	Auto PromptMode = "auto"
+
+	// Strict mode: Strictly follow the workflow agent
+	Strict PromptMode = "strict"
 )
 
 const (

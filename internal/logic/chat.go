@@ -305,6 +305,8 @@ func (l *ChatCompletionLogic) handleStreamChunk(
 	remainingDepth int,
 ) error {
 	content, usage, resp := l.responseHandler.extractStreamingData(rawLine)
+	// DEBUG
+	// fmt.Println(content)
 	if resp != nil {
 		state.response = resp
 	}

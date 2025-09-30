@@ -98,7 +98,8 @@ func (u *UserCompressor) Execute(promptMsg *PromptMsg) {
 	// Check if user message needs to be compressed
 	userMsgList := append(promptMsg.olderUserMsgList, *promptMsg.lastUserMsg)
 	userMessageTokens := u.tokenCounter.CountMessagesTokens(userMsgList)
-	needsCompressUserMsg := userMessageTokens > u.config.TokenThreshold
+	needsCompressUserMsg := u.config.ContextCompressConfig.EnableCompress &&
+		userMessageTokens > u.config.ContextCompressConfig.TokenThreshold
 	logger.Info("user message tokens",
 		zap.Int("tokens", userMessageTokens),
 		zap.Bool("needsCompression", needsCompressUserMsg),
@@ -182,23 +183,23 @@ func (u *UserCompressor) updatePromptMessages(promptMsg *PromptMsg, summary stri
 func (u *UserCompressor) trimMessagesToTokenThreshold(messages []types.Message) ([]types.Message, []types.Message) {
 	const method = "UserCompressor.trimMessagesToTokenThreshold"
 
-	if len(messages) <= u.config.RecentUserMsgUsedNums {
+	if len(messages) <= u.config.ContextCompressConfig.RecentUserMsgUsedNums {
 		logger.Warn("no enough messages to trim",
 			zap.Int("messages length", len(messages)),
-			zap.Int("RecentUserMsgUsedNums", u.config.RecentUserMsgUsedNums),
+			zap.Int("RecentUserMsgUsedNums", u.config.ContextCompressConfig.RecentUserMsgUsedNums),
 		)
 		return []types.Message{}, messages
 	}
 
-	messagesToSummarize := utils.GetOldUserMsgsWithNum(messages, u.config.RecentUserMsgUsedNums)
-	retainedMessages := utils.GetRecentUserMsgsWithNum(messages, u.config.RecentUserMsgUsedNums)
+	messagesToSummarize := utils.GetOldUserMsgsWithNum(messages, u.config.ContextCompressConfig.RecentUserMsgUsedNums)
+	retainedMessages := utils.GetRecentUserMsgsWithNum(messages, u.config.ContextCompressConfig.RecentUserMsgUsedNums)
 
 	currentTokens := u.tokenCounter.CountMessagesTokens(messagesToSummarize)
 	bufferTokens := 5000 // buffer for summary tokens
 	totalTokens := currentTokens + bufferTokens
 
 	var removedCount int
-	for totalTokens > u.config.SummaryModelTokenThreshold && len(messagesToSummarize) > 0 {
+	for totalTokens > u.config.ContextCompressConfig.SummaryModelTokenThreshold && len(messagesToSummarize) > 0 {
 		removedTokens := u.tokenCounter.CountOneMessageTokens(messagesToSummarize[0])
 		totalTokens -= removedTokens
 		messagesToSummarize = messagesToSummarize[1:]
