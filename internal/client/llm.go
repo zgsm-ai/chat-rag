@@ -212,7 +212,8 @@ func (c *LLMClient) ChatLLMWithMessagesStreamRaw(ctx context.Context, messages [
 	}
 
 	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("error reading response: %w", err)
+		logger.ErrorC(ctx, "Error reading response", zap.Error(err))
+		return types.NewNetWorkError()
 	}
 
 	return nil
