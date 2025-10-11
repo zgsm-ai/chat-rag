@@ -132,30 +132,26 @@ Example: Searching references by symbol name only
 	// DefinitionSearchTool
 	DefinitionToolName   = "code_definition_search"
 	DefinitionCapability = `
-Always use code_definition_search first when analyzing any code that contains symbols (functions, classes, methods, interfaces, constants, etc.) whose definitions are not fully visible in the provided snippet.
-This tool retrieves the complete and precise definitions of all external symbols referenced within a code snippet (specified by filePath + startLine + endLine), ensuring you fully understand its logic and dependencies before continuing analysis.
-You can use code_definition_search to retrieve complete, precise definitions and implementations of a symbol, as well as external or unknown symbols in a code snippet, and to directly obtain constant values—using two approaches:
-1. Recommended and Highly Efficient: Start by using the file path and line range mode to retrieve all external definitions within that range, ensuring a complete understanding of the code's context.
-2. By providing the symbol name (function, class, method, interface, struct, constant, etc.) if you know the symbol name but not its exact location.
-This tool provides accurate, context-free definitions and implementations of all external symbols in a snippet or of a specific symbol, giving exactly the code you need for analysis or modification.
-Please note that the results may include multiple matches, which should be distinguished using the file path or contextual information.
-Whenever you need to parse a specific code segment (by providing the file path and line numbers) or query a symbol by name, you should always prioritize using code_definition_search — it delivers fast, precise, and minimal-overhead results.
-This tool can obtain the definition and implementation of the code faster and more accurately than through the directory file structure and directly reading the file content.
+When analyzing code that references symbols (functions, classes, methods, interfaces, constants) whose definitions are not fully visible, always prioritize code_definition_search first.
+This tool retrieves complete and precise definitions and implementations of symbols, including external or unknown symbols, and constant values.
+Usage Modes:
+1. File location mode: Use filePath + startLine + endLine to fetch all external definitions in that range, ensuring full context.
+2. Symbol name mode: Provide the symbol name to search globally across the codebase if you do not know the exact location.
+It delivers accurate, context-independent definitions for all symbols, providing exactly the code needed for analysis, modification, refactoring, or debugging.
+Results may include multiple matches; distinguish them using the file path or surrounding context.
+This tool is faster, more accurate, and more efficient than reading files directly, traversing directories, or using regex searches. It also consumes fewer tokens.
+Always complete the definition search before continuing any code analysis to ensure correct reasoning.
 `
 	DefinitionToolDesc = `## code_definition_search
-Description: Retrieve the **complete definition and implementation** of a symbol (function, class, method, interface, struct, constant, etc.) 
+Description: Retrieve the **complete definition and implementation** of a symbol (function, class, method, interface, struct, constant) 
 by specifying a file path with line range, or by providing the symbol name directly.
 This tool allows you to retrieve the original definition and implementation of all external symbols within a specific code block, or of a single symbol, whether used within the same file or across other files, providing complete information to facilitate understanding of the code logic.
 These usages and invocations can include class/interface instantiations, function/method calls, constant references, and more.
 Key Rule:
 - Always call this tool first if the code snippet references any symbol that is not fully defined within the snippet itself.
-- This ensures you analyze real implementations, not incomplete or assumed logic.
-- Do not rely on reading partial code directly. 
+- This tool ensures you analyze real implementations, not incomplete or assumed logic.
 When to use:
-- To explain, analyze, review, refactor, optimize, debug, or troubleshoot code.
-- To understand how values, constants, or class structures are defined.
 - When encountering any external or unknown symbol.
-- To retrieve the full body of a function, method, or class.
 - To obtain constant values.
 - To get the complete implementation of a symbol.
 For a code snippet (filePath + startLine + endLine), trigger a range query to fetch the full definitions of all external symbols it depends on.
@@ -166,21 +162,18 @@ This only applies to seven languages: Java, Go, Python, C, CPP, JavaScript, and 
 
 Parameters:
 - codebasePath: (required) Absolute path to the codebase root
-- filePath: (optional) Full path to the file within the codebase. Must match the path separator style of the current operating system.
+- filePath: (optional) The absolute path to the file within the codebase. Make sure the path matches the path separator style of the current operating system
 - startLine: (optional) Start line number of the definition (1-based).
 - endLine: (optional) End line number of the definition (1-based).
-- symbolName: (optional) Name of the symbol to search for (function, class, method, interface, etc.)
+- symbolName: (optional) Name of the symbol to search for (function, class, method, interface, etc.) without any prefix. For example, use QueryCallGraphOptions instead of types.QueryCallGraphOptions; 
 
 Important Path Requirements:
 ABSOLUTE PATHS REQUIRED: The filePath parameter must be a full absolute system path (not relative paths or workspace-relative paths)
-Important:
-- Do **not** skip this step. If a definition is missing, your analysis will be invalid.
-- This tool does not return references. For usage/call sites, use code_reference_search instead.
 
 Usage:
 Two usage modes are available:
-1. File location mode: Provide filePath with startLine and endLine to retrieve definition from specific location
-2. SymbolName search mode: Provide symbolName to search for the symbol definition globally across the codebase.
+1. Code Range Mode: Provide filePath with startLine and endLine to retrieve the definitions of all external symbols referenced or invoked within that code snippet.
+2. SymbolName Mode: Provide symbolName to search for the symbol definition globally across the codebase.
 The parameter name is **symbolName**, not symbol. Using <symbol> will be invalid.
 
 <code_definition_search>
@@ -190,7 +183,7 @@ The parameter name is **symbolName**, not symbol. Using <symbol> will be invalid
   <startLine>Start line number</startLine>
   <endLine>End line number</endLine>
   <!-- Option 2: Use symbolName parameter -->
-  <symbolName>Name of symbol to search for</symbolName>
+  <symbolName>Name of symbol to search for without any prefix</symbolName>
 </code_definition_search>
 
 Note: 
@@ -292,7 +285,7 @@ Review search results
 
 Rule 3: Efficiency Principles
 Semantic First: Always prefer semantic understanding over literal reading
-Definition Search First: Always prefer using definition search over reading files directly to find definitions
+Definition Search First: Always prefer using definition search over reading files directly to find symbol definitions
 Comprehensive Coverage: Use codebase_search to avoid missing related code
 Token Optimization: Choose tools that minimize token consumption
 Context Matters: Gather all relevant symbol definitions and implementations before analyzing code.
