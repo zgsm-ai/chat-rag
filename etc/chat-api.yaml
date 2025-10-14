@@ -24,7 +24,7 @@ DepartmentApiEndpoint: "http://localhost:1234/work_id?work_id="
 # Models supported by function calling
 LLM:
   # Endpoint: "https://zgsm.sangfor.com/chat-rag/api/v1/chat/completions"
-  Endpoint: "http://127.0.0.1:32732/v1/chat/completions"
+  Endpoint: "http://127.0.0.1:30616/v1/chat/completions"
   # Endpoint: "http://127.0.0.1:32325/model/glm-4.5-fp8/v1/chat/completions"
   FuncCallingModels:
     - "deepseek-v3"
@@ -42,13 +42,13 @@ Tools:
     TopK: 50
     ScoreThreshold: 0.7
   DefinitionSearch:
-    SearchEndpoint: "http://123.58.64.57:30080/codebase-indexer/api/v1/search/definition"
-    ApiReadyEndpoint: "http://123.58.64.57:30080/codebase-indexer/api/v1/index/summary"
+    SearchEndpoint: "http://127.0.0.1:9001/codebase-indexer/api/v1/search/definition"
+    ApiReadyEndpoint: "http://127.0.0.1:9001/codebase-indexer/api/v1/index/summary"
   ReferenceSearch:
-    SearchEndpoint: "http://123.58.64.57:30080/codebase-indexer/api/v1/search/reference"
-    ApiReadyEndpoint: "http://123.58.64.57:30080/codebase-indexer/api/v1/index/summary"
+    SearchEndpoint: "http://127.0.0.1:9001/codebase-indexer/api/v1/calgraph"
+    ApiReadyEndpoint: "http://127.0.0.1:9001/codebase-indexer/api/v1/index/summary"
   KnowledgeSearch:
-    SearchEndpoint: "http://123.58.64.57:30080/codebase-embedder/api/v1/search/document"
-    ApiReadyEndpoint: "http://123.58.64.57:30080/codebase-embedder/api/v1/documents/summary"
+    SearchEndpoint: "http://127.0.0.1:9001/codebase-embedder/api/v1/search/document"
+    ApiReadyEndpoint: "http://127.0.0.1:9001/codebase-embedder/api/v1/documents/summary"
     TopK: 20
     ScoreThreshold: 0.7
