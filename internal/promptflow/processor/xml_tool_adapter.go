@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/zgsm-ai/chat-rag/internal/functions"
 	"github.com/zgsm-ai/chat-rag/internal/logger"
@@ -74,32 +75,72 @@ func (x *XmlToolAdapter) insertToolsIntoSystemContent(content string) (string, e
 	var capabilitiesContent strings.Builder
 	var hasTools bool
 
-	for _, toolName := range x.toolExecutor.GetAllTools() {
-		ready, err := x.toolExecutor.CheckToolReady(x.ctx, toolName)
-		if !ready {
-			logger.WarnC(x.ctx, "Tool is not ready, skip adapt", zap.String("tool", toolName),
-				zap.String("method", method), zap.Error(err))
+	toolNames := x.toolExecutor.GetAllTools()
+	if len(toolNames) == 0 {
+		logger.InfoC(x.ctx, "No tools available", zap.String("method", method))
+	}
+
+	// Parallel processing of tool checks and description retrieval
+	type toolResult struct {
+		name       string
+		ready      bool
+		readyErr   error
+		desc       string
+		descErr    error
+		capability string
+		capErr     error
+	}
+
+	results := make([]toolResult, len(toolNames))
+	var wg sync.WaitGroup
+
+	for i, toolName := range toolNames {
+		wg.Add(1)
+		go func(index int, name string) {
+			defer wg.Done()
+
+			result := toolResult{name: name}
+
+			// Check if tool is ready
+			result.ready, result.readyErr = x.toolExecutor.CheckToolReady(x.ctx, name)
+
+			if result.ready {
+				// Get tool description
+				result.desc, result.descErr = x.toolExecutor.GetToolDescription(name)
+
+				// Get tool capability
+				result.capability, result.capErr = x.toolExecutor.GetToolCapability(name)
+			}
+
+			results[index] = result
+		}(i, toolName)
+	}
+
+	wg.Wait()
+
+	// Process results and build content
+	for _, result := range results {
+		if !result.ready {
+			logger.WarnC(x.ctx, "Tool is not ready, skip adapt", zap.String("tool", result.name),
+				zap.String("method", method), zap.Error(result.readyErr))
 			continue
 		}
 		hasTools = true
 
-		desc, err := x.toolExecutor.GetToolDescription(toolName)
-		if err != nil {
-			logger.Error("Failed to get tool description", zap.Error(err))
+		if result.descErr != nil {
+			logger.Error("Failed to get tool description", zap.Error(result.descErr))
 			continue
 		}
 
-		toolsContent.WriteString(desc)
+		toolsContent.WriteString(result.desc)
 		toolsContent.WriteString("\n\n")
 
-		// Get tool capability
-		capability, err := x.toolExecutor.GetToolCapability(toolName)
-		if err != nil {
-			logger.Error("Failed to get tool capability", zap.Error(err))
+		if result.capErr != nil {
+			logger.Error("Failed to get tool capability", zap.Error(result.capErr))
 			continue
 		}
-		capabilitiesContent.WriteString(capability)
-		logger.InfoC(x.ctx, "Tool adapted in system prompt", zap.String("name", toolName))
+		capabilitiesContent.WriteString(result.capability)
+		logger.InfoC(x.ctx, "Tool adapted in system prompt", zap.String("name", result.name))
 	}
 
 	// Insert the tools content after the tools header

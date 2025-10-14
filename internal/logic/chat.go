@@ -220,12 +220,14 @@ type streamState struct {
 	fullContent  strings.Builder
 	response     *types.ChatCompletionResponse
 	modelStart   time.Time
+	firstToken   bool // Flag to track if first token has been received
 }
 
 func newStreamState() *streamState {
 	return &streamState{
 		windowSize: 6,
 		modelStart: time.Now(),
+		firstToken: true, // Initialize as true to detect first token
 	}
 }
 
@@ -305,8 +307,6 @@ func (l *ChatCompletionLogic) handleStreamChunk(
 	remainingDepth int,
 ) error {
 	content, usage, resp := l.responseHandler.extractStreamingData(rawLine)
-	// DEBUG
-	// fmt.Println(content)
 	if resp != nil {
 		state.response = resp
 	}
@@ -315,6 +315,13 @@ func (l *ChatCompletionLogic) handleStreamChunk(
 	}
 	if content == "" {
 		return l.sendRawLine(flusher, rawLine)
+	}
+
+	// Log first token response
+	if state.firstToken && content != "[DONE]" {
+		logger.InfoC(l.ctx, "[stream start] received first token response",
+			zap.Duration("timeToFirstToken", time.Since(state.modelStart)))
+		state.firstToken = false
 	}
 
 	// Add to window and complete content
@@ -508,6 +515,9 @@ func (l *ChatCompletionLogic) completeStreamResponse(
 			return err
 		}
 	}
+
+	logger.InfoC(l.ctx, "[stream end]",
+		zap.Duration("timeToEndToken", time.Since(state.modelStart)))
 
 	l.updateStreamStats(chatLog, state)
 
