@@ -177,6 +177,9 @@ func (c *LLMClient) ChatLLMWithMessagesStreamRaw(ctx context.Context, messages [
 	// Ensure Content-Length is set correctly
 	req.ContentLength = int64(reader.Len())
 
+	// Log before sending request to LLM
+	logger.InfoC(ctx, "Starting request to LLM model ...")
+
 	// Send request
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
