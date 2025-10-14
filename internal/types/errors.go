@@ -53,6 +53,9 @@ const (
 
 	ErrCodeInernalError = "chat-rag.internal_error"
 	ErrMsgInernalError  = "Internal Server Error. Please try again later."
+
+	ErrCodeNetworkError = "chat-rag.network_interrupt"
+	ErrMsgNetworkError  = "Network connection has been interrupted. Please verify your network connectivity and retry."
 )
 
 type APIError struct {
@@ -83,6 +86,16 @@ func NewModelServiceUnavailableError() *APIError {
 	}
 }
 
+func NewNetWorkError() *APIError {
+	return &APIError{
+		Code:       ErrCodeNetworkError,
+		Message:    ErrMsgNetworkError,
+		Success:    false,
+		StatusCode: http.StatusInternalServerError,
+		Type:       string(ErrServerModel),
+	}
+}
+
 func NewHTTPStatusError(statusCode int, bodyStr string) *APIError {
 	var code string
 	var msg string
@@ -97,6 +110,9 @@ func NewHTTPStatusError(statusCode int, bodyStr string) *APIError {
 	case http.StatusTooManyRequests:
 		code = ErrCodeTooManyRequests
 		msg = ErrMsgTooManyRequests
+	case http.StatusRequestEntityTooLarge:
+		code = ErrCodeContextExceeded
+		msg = ErrMsgContextExceeded
 	default:
 		code = ErrCodeModelServiceUnavailable
 		msg = fmt.Sprintf("%s\n\n[Error Detail]:\nCode: %d\nMessage: %s",
