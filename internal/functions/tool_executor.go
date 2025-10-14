@@ -53,7 +53,7 @@ Example: Searching for functions related to user authentication
 	// ReferenceSearchTool
 	ReferenceSearchToolName   = "code_reference_search"
 	ReferenceSearchCapability = `- You can use code_reference_search to retrieve the usage and call information of a symbol (function, class, method, etc.) across the codebase by providing its precise file path and line range. 
-This tool is particularly useful when you want to locate all uses of a function or class or analyze code dependencies across different parts of the project. 
+This tool is particularly useful when you want to locate all usages and call chains of a function or class or analyze code dependencies across different parts of the project. 
 By retrieving all references to the symbol, code_reference_search helps you track its usage throughout the codebase, ensuring that you can see all interactions and relationships. 
 Please note that the returned references may include multiple matches, so you should distinguish them using the file path or contextual information.
 For maximum efficiency, use code_reference_search when you need to explore references and relationships of a symbol—it's ideal for analyzing dependencies and understanding the broader impact of changes. 
@@ -70,12 +70,9 @@ Use this tool when you want to find where a function or class is used or called,
 Key Features:
 The tool provides all references to a symbol, which include class/interface usages, function/method calls, imports, and other occurrences.
 Use code_reference_search in these scenarios:
-- Refactoring: Identify and update all affected dependencies.
-- Troubleshooting: Locate all call sites of suspected incorrect usage.
-- Performance: Find where and how often a utility is invoked.
-- Security: Audit all usages of sensitive functions.
-- Onboarding: Understand module interactions in large projects.
-- Migration: Analyze dependencies during language or framework shifts.
+- Refactoring: Locate all code that depends on the symbol to ensure complete updates.
+- Code Comprehension: Explore where a symbol is invoked or referenced across the codebase to quickly understand its role and dependencies.
+- Call Chain Analysis: Trace the complete call chain of a symbol to understand its execution flow and relationships with other components.
 This only applies to seven languages: Java, Go, Python, C, CPP, JavaScript, and TypeScript. Other languages are not applicable.
 
 Parameters:
@@ -264,7 +261,7 @@ TOOLS USE FOLLOW RULES
 - Code Search Execution Rules
 If the task is related to the project code, follow the following rules:
 Rule 1: Tool Priority Hierarchy
-1. code_definition_search (For specific implementations, definitions)
+1. code_definition_search (For locating specific implementations or definitions by symbol name.)
 2. code_reference_search (For exploring references, usages, and code relationships)
 3. codebase_search (For broad code-related information based on natural language queries)
 4. knowledge_base_search (For exploring documentation)
@@ -285,7 +282,7 @@ Review search results
 
 Rule 3: Efficiency Principles
 Semantic First: Always prefer semantic understanding over literal reading
-Definition Search First: Always prefer using definition search over reading files directly to find symbol definitions
+Definition Search First: Prefer symbol name or code snippet (filePath + line range) searches to locate definitions, instead of reading files directly.
 Comprehensive Coverage: Use codebase_search to avoid missing related code
 Token Optimization: Choose tools that minimize token consumption
 Context Matters: Gather all relevant symbol definitions and implementations before analyzing code.
