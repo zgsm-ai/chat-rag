@@ -56,6 +56,9 @@ const (
 
 	ErrCodeNetworkError = "chat-rag.network_interrupt"
 	ErrMsgNetworkError  = "Network connection has been interrupted. Please verify your network connectivity and retry."
+
+	ErrCodeServerBusy = "chat-rag.server_busy"
+	ErrMsgServerBusy  = "Server is busy. Please try again later."
 )
 
 type APIError struct {
@@ -113,6 +116,9 @@ func NewHTTPStatusError(statusCode int, bodyStr string) *APIError {
 	case http.StatusRequestEntityTooLarge:
 		code = ErrCodeContextExceeded
 		msg = ErrMsgContextExceeded
+	case http.StatusGatewayTimeout:
+		code = ErrCodeServerBusy
+		msg = ErrMsgServerBusy
 	default:
 		code = ErrCodeModelServiceUnavailable
 		msg = fmt.Sprintf("%s\n\n[Error Detail]:\nCode: %d\nMessage: %s",
