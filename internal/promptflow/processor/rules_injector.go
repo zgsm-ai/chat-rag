@@ -13,20 +13,25 @@ import (
 
 type RulesInjector struct {
 	BaseProcessor
+
+	promptMode  string
 	rulesConfig *RulesConfig
 }
 
 type AgentConfig struct {
-	MatchKeys []string `mapstructure:"match_keys"`
-	Rules     string   `mapstructure:"rules"`
+	MatchKeys  []string `mapstructure:"match_keys"`
+	MatchModes []string `mapstructure:"match_modes"`
+	Rules      string   `mapstructure:"rules"`
 }
 
 type RulesConfig struct {
 	Agents map[string]AgentConfig `yaml:"agents"`
 }
 
-func NewRulesInjector() *RulesInjector {
-	return &RulesInjector{}
+func NewRulesInjector(promptMode string) *RulesInjector {
+	return &RulesInjector{
+		promptMode: promptMode,
+	}
 }
 
 func (r *RulesInjector) loadRulesConfig() error {
@@ -112,6 +117,22 @@ func (r *RulesInjector) injectRulesIntoSystemContent(content string) (string, er
 	}
 
 	for agentName, agentConfig := range r.rulesConfig.Agents {
+		// Check if current promptMode is in match_modes list
+		if len(agentConfig.MatchModes) == 0 {
+			continue // Skip this rule if match_modes is empty
+		}
+
+		modeMatched := false
+		for _, mode := range agentConfig.MatchModes {
+			if mode == r.promptMode {
+				modeMatched = true
+				break
+			}
+		}
+		if !modeMatched {
+			continue // Skip this rule if mode doesn't match
+		}
+
 		// Iterate through all match keys for each agent
 		for _, matchKey := range agentConfig.MatchKeys {
 			if strings.Contains(firstParagraph, matchKey) {

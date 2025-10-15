@@ -1,8 +1,10 @@
 # Agent Rules Configuration
 agents:
   workflow:
+    match_modes:
+      - "strict"
     match_keys:
-      - "a strategic workflow controller"
+      - "a strict strategic workflow controller"
     rules: |
       # 开发流程
 
@@ -405,7 +407,10 @@ agents:
 
       通过这种自然、系统的协作方式，我们能确保每个功能都经过深思熟虑，从想法到代码的每一步都稳扎稳打，最终交付出色的产品。 
 
-  software_engineer:
+  code:
+    match_modes:
+      - "strict"
+      - "default"
     match_keys:
       - "a highly skilled software engineer"
     rules: |
@@ -562,7 +567,10 @@ agents:
       这份编码规则文档将作为编程智能体的行为准则，确保生成的代码符合行业最佳实践，具备高质量、高安全性和良好的可维护性。
 
   architect:
-    match_key: "an experienced technical leader"
+    match_modes:
+      - "strict"
+    match_key:
+      - "an experienced technical leader"
     rules: |
       # 核心职责
 

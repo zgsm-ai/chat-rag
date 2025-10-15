@@ -50,15 +50,19 @@ func NewPromptProcessor(
 	case types.Strict:
 		modeName = "Strict workflow mode"
 		creator = func() (PromptArranger, error) {
-			return strategies.NewStrictWorflowProcessor(ctx, svcCtx, headers, identity, modelName)
+			return strategies.NewRagWithRuleProcessor(
+				ctx, svcCtx, headers, identity,
+				modelName, string(promptMode))
 		}
 
 	case types.Cost, types.Balanced, types.Auto:
 		fallthrough
 	default:
-		modeName = "RagCompressProcessor processing mode"
+		modeName = "Default processing mode"
 		creator = func() (PromptArranger, error) {
-			return strategies.NewRagCompressProcessor(ctx, svcCtx, headers, identity, modelName)
+			return strategies.NewRagWithRuleProcessor(
+				ctx, svcCtx, headers, identity,
+				modelName, string(promptMode))
 		}
 	}
 
