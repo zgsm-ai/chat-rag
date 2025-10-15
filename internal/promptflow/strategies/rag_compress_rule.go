@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/zgsm-ai/chat-rag/internal/bootstrap"
+	"github.com/zgsm-ai/chat-rag/internal/config"
 	"github.com/zgsm-ai/chat-rag/internal/model"
 	"github.com/zgsm-ai/chat-rag/internal/promptflow/processor"
 )
@@ -13,6 +14,7 @@ type RagWithRuleProcessor struct {
 	RagCompressProcessor
 
 	promptMode   string
+	rulesConfig  *config.RulesConfig
 	ruleInjector *processor.RulesInjector
 }
 
@@ -32,6 +34,7 @@ func NewRagWithRuleProcessor(
 
 	processor := &RagWithRuleProcessor{
 		RagCompressProcessor: *ragCompressProcessor,
+		rulesConfig:          svcCtx.RulesConfig,
 	}
 
 	if promoptMode == "" {
@@ -47,7 +50,7 @@ func NewRagWithRuleProcessor(
 func (r *RagWithRuleProcessor) buildProcessorChain() error {
 	r.userMsgFilter = processor.NewUserMsgFilter()
 	r.xmlToolAdapter = processor.NewXmlToolAdapter(r.ctx, r.toolsExecutor)
-	r.ruleInjector = processor.NewRulesInjector(r.promptMode)
+	r.ruleInjector = processor.NewRulesInjector(r.promptMode, r.rulesConfig)
 	r.userCompressor = processor.NewUserCompressor(
 		r.ctx,
 		r.config,

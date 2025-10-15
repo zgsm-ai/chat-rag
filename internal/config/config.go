@@ -88,3 +88,15 @@ type Config struct {
 
 	LLM LLMConfig
 }
+
+// AgentConfig holds configuration for a specific agent
+type AgentConfig struct {
+	MatchKeys  []string `mapstructure:"match_keys"`
+	MatchModes []string `mapstructure:"match_modes"`
+	Rules      string   `mapstructure:"rules"`
+}
+
+// RulesConfig holds the rules configuration for agents
+type RulesConfig struct {
+	Agents map[string]AgentConfig `yaml:"agents"`
+}
