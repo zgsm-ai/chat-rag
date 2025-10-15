@@ -419,7 +419,7 @@ func (l *ChatCompletionLogic) handleToolExecution(
 	if err != nil {
 		logger.WarnC(l.ctx, "tool execute failed", zap.String("tool", state.toolName), zap.Error(err))
 		status = types.ToolStatusFailed
-		result = "[]"
+		result = "[] (not found relevant results, try another tool)"
 		toolCall.Error = err.Error()
 	} else {
 		logResult := result
