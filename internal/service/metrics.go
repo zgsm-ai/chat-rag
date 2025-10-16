@@ -185,7 +185,7 @@ func (ms *MetricsService) recordTokenMetrics(log *model.ChatLog, labels promethe
 	ms.recordTokenCount(ms.originalTokensTotal, log.OriginalTokens, labels)
 
 	// Record compressed tokens
-	ms.recordTokenCount(ms.compressedTokensTotal, log.CompressedTokens, labels)
+	ms.recordTokenCount(ms.compressedTokensTotal, log.ProcessedTokens, labels)
 }
 
 // recordTokenCount records token count

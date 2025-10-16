@@ -50,7 +50,7 @@ func (h *ResponseHandler) extractResponseInfo(chatLog *model.ChatLog, response *
 		chatLog.Usage = response.Usage
 	} else {
 		// Calculate usage if not provided
-		chatLog.Usage = h.calculateUsage(chatLog.CompressedTokens.All, chatLog.ResponseContent)
+		chatLog.Usage = h.calculateUsage(chatLog.ProcessedTokens.All, chatLog.ResponseContent)
 		logger.Info("calculated usage",
 			zap.Int("totalTokens", chatLog.Usage.TotalTokens),
 		)
