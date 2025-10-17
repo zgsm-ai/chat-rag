@@ -18,6 +18,9 @@
         "stream": true,
         "stream_options": {
             "include_usage": true
+        },
+        "extra_body": {
+            "prompt_mode": "raw"
         }
     },
     {
@@ -35,6 +38,9 @@
         "stream": true,
         "stream_options": {
             "include_usage": true
+        },
+        "extra_body": {
+            "prompt_mode": "raw"
         }
     },
     {
@@ -52,6 +58,9 @@
         "stream": true,
         "stream_options": {
             "include_usage": true
+        },
+        "extra_body": {
+            "prompt_mode": "raw"
         }
     },
     {
@@ -69,6 +78,9 @@
         "stream": true,
         "stream_options": {
             "include_usage": true
+        },
+        "extra_body": {
+            "prompt_mode": "raw"
         }
     },
     {
@@ -86,6 +98,9 @@
         "stream": true,
         "stream_options": {
             "include_usage": true
+        },
+        "extra_body": {
+            "prompt_mode": "raw"
         }
     },
     {
@@ -103,6 +118,9 @@
         "stream": true,
         "stream_options": {
             "include_usage": true
+        },
+        "extra_body": {
+            "prompt_mode": "raw"
         }
     },
     {
@@ -120,6 +138,9 @@
         "stream": true,
         "stream_options": {
             "include_usage": true
+        },
+        "extra_body": {
+            "prompt_mode": "raw"
         }
     },
     {
@@ -137,6 +158,9 @@
         "stream": true,
         "stream_options": {
             "include_usage": true
+        },
+        "extra_body": {
+            "prompt_mode": "raw"
         }
     },
     {
@@ -154,6 +178,9 @@
         "stream": true,
         "stream_options": {
             "include_usage": true
+        },
+        "extra_body": {
+            "prompt_mode": "raw"
         }
     },
     {
@@ -171,6 +198,9 @@
         "stream": true,
         "stream_options": {
             "include_usage": true
+        },
+        "extra_body": {
+            "prompt_mode": "raw"
         }
     },
     {
@@ -188,6 +218,9 @@
         "stream": true,
         "stream_options": {
             "include_usage": true
+        },
+        "extra_body": {
+            "prompt_mode": "raw"
         }
     },
     {
@@ -205,6 +238,9 @@
         "stream": true,
         "stream_options": {
             "include_usage": true
+        },
+        "extra_body": {
+            "prompt_mode": "raw"
         }
     },
     {
@@ -222,6 +258,9 @@
         "stream": true,
         "stream_options": {
             "include_usage": true
+        },
+        "extra_body": {
+            "prompt_mode": "raw"
         }
     },
     {
@@ -239,6 +278,9 @@
         "stream": true,
         "stream_options": {
             "include_usage": true
+        },
+        "extra_body": {
+            "prompt_mode": "raw"
         }
     },
     {
@@ -256,6 +298,9 @@
         "stream": true,
         "stream_options": {
             "include_usage": true
+        },
+        "extra_body": {
+            "prompt_mode": "raw"
         }
     },
     {
@@ -273,6 +318,9 @@
         "stream": true,
         "stream_options": {
             "include_usage": true
+        },
+        "extra_body": {
+            "prompt_mode": "raw"
         }
     },
     {
@@ -290,6 +338,9 @@
         "stream": true,
         "stream_options": {
             "include_usage": true
+        },
+        "extra_body": {
+            "prompt_mode": "raw"
         }
     },
     {
@@ -307,6 +358,9 @@
         "stream": true,
         "stream_options": {
             "include_usage": true
+        },
+        "extra_body": {
+            "prompt_mode": "raw"
         }
     }
 ]

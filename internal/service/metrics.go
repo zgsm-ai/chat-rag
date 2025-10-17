@@ -30,12 +30,10 @@ const (
 	metricRequestsTotal         = "chat_rag_requests_total"
 	metricOriginalTokensTotal   = "chat_rag_original_tokens_total"
 	metricCompressedTokensTotal = "chat_rag_compressed_tokens_total"
-	metricCompressionRatio      = "chat_rag_compression_ratio"
-	metricSemanticLatency       = "chat_rag_semantic_latency_ms"
-	metricSummaryLatency        = "chat_rag_summary_latency_ms"
+	metricFirstTokenLatency     = "chat_rag_first_token_latency_ms"
+	metricWindowLatency         = "chat_rag_window_latency_ms"
 	metricMainModelLatency      = "chat_rag_main_model_latency_ms"
 	metricTotalLatency          = "chat_rag_total_latency_ms"
-	metricUserPromptCompressed  = "chat_rag_user_prompt_compressed_total"
 	metricResponseTokens        = "chat_rag_response_tokens_total"
 	metricErrorsTotal           = "chat_rag_errors_total"
 
@@ -45,10 +43,7 @@ const (
 
 // Bucket definitions
 var (
-	compressionRatioBuckets = []float64{0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0}
-	fastLatencyBuckets      = []float64{10, 50, 100, 200, 500, 1000, 2000, 5000}
-	mainModelLatencyBuckets = []float64{100, 500, 1000, 2000, 5000, 10000, 20000}
-	totalLatencyBuckets     = []float64{100, 500, 1000, 2000, 5000, 10000, 20000, 30000}
+	modelLatencyBuckets = []float64{100, 500, 1000, 2000, 5000, 10000, 20000, 30000, 60000}
 )
 
 // Base label list
@@ -77,12 +72,10 @@ type MetricsService struct {
 	requestsTotal         *prometheus.CounterVec
 	originalTokensTotal   *prometheus.CounterVec
 	compressedTokensTotal *prometheus.CounterVec
-	compressionRatio      *prometheus.HistogramVec
-	semanticLatency       *prometheus.HistogramVec
-	summaryLatency        *prometheus.HistogramVec
+	fistTokenLatency      *prometheus.HistogramVec
+	windowLatency         *prometheus.HistogramVec
 	mainModelLatency      *prometheus.HistogramVec
 	totalLatency          *prometheus.HistogramVec
-	userPromptCompressed  *prometheus.CounterVec
 	responseTokens        *prometheus.CounterVec
 	errorsTotal           *prometheus.CounterVec
 }
@@ -94,12 +87,10 @@ func NewMetricsService() MetricsInterface {
 	ms.requestsTotal = ms.createCounterVec(metricRequestsTotal, "Total number of chat completion requests", metricsLabelCategory)
 	ms.originalTokensTotal = ms.createCounterVec(metricOriginalTokensTotal, "Total number of original tokens processed", metricsLabelTokenScope)
 	ms.compressedTokensTotal = ms.createCounterVec(metricCompressedTokensTotal, "Total number of compressed tokens processed", metricsLabelTokenScope)
-	ms.compressionRatio = ms.createHistogramVec(metricCompressionRatio, "Distribution of compression ratios", nil, compressionRatioBuckets)
-	ms.semanticLatency = ms.createHistogramVec(metricSemanticLatency, "Semantic processing latency in milliseconds", nil, fastLatencyBuckets)
-	ms.summaryLatency = ms.createHistogramVec(metricSummaryLatency, "Summary processing latency in milliseconds", nil, fastLatencyBuckets)
-	ms.mainModelLatency = ms.createHistogramVec(metricMainModelLatency, "Main model processing latency in milliseconds", nil, mainModelLatencyBuckets)
-	ms.totalLatency = ms.createHistogramVec(metricTotalLatency, "Total processing latency in milliseconds", nil, totalLatencyBuckets)
-	ms.userPromptCompressed = ms.createCounterVec(metricUserPromptCompressed, "Total number of requests where user prompt was compressed")
+	ms.fistTokenLatency = ms.createHistogramVec(metricFirstTokenLatency, "Fist token received latency in milliseconds", nil, modelLatencyBuckets)
+	ms.windowLatency = ms.createHistogramVec(metricWindowLatency, "Window latency in milliseconds", nil, modelLatencyBuckets)
+	ms.mainModelLatency = ms.createHistogramVec(metricMainModelLatency, "Main model processing latency in milliseconds", nil, modelLatencyBuckets)
+	ms.totalLatency = ms.createHistogramVec(metricTotalLatency, "Total processing latency in milliseconds", nil, modelLatencyBuckets)
 	ms.responseTokens = ms.createCounterVec(metricResponseTokens, "Total number of response tokens generated")
 	ms.errorsTotal = ms.createCounterVec(metricErrorsTotal, "Total number of errors encountered", metricsLabelErrorType)
 
@@ -144,12 +135,10 @@ func (ms *MetricsService) registerMetrics() {
 		ms.requestsTotal,
 		ms.originalTokensTotal,
 		ms.compressedTokensTotal,
-		ms.compressionRatio,
-		ms.semanticLatency,
-		ms.summaryLatency,
+		ms.fistTokenLatency,
+		ms.windowLatency,
 		ms.mainModelLatency,
 		ms.totalLatency,
-		ms.userPromptCompressed,
 		ms.responseTokens,
 		ms.errorsTotal,
 	)
@@ -165,7 +154,6 @@ func (ms *MetricsService) RecordChatLog(log *model.ChatLog) {
 	ms.recordRequestMetrics(log, labels)
 	ms.recordTokenMetrics(log, labels)
 	ms.recordLatencyMetrics(log, labels)
-	ms.recordCompressionMetrics(log, labels)
 	ms.recordResponseMetrics(log, labels)
 	ms.recordErrorMetrics(log, labels)
 }
@@ -219,12 +207,11 @@ func (ms *MetricsService) recordLatencyMetrics(log *model.ChatLog, labels promet
 	if log.TotalLatency > 0 {
 		ms.totalLatency.With(labels).Observe(float64(log.TotalLatency))
 	}
-}
-
-// recordCompressionMetrics records compression related metrics
-func (ms *MetricsService) recordCompressionMetrics(log *model.ChatLog, labels prometheus.Labels) {
-	if log.IsUserPromptCompressed {
-		ms.userPromptCompressed.With(labels).Inc()
+	if log.FirstTokenLatency > 0 {
+		ms.fistTokenLatency.With(labels).Observe(float64(log.FirstTokenLatency))
+	}
+	if log.WindowLatency > 0 {
+		ms.windowLatency.With(labels).Observe(float64(log.WindowLatency))
 	}
 }
 

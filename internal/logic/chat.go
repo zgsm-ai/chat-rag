@@ -213,15 +213,15 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 
 // streamState holds the state for streaming processing
 type streamState struct {
-	window         []string // Window of streamed content used for detect tools
-	windowSize     int
-	toolDetected   bool
-	toolName       string
-	fullContent    strings.Builder
-	response       *types.ChatCompletionResponse
-	modelStart     time.Time
-	firstToken     bool // Flag to track if first token has been received
-	firstTokenSent bool // Flag to track if first token has been sent to client
+	window       []string // Window of streamed content used for detect tools
+	windowSize   int
+	toolDetected bool
+	toolName     string
+	fullContent  strings.Builder
+	response     *types.ChatCompletionResponse
+	modelStart   time.Time
+	firstToken   bool // Flag to track if first token has been received
+	windowSent   bool // Flag to track if first token has been sent to client
 }
 
 func newStreamState() *streamState {
@@ -329,9 +329,13 @@ func (l *ChatCompletionLogic) handleStreamChunk(
 	if state.firstToken && content != "[DONE]" {
 		firstTokenLatency := time.Since(state.modelStart)
 		chatLog.FirstTokenLatency = firstTokenLatency.Milliseconds()
-		logger.InfoC(l.ctx, "[non-raw mode] received first token response",
-			zap.Duration("firstTokenReceivedLatency", firstTokenLatency))
+		logger.InfoC(l.ctx, "[first-token] first token received, and response",
+			zap.Duration("firstTokenLatency", firstTokenLatency))
 		state.firstToken = false
+
+		if err := l.sendStreamContent(flusher, state.response, "\n"); err != nil {
+			return err
+		}
 	}
 
 	// Add to window and complete content
@@ -349,12 +353,13 @@ func (l *ChatCompletionLogic) handleStreamChunk(
 
 	// Send content beyond window
 	if !state.toolDetected && len(state.window) >= state.windowSize {
-		// Log first token sent to client
-		if !state.firstTokenSent {
-			state.firstTokenSent = true
-			firstTokenSentLatency := time.Since(state.modelStart)
-			logger.InfoC(l.ctx, "[non-raw mode] first token sent to client",
-				zap.Duration("firstTokenSentLatency", firstTokenSentLatency))
+		// Log window tokens token sent to client
+		if !state.windowSent {
+			state.windowSent = true
+			windowLatency := time.Since(state.modelStart)
+			chatLog.WindowLatency = windowLatency.Milliseconds()
+			logger.InfoC(l.ctx, "first window tokens sent to client",
+				zap.Duration("firstWindowTokenLatency", windowLatency))
 		}
 
 		if err := l.sendStreamContent(flusher, state.response, state.window[0]); err != nil {
@@ -534,9 +539,6 @@ func (l *ChatCompletionLogic) completeStreamResponse(
 		}
 	}
 
-	logger.InfoC(l.ctx, "[non-raw mode] stream end",
-		zap.Duration("totalLatency", time.Since(state.modelStart)))
-
 	l.updateStreamStats(chatLog, state)
 
 	return nil
@@ -561,7 +563,9 @@ func (l *ChatCompletionLogic) handleStreamError(err error, chatLog *model.ChatLo
 
 // updateStreamStats updates chat log with streaming statistics
 func (l *ChatCompletionLogic) updateStreamStats(chatLog *model.ChatLog, state *streamState) {
-	chatLog.MainModelLatency = time.Since(state.modelStart).Milliseconds()
+	endTime := time.Since(state.modelStart)
+	logger.InfoC(l.ctx, "[last-token] stream end", zap.Duration("totalLatency", endTime))
+	chatLog.MainModelLatency = endTime.Milliseconds()
 	chatLog.ResponseContent = state.fullContent.String()
 
 	if l.usage != nil {
@@ -661,7 +665,7 @@ func (l *ChatCompletionLogic) handleRawModeStream(
 				firstTokenTime = time.Now()
 				firstTokenLatency := firstTokenTime.Sub(modelStart)
 				chatLog.FirstTokenLatency = firstTokenLatency.Milliseconds()
-				logger.InfoC(l.ctx, "[raw mode] first token received, and response",
+				logger.InfoC(l.ctx, "[first-token][raw mode] first token received, and response",
 					zap.Duration("firstTokenLatency", firstTokenLatency))
 			}
 
@@ -694,7 +698,7 @@ func (l *ChatCompletionLogic) handleRawModeStream(
 	chatLog.MainModelLatency = totalLatency.Milliseconds()
 
 	if firstTokenReceived {
-		logger.InfoC(l.ctx, "[raw mode] last token received",
+		logger.InfoC(l.ctx, "[last-token][raw mode] last token received",
 			zap.Duration("totalLatency", totalLatency))
 	}
 
