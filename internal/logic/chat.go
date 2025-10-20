@@ -86,17 +86,26 @@ func (l *ChatCompletionLogic) newChatLog(startTime time.Time) *model.ChatLog {
 	userTokens := l.countTokensInMessages(utils.GetUserMsgs(l.request.Messages))
 	allTokens := l.countTokensInMessages(l.request.Messages)
 
+	// Create a deep copy of the original messages to avoid reference issues
+	originalPrompt := make([]types.Message, len(l.request.Messages))
+	copy(originalPrompt, l.request.Messages)
+
 	return &model.ChatLog{
-		Identity:   *l.identity,
-		Timestamp:  startTime,
-		Model:      l.request.Model,
-		PromptMode: string(l.request.ExtraBody.PromptMode),
+		Identity:  *l.identity,
+		Timestamp: startTime,
+		Params: model.RequestParams{
+			Model:               l.request.Model,
+			PromptMode:          string(l.request.ExtraBody.PromptMode),
+			MaxTokens:           l.request.MaxTokens,
+			MaxCompletionTokens: l.request.MaxCompletionTokens,
+			Temperature:         l.request.Temperature,
+		},
 		OriginalTokens: model.TokenStats{
 			SystemTokens: allTokens - userTokens,
 			UserTokens:   userTokens,
 			All:          allTokens,
 		},
-		OriginalPrompt: l.request.Messages,
+		OriginalPrompt: originalPrompt,
 	}
 }
 
@@ -133,12 +142,11 @@ func (l *ChatCompletionLogic) logCompletion(chatLog *model.ChatLog) {
 // ChatCompletion handles chat completion requests
 func (l *ChatCompletionLogic) ChatCompletion() (resp *types.ChatCompletionResponse, err error) {
 	chatLog, processedPrompt, err := l.processRequest()
-	msgs := l.request.Messages
 
 	defer l.logCompletion(chatLog)
 
 	if err == nil {
-		msgs = processedPrompt.Messages
+		l.request.Messages = processedPrompt.Messages
 		chatLog.IsPromptProceed = true
 	} else {
 		err := fmt.Errorf("ChatCompletion failed to process request:\n%w", err)
@@ -156,7 +164,7 @@ func (l *ChatCompletionLogic) ChatCompletion() (resp *types.ChatCompletionRespon
 
 	modelStart := time.Now()
 	// Generate completion using structured messages
-	response, err := llmClient.ChatLLMWithMessagesRaw(l.ctx, msgs)
+	response, err := llmClient.ChatLLMWithMessagesRaw(l.ctx, l.request.LLMRequestParams)
 	if err != nil {
 		if l.isContextLengthError(err) {
 			logger.Error("Input context too long, exceeded limit.", zap.Error(err))
@@ -180,12 +188,11 @@ func (l *ChatCompletionLogic) ChatCompletion() (resp *types.ChatCompletionRespon
 // ChatCompletionStream handles streaming chat completion with SSE
 func (l *ChatCompletionLogic) ChatCompletionStream() error {
 	chatLog, processedPrompt, err := l.processRequest()
-	msgs := l.request.Messages
 
 	defer l.logCompletion(chatLog)
 
 	if err == nil {
-		msgs = processedPrompt.Messages
+		l.request.Messages = processedPrompt.Messages
 		chatLog.IsPromptProceed = true
 	} else {
 		err := fmt.Errorf("ChatCompletionStream failed to process request: %w", err)
@@ -208,7 +215,7 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 	}
 
 	logger.Info("start to handle streaming response ...")
-	return l.handleStreamingWithTools(llmClient, flusher, msgs, chatLog, MaxToolCallDepth)
+	return l.handleStreamingWithTools(llmClient, flusher, chatLog, MaxToolCallDepth)
 }
 
 // streamState holds the state for streaming processing
@@ -235,7 +242,6 @@ func newStreamState() *streamState {
 func (l *ChatCompletionLogic) handleStreamingWithTools(
 	llmClient client.LLMInterface,
 	flusher http.Flusher,
-	messages []types.Message,
 	chatLog *model.ChatLog,
 	remainingDepth int,
 ) error {
@@ -247,20 +253,20 @@ func (l *ChatCompletionLogic) handleStreamingWithTools(
 
 	// If raw mode, directly pass through results to client
 	if l.request.ExtraBody.PromptMode == types.Raw {
-		return l.handleRawModeStream(llmClient, flusher, messages, chatLog)
+		return l.handleRawModeStream(llmClient, flusher, chatLog)
 	}
 
 	state := newStreamState()
 
 	// Phase 1: Process streaming response
-	toolDetected, err := l.processStream(llmClient, flusher, messages, state, remainingDepth, chatLog)
+	toolDetected, err := l.processStream(llmClient, flusher, state, remainingDepth, chatLog)
 	if err != nil {
 		return l.handleStreamError(err, chatLog)
 	}
 
 	// Phase 2: Handle tool execution or complete response
 	if toolDetected {
-		return l.handleToolExecution(llmClient, flusher, messages, chatLog, state, remainingDepth)
+		return l.handleToolExecution(llmClient, flusher, chatLog, state, remainingDepth)
 	}
 
 	return l.completeStreamResponse(flusher, chatLog, state)
@@ -270,12 +276,11 @@ func (l *ChatCompletionLogic) handleStreamingWithTools(
 func (l *ChatCompletionLogic) processStream(
 	llmClient client.LLMInterface,
 	flusher http.Flusher,
-	messages []types.Message,
 	state *streamState,
 	remainingDepth int,
 	chatLog *model.ChatLog,
 ) (bool, error) {
-	err := llmClient.ChatLLMWithMessagesStreamRaw(l.ctx, messages, func(llmResp client.LLMResponse) error {
+	err := llmClient.ChatLLMWithMessagesStreamRaw(l.ctx, l.request.LLMRequestParams, func(llmResp client.LLMResponse) error {
 		l.handleResonseHeaders(llmResp.Header, []string{
 			types.HeaderUserInput,
 			types.HeaderSelectLLm,
@@ -403,7 +408,6 @@ func (l *ChatCompletionLogic) detectAndHandleTool(flusher http.Flusher, state *s
 func (l *ChatCompletionLogic) handleToolExecution(
 	llmClient client.LLMInterface,
 	flusher http.Flusher,
-	messages []types.Message,
 	chatLog *model.ChatLog,
 	state *streamState,
 	remainingDepth int,
@@ -454,7 +458,7 @@ func (l *ChatCompletionLogic) handleToolExecution(
 	}
 	toolCall.ResultStatus = string(status)
 
-	messages = append(messages,
+	l.request.Messages = append(l.request.Messages,
 		types.Message{
 			Role:    types.RoleAssistant,
 			Content: state.fullContent.String(),
@@ -477,7 +481,7 @@ func (l *ChatCompletionLogic) handleToolExecution(
 	)
 
 	l.updateToolStatus(state.toolName, status)
-	chatLog.ProcessedPrompt = messages
+	chatLog.ProcessedPrompt = l.request.Messages
 	chatLog.ToolCalls = append(chatLog.ToolCalls, toolCall)
 
 	// sending tool call ending response to client page
@@ -498,7 +502,6 @@ func (l *ChatCompletionLogic) handleToolExecution(
 	return l.handleStreamingWithTools(
 		llmClient,
 		flusher,
-		messages,
 		chatLog,
 		remainingDepth-1,
 	)
@@ -640,7 +643,6 @@ func (l *ChatCompletionLogic) isContextLengthError(err error) bool {
 func (l *ChatCompletionLogic) handleRawModeStream(
 	llmClient client.LLMInterface,
 	flusher http.Flusher,
-	messages []types.Message,
 	chatLog *model.ChatLog,
 ) error {
 	logger.InfoC(l.ctx, "handling raw mode streaming - direct passthrough")
@@ -650,7 +652,7 @@ func (l *ChatCompletionLogic) handleRawModeStream(
 	firstTokenReceived := false
 	var firstTokenTime time.Time
 
-	err := llmClient.ChatLLMWithMessagesStreamRaw(l.ctx, messages, func(llmResp client.LLMResponse) error {
+	err := llmClient.ChatLLMWithMessagesStreamRaw(l.ctx, l.request.LLMRequestParams, func(llmResp client.LLMResponse) error {
 		// Handle response headers
 		l.handleResonseHeaders(llmResp.Header, []string{
 			types.HeaderUserInput,

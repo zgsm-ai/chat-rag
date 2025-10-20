@@ -72,12 +72,10 @@ const StrFilterToolSearchStart = "\n#### 🔍 "
 const StrFilterToolSearchEnd = "工具检索中"
 
 type ChatCompletionRequest struct {
-	Model         string        `json:"model"`
-	Messages      []Message     `json:"messages"`
-	Stream        bool          `json:"stream,omitempty"`
-	Temperature   float64       `json:"temperature,omitempty"`
-	StreamOptions StreamOptions `json:"stream_options,omitempty"`
-	ExtraBody     ExtraBody     `json:"extra_body,omitempty"`
+	ChatLLMRequest               // Embedded ChatLLMRequest
+	Stream         bool          `json:"stream,omitempty"`
+	StreamOptions  StreamOptions `json:"stream_options,omitempty"`
+	ExtraBody      ExtraBody     `json:"extra_body,omitempty"`
 }
 
 type ExtraBody struct {
@@ -93,20 +91,25 @@ type ChatCompletionResponse struct {
 	Usage   Usage    `json:"usage"`
 }
 
+// LLMRequestParams contains parameters for LLM requests
+type LLMRequestParams struct {
+	Messages            []Message `json:"messages"`
+	MaxTokens           *int      `json:"max_tokens,omitempty"`
+	MaxCompletionTokens *int      `json:"max_completion_tokens,omitempty"`
+	Temperature         *float64  `json:"temperature,omitempty"`
+}
+
 type ChatLLMRequest struct {
-	Model       string    `json:"model"`
-	Messages    []Message `json:"messages"`
-	Temperature float64   `json:"temperature,omitempty"`
+	Model            string `json:"model"`
+	LLMRequestParams        // Embedded params
 }
 
 type ChatLLMRequestStream struct {
-	Model         string        `json:"model"`
-	Temperature   float64       `json:"temperature"`
-	Messages      []Message     `json:"messages"`
-	Tools         []Function    `json:"tools,omitempty"`
-	ToolChoice    string        `json:"tool_choice,omitempty"`
-	Stream        bool          `json:"stream,omitempty"`
-	StreamOptions StreamOptions `json:"stream_options,omitempty"`
+	ChatLLMRequest               // Embedded ChatLLMRequest
+	Tools          []Function    `json:"tools,omitempty"`
+	ToolChoice     string        `json:"tool_choice,omitempty"`
+	Stream         bool          `json:"stream,omitempty"`
+	StreamOptions  StreamOptions `json:"stream_options,omitempty"`
 }
 
 type Choice struct {

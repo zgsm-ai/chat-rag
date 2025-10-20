@@ -43,7 +43,10 @@ const (
 
 // Bucket definitions
 var (
-	modelLatencyBuckets = []float64{100, 500, 1000, 2000, 5000, 10000, 20000, 30000, 60000}
+	modelLatencyBuckets = []float64{
+		100, 500, 1000, 2000, 5000, 10000,
+		20000, 30000, 60000, 120000, 300000,
+	}
 )
 
 // Base label list
@@ -238,7 +241,7 @@ func (ms *MetricsService) getBaseLabels(log *model.ChatLog) prometheus.Labels {
 	labels := prometheus.Labels{
 		metricsBaseLabelClientID:  log.Identity.ClientID,
 		metricsBaseLabelClientIDE: log.Identity.ClientIDE,
-		metricsBaseLabelModel:     log.Model,
+		metricsBaseLabelModel:     log.Params.Model,
 		metricsBaseLabelUser:      log.Identity.UserName,
 		metricsBaseLabelLoginFrom: log.Identity.LoginFrom,
 		metricsBaseLabelCaller:    log.Identity.Caller,

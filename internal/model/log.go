@@ -26,12 +26,20 @@ type ToolCall struct {
 	Error        string `json:"error"`
 }
 
+// RequestParams represents the request parameters for a chat completion
+type RequestParams struct {
+	Model               string   `json:"model"`
+	PromptMode          string   `json:"prompt_mode"`
+	MaxTokens           *int     `json:"max_tokens,omitempty"`
+	MaxCompletionTokens *int     `json:"max_completion_tokens,omitempty"`
+	Temperature         *float64 `json:"temperature,omitempty"`
+}
+
 // ChatLog represents a single chat completion log entry
 type ChatLog struct {
-	Identity   Identity  `json:"identity"`
-	Timestamp  time.Time `json:"timestamp"`
-	Model      string    `json:"model"`
-	PromptMode string    `json:"prompt_mode"`
+	Identity  Identity      `json:"identity"`
+	Timestamp time.Time     `json:"timestamp"`
+	Params    RequestParams `json:"params"`
 
 	// Token statistics
 	OriginalTokens  TokenStats `json:"original_tokens"`
