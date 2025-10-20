@@ -450,7 +450,7 @@ func (ls *LoggerRecordService) classifyLog(logs *model.ChatLog) string {
 	defer cancel()
 
 	// classify uses the recent 2 user messages
-	userMessages := utils.GetRecentUserMsgsWithNum(logs.CompressedPrompt, 2)
+	userMessages := utils.GetRecentUserMsgsWithNum(logs.ProcessedPrompt, 2)
 	userMessages = append(userMessages, types.Message{
 		Role:    types.RoleUser,
 		Content: userClassificationPrompt,

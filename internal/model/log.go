@@ -26,31 +26,41 @@ type ToolCall struct {
 	Error        string `json:"error"`
 }
 
+// RequestParams represents the request parameters for a chat completion
+type RequestParams struct {
+	Model               string   `json:"model"`
+	PromptMode          string   `json:"prompt_mode"`
+	MaxTokens           *int     `json:"max_tokens,omitempty"`
+	MaxCompletionTokens *int     `json:"max_completion_tokens,omitempty"`
+	Temperature         *float64 `json:"temperature,omitempty"`
+}
+
 // ChatLog represents a single chat completion log entry
 type ChatLog struct {
-	Identity   Identity  `json:"identity"`
-	Timestamp  time.Time `json:"timestamp"`
-	Model      string    `json:"model"`
-	PromptMode string    `json:"prompt_mode"`
+	Identity  Identity      `json:"identity"`
+	Timestamp time.Time     `json:"timestamp"`
+	Params    RequestParams `json:"params"`
 
 	// Token statistics
-	OriginalTokens   TokenStats `json:"original_tokens"`
-	CompressedTokens TokenStats `json:"compressed_tokens"`
+	OriginalTokens  TokenStats `json:"original_tokens"`
+	ProcessedTokens TokenStats `json:"processed_tokens"`
 
 	// Processing flags
 	IsPromptProceed        bool `json:"is_prompt_proceed"`
 	IsUserPromptCompressed bool `json:"is_user_prompt_compressed"`
 
 	// Latency metrics (in milliseconds)
-	MainModelLatency int64 `json:"main_model_latency_ms"`
-	TotalLatency     int64 `json:"total_latency_ms"`
+	MainModelLatency  int64 `json:"main_model_latency_ms"`
+	TotalLatency      int64 `json:"total_latency_ms"`
+	FirstTokenLatency int64 `json:"first_token_latency_ms"`
+	WindowLatency     int64 `json:"window_latency_ms"`
 
 	// Tools
 	ToolCalls []ToolCall `json:"tool_calls"`
 
 	// Content samples (truncated for logging)
-	OriginalPrompt   []types.Message `json:"original_prompt"`
-	CompressedPrompt []types.Message `json:"compressed_prompt"`
+	OriginalPrompt  []types.Message `json:"original_prompt"`
+	ProcessedPrompt []types.Message `json:"processed_prompt"`
 
 	// Response information
 	ResponseContent string              `json:"response_content,omitempty"`
@@ -131,7 +141,7 @@ func CreateLokiStream(log *ChatLog) *LogStream {
 	// Add log entry to stream
 	logCopy := *log
 	logCopy.OriginalPrompt = nil
-	logCopy.CompressedPrompt = nil
+	logCopy.ProcessedPrompt = nil
 	logJSON, _ := logCopy.ToCompressedJSON()
 
 	return &LogStream{

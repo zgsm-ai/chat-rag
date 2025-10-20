@@ -25,6 +25,9 @@ type ServiceContext struct {
 	TokenCounter *tokenizer.TokenCounter
 
 	ToolExecutor functions.ToolExecutor
+
+	// Rules Configuration
+	RulesConfig *config.RulesConfig
 }
 
 // NewServiceContext creates a new service context with all dependencies
@@ -67,6 +70,12 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	// Initialize Redis client
 	redisClient := client.NewRedisClient(c.Redis)
 
+	// Load rules configuration
+	rulesConfig, err := config.LoadRulesConfig()
+	if err != nil {
+		panic("Failed to load rules configuration:" + err.Error())
+	}
+
 	return &ServiceContext{
 		Config:         c,
 		SemanticClient: semanticClient,
@@ -76,6 +85,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		TokenCounter:   tokenCounter,
 		ToolExecutor:   xmlToolExecutor,
 		RedisClient:    redisClient,
+		RulesConfig:    rulesConfig,
 	}
 }
 

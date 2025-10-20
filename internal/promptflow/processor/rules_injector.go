@@ -2,53 +2,25 @@ package processor
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 
-	config "github.com/zgsm-ai/chat-rag/internal/config"
+	"github.com/zgsm-ai/chat-rag/internal/config"
 	"github.com/zgsm-ai/chat-rag/internal/logger"
 	"go.uber.org/zap"
 )
 
 type RulesInjector struct {
 	BaseProcessor
-	rulesConfig *RulesConfig
+
+	promptMode  string
+	rulesConfig *config.RulesConfig
 }
 
-type AgentConfig struct {
-	MatchKeys []string `mapstructure:"match_keys"`
-	Rules     string   `mapstructure:"rules"`
-}
-
-type RulesConfig struct {
-	Agents map[string]AgentConfig `yaml:"agents"`
-}
-
-func NewRulesInjector() *RulesInjector {
-	return &RulesInjector{}
-}
-
-func (r *RulesInjector) loadRulesConfig() error {
-	// Get the project root directory path
-	projectRoot, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("failed to get working directory: %w", err)
+func NewRulesInjector(promptMode string, rulesConfig *config.RulesConfig) *RulesInjector {
+	return &RulesInjector{
+		promptMode:  promptMode,
+		rulesConfig: rulesConfig,
 	}
-
-	// Build the configuration file path
-	configPath := filepath.Join(projectRoot, "etc", "rules.yaml")
-
-	// Load YAML configuration using config package
-	config, err := config.LoadYAML[RulesConfig](configPath)
-	if err != nil {
-		return fmt.Errorf("failed to load rules config: %w", err)
-	}
-
-	r.rulesConfig = config
-	logger.Info("Successfully loaded rules configuration", zap.String("config_path", configPath))
-
-	return nil
 }
 
 func (r *RulesInjector) Execute(promptMsg *PromptMsg) {
@@ -61,12 +33,11 @@ func (r *RulesInjector) Execute(promptMsg *PromptMsg) {
 		return
 	}
 
-	// Load rules configuration
-	if err := r.loadRulesConfig(); err != nil {
-		logger.Warn("Failed to load rules configuration",
-			zap.String("method", method),
-			zap.Error(err))
-		r.Err = fmt.Errorf("failed to load rules configuration: %w", err)
+	// Check if rules configuration is available
+	if r.rulesConfig == nil {
+		logger.Error("Rules configuration is not available - this should not happen in production",
+			zap.String("method", method))
+		r.Err = fmt.Errorf("rules configuration is not available - service configuration error")
 		r.passToNext(promptMsg)
 		return
 	}
@@ -112,6 +83,22 @@ func (r *RulesInjector) injectRulesIntoSystemContent(content string) (string, er
 	}
 
 	for agentName, agentConfig := range r.rulesConfig.Agents {
+		// Check if current promptMode is in match_modes list
+		if len(agentConfig.MatchModes) == 0 {
+			continue // Skip this rule if match_modes is empty
+		}
+
+		modeMatched := false
+		for _, mode := range agentConfig.MatchModes {
+			if mode == r.promptMode {
+				modeMatched = true
+				break
+			}
+		}
+		if !modeMatched {
+			continue // Skip this rule if mode doesn't match
+		}
+
 		// Iterate through all match keys for each agent
 		for _, matchKey := range agentConfig.MatchKeys {
 			if strings.Contains(firstParagraph, matchKey) {

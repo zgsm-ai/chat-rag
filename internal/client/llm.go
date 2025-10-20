@@ -23,9 +23,9 @@ type LLMInterface interface {
 	// GenerateContent directly generates non-streaming content with system prompts and user prompts
 	GenerateContent(ctx context.Context, systemPrompt string, userMessages []types.Message) (string, error)
 	// ChatLLMWithMessagesStreamRaw directly calls the API using HTTP client to get raw streaming response
-	ChatLLMWithMessagesStreamRaw(ctx context.Context, messages []types.Message, callback func(LLMResponse) error) error
+	ChatLLMWithMessagesStreamRaw(ctx context.Context, params types.LLMRequestParams, callback func(LLMResponse) error) error
 	//ChatLLMWithMessagesRaw directly calls the API using HTTP client to get raw non-streaming response
-	ChatLLMWithMessagesRaw(ctx context.Context, messages []types.Message) (types.ChatCompletionResponse, error)
+	ChatLLMWithMessagesRaw(ctx context.Context, params types.LLMRequestParams) (types.ChatCompletionResponse, error)
 	// SetTools sets the tools for the LLM client
 	SetTools(tools []types.Function)
 }
@@ -83,7 +83,10 @@ func (c *LLMClient) GenerateContent(ctx context.Context, systemPrompt string, us
 
 	messages = append(messages, userMessages...)
 	// Call ChatLLMWithMessagesRaw to get the raw response
-	result, err := c.ChatLLMWithMessagesRaw(ctx, messages)
+	params := types.LLMRequestParams{
+		Messages: messages,
+	}
+	result, err := c.ChatLLMWithMessagesRaw(ctx, params)
 	if err != nil {
 		return "", fmt.Errorf("failed to get response from ChatLLMWithMessagesRaw: %w", err)
 	}
@@ -135,16 +138,18 @@ func (c *LLMClient) handleAPIError(resp *http.Response, logMessage string) error
 }
 
 // ChatLLMWithMessagesStreamRaw directly calls the API using HTTP client to get raw streaming response
-func (c *LLMClient) ChatLLMWithMessagesStreamRaw(ctx context.Context, messages []types.Message, callback func(LLMResponse) error) error {
+func (c *LLMClient) ChatLLMWithMessagesStreamRaw(ctx context.Context, params types.LLMRequestParams, callback func(LLMResponse) error) error {
 	if callback == nil {
 		return fmt.Errorf("callback function cannot be nil")
 	}
 
 	// Prepare request data structure
 	requestPayload := types.ChatLLMRequestStream{
-		Model:    c.modelName,
-		Messages: messages,
-		Stream:   true,
+		ChatLLMRequest: types.ChatLLMRequest{
+			Model:            c.modelName,
+			LLMRequestParams: params,
+		},
+		Stream: true,
 		StreamOptions: types.StreamOptions{
 			IncludeUsage: true,
 		},
@@ -223,11 +228,11 @@ func (c *LLMClient) ChatLLMWithMessagesStreamRaw(ctx context.Context, messages [
 }
 
 // ChatLLMWithMessagesRaw directly calls the API using HTTP client to get raw non-streaming response
-func (c *LLMClient) ChatLLMWithMessagesRaw(ctx context.Context, messages []types.Message) (types.ChatCompletionResponse, error) {
+func (c *LLMClient) ChatLLMWithMessagesRaw(ctx context.Context, params types.LLMRequestParams) (types.ChatCompletionResponse, error) {
 	// Prepare request data structure
 	requestPayload := types.ChatLLMRequest{
-		Model:    c.modelName,
-		Messages: messages,
+		Model:            c.modelName,
+		LLMRequestParams: params,
 	}
 
 	nil_resp := types.ChatCompletionResponse{}

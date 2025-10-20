@@ -61,9 +61,13 @@ func createTestServiceContext(t *testing.T, cfg *config.Config, tokenCounter int
 // createTestRequest creates a test ChatCompletionRequest
 func createTestRequest(model string, messages []types.Message, stream bool) *types.ChatCompletionRequest {
 	return &types.ChatCompletionRequest{
-		Model:    model,
-		Messages: messages,
-		Stream:   stream,
+		ChatLLMRequest: types.ChatLLMRequest{
+			Model: model,
+			LLMRequestParams: types.LLMRequestParams{
+				Messages: messages,
+			},
+		},
+		Stream: stream,
 	}
 }
 
