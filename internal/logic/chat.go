@@ -100,10 +100,12 @@ func (l *ChatCompletionLogic) newChatLog(startTime time.Time) *model.ChatLog {
 			MaxCompletionTokens: l.request.MaxCompletionTokens,
 			Temperature:         l.request.Temperature,
 		},
-		OriginalTokens: model.TokenStats{
-			SystemTokens: allTokens - userTokens,
-			UserTokens:   userTokens,
-			All:          allTokens,
+		Tokens: model.TokenMetrics{
+			Original: model.TokenStats{
+				SystemTokens: allTokens - userTokens,
+				UserTokens:   userTokens,
+				All:          allTokens,
+			},
 		},
 		OriginalPrompt: originalPrompt,
 	}
@@ -116,11 +118,13 @@ func (l *ChatCompletionLogic) updateChatLog(chatLog *model.ChatLog, processedPro
 	allTokens := l.countTokensInMessages(processedPrompt.Messages)
 	userTokens := l.countTokensInMessages(utils.GetUserMsgs(processedPrompt.Messages))
 
-	chatLog.ProcessedTokens = model.TokenStats{
+	chatLog.Tokens.Processed = model.TokenStats{
 		SystemTokens: allTokens - userTokens,
 		UserTokens:   userTokens,
 		All:          allTokens,
 	}
+	// Calculate ratios after setting processed tokens
+	chatLog.Tokens.CalculateRatios()
 
 	chatLog.ProcessedPrompt = processedPrompt.Messages
 
@@ -133,7 +137,7 @@ func (l *ChatCompletionLogic) updateChatLog(chatLog *model.ChatLog, processedPro
 }
 
 func (l *ChatCompletionLogic) logCompletion(chatLog *model.ChatLog) {
-	chatLog.TotalLatency = time.Since(chatLog.Timestamp).Milliseconds()
+	chatLog.Latency.TotalLatency = time.Since(chatLog.Timestamp).Milliseconds()
 	if l.svcCtx.LoggerService != nil {
 		l.svcCtx.LoggerService.LogAsync(chatLog, l.headers)
 	}
@@ -178,7 +182,7 @@ func (l *ChatCompletionLogic) ChatCompletion() (resp *types.ChatCompletionRespon
 		return nil, err
 	}
 
-	chatLog.MainModelLatency = time.Since(modelStart).Milliseconds()
+	chatLog.Latency.MainModelLatency = time.Since(modelStart).Milliseconds()
 
 	// Extract response content and usage information
 	l.responseHandler.extractResponseInfo(chatLog, &response)
@@ -333,7 +337,7 @@ func (l *ChatCompletionLogic) handleStreamChunk(
 	// Log first token response
 	if state.firstToken && content != "[DONE]" {
 		firstTokenLatency := time.Since(state.modelStart)
-		chatLog.FirstTokenLatency = firstTokenLatency.Milliseconds()
+		chatLog.Latency.FirstTokenLatency = firstTokenLatency.Milliseconds()
 		logger.InfoC(l.ctx, "[first-token] first token received, and response",
 			zap.Duration("firstTokenLatency", firstTokenLatency))
 		state.firstToken = false
@@ -362,7 +366,7 @@ func (l *ChatCompletionLogic) handleStreamChunk(
 		if !state.windowSent {
 			state.windowSent = true
 			windowLatency := time.Since(state.modelStart)
-			chatLog.WindowLatency = windowLatency.Milliseconds()
+			chatLog.Latency.WindowLatency = windowLatency.Milliseconds()
 			logger.InfoC(l.ctx, "first window tokens sent to client",
 				zap.Duration("firstWindowTokenLatency", windowLatency))
 		}
@@ -568,14 +572,14 @@ func (l *ChatCompletionLogic) handleStreamError(err error, chatLog *model.ChatLo
 func (l *ChatCompletionLogic) updateStreamStats(chatLog *model.ChatLog, state *streamState) {
 	endTime := time.Since(state.modelStart)
 	logger.InfoC(l.ctx, "[last-token] stream end", zap.Duration("totalLatency", endTime))
-	chatLog.MainModelLatency = endTime.Milliseconds()
+	chatLog.Latency.MainModelLatency = endTime.Milliseconds()
 	chatLog.ResponseContent = state.fullContent.String()
 
 	if l.usage != nil {
 		chatLog.Usage = *l.usage
 	} else {
 		chatLog.Usage = l.responseHandler.calculateUsage(
-			chatLog.ProcessedTokens.All,
+			chatLog.Tokens.Processed.All,
 			chatLog.ResponseContent,
 		)
 		logger.Info("calculated usage for streaming response")
@@ -666,7 +670,7 @@ func (l *ChatCompletionLogic) handleRawModeStream(
 				firstTokenReceived = true
 				firstTokenTime = time.Now()
 				firstTokenLatency := firstTokenTime.Sub(modelStart)
-				chatLog.FirstTokenLatency = firstTokenLatency.Milliseconds()
+				chatLog.Latency.FirstTokenLatency = firstTokenLatency.Milliseconds()
 				logger.InfoC(l.ctx, "[first-token][raw mode] first token received, and response",
 					zap.Duration("firstTokenLatency", firstTokenLatency))
 			}
@@ -697,7 +701,7 @@ func (l *ChatCompletionLogic) handleRawModeStream(
 	// Record statistics and total latency
 	endTime := time.Now()
 	totalLatency := endTime.Sub(modelStart)
-	chatLog.MainModelLatency = totalLatency.Milliseconds()
+	chatLog.Latency.MainModelLatency = totalLatency.Milliseconds()
 
 	if firstTokenReceived {
 		logger.InfoC(l.ctx, "[last-token][raw mode] last token received",
@@ -705,7 +709,7 @@ func (l *ChatCompletionLogic) handleRawModeStream(
 	}
 
 	logger.InfoC(l.ctx, "raw mode streaming completed",
-		zap.Int64("modelLatency", chatLog.MainModelLatency))
+		zap.Int64("modelLatency", chatLog.Latency.MainModelLatency))
 
 	return nil
 }

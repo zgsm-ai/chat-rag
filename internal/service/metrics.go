@@ -173,10 +173,10 @@ func (ms *MetricsService) recordRequestMetrics(log *model.ChatLog, labels promet
 // recordTokenMetrics records token related metrics
 func (ms *MetricsService) recordTokenMetrics(log *model.ChatLog, labels prometheus.Labels) {
 	// Record original tokens
-	ms.recordTokenCount(ms.originalTokensTotal, log.OriginalTokens, labels)
+	ms.recordTokenCount(ms.originalTokensTotal, log.Tokens.Original, labels)
 
 	// Record compressed tokens
-	ms.recordTokenCount(ms.compressedTokensTotal, log.ProcessedTokens, labels)
+	ms.recordTokenCount(ms.compressedTokensTotal, log.Tokens.Processed, labels)
 }
 
 // recordTokenCount records token count
@@ -204,17 +204,17 @@ func (ms *MetricsService) recordTokenCount(metric *prometheus.CounterVec, tokens
 
 // recordLatencyMetrics records latency related metrics
 func (ms *MetricsService) recordLatencyMetrics(log *model.ChatLog, labels prometheus.Labels) {
-	if log.MainModelLatency > 0 {
-		ms.mainModelLatency.With(labels).Observe(float64(log.MainModelLatency))
+	if log.Latency.MainModelLatency > 0 {
+		ms.mainModelLatency.With(labels).Observe(float64(log.Latency.MainModelLatency))
 	}
-	if log.TotalLatency > 0 {
-		ms.totalLatency.With(labels).Observe(float64(log.TotalLatency))
+	if log.Latency.TotalLatency > 0 {
+		ms.totalLatency.With(labels).Observe(float64(log.Latency.TotalLatency))
 	}
-	if log.FirstTokenLatency > 0 {
-		ms.fistTokenLatency.With(labels).Observe(float64(log.FirstTokenLatency))
+	if log.Latency.FirstTokenLatency > 0 {
+		ms.fistTokenLatency.With(labels).Observe(float64(log.Latency.FirstTokenLatency))
 	}
-	if log.WindowLatency > 0 {
-		ms.windowLatency.With(labels).Observe(float64(log.WindowLatency))
+	if log.Latency.WindowLatency > 0 {
+		ms.windowLatency.With(labels).Observe(float64(log.Latency.WindowLatency))
 	}
 }
 

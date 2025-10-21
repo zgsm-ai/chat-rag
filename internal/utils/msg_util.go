@@ -205,3 +205,23 @@ func MarshalJSONWithoutEscapeHTML(v interface{}) (string, error) {
 	}
 	return jsonResult, nil
 }
+
+// ExtractTextFromContent extracts text string from content item
+func ExtractTextFromContent(item interface{}) string {
+	contentMap, ok := item.(map[string]interface{})
+	if !ok {
+		return ""
+	}
+
+	text, exists := contentMap["text"]
+	if !exists {
+		return ""
+	}
+
+	textStr, ok := text.(string)
+	if !ok {
+		return ""
+	}
+
+	return textStr
+}
