@@ -54,7 +54,7 @@ func NewChatCompletionLogic(
 	}
 }
 
-const MaxToolCallDepth = 10
+const MaxToolCallDepth = 6
 
 // processRequest handles common request processing logic
 func (l *ChatCompletionLogic) processRequest() (*model.ChatLog, *ds.ProcessedPrompt, error) {
