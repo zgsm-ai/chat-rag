@@ -41,7 +41,7 @@ const (
 
 	// Default values
 	defaultCategory    = "unknown"
-	defaultPromoptMode = "Vibe"
+	defaultPromoptMode = "vibe"
 
 	// Token scope constants
 	tokenScopeSystem = "system"
