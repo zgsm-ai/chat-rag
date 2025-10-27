@@ -65,6 +65,11 @@ type ContextCompressConfig struct {
 	RecentUserMsgUsedNums int
 }
 
+type PreciseContextConfig struct {
+	// filter "environment_details" user prompt in context
+	EnableEnvDetailsFilter bool
+}
+
 // Config holds all service configuration
 type Config struct {
 	// Server configuration
@@ -77,8 +82,9 @@ type Config struct {
 	// Logging configuration
 	Log LogConfig
 
-	// Context compression configuration
+	// Context handling configuration
 	ContextCompressConfig ContextCompressConfig
+	PreciseContextConfig  PreciseContextConfig
 
 	//Department configuration
 	DepartmentApiEndpoint string

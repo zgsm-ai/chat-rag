@@ -18,6 +18,9 @@ ContextCompressConfig:
   SummaryModelTokenThreshold: 64_000
   RecentUserMsgUsedNums: 3
 
+PreciseContextConfig:
+  EnableEnvDetailsFilter: true
+
 # Department configuration
 DepartmentApiEndpoint: "http://localhost:1234/work_id?work_id="
 

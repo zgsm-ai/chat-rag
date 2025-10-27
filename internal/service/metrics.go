@@ -9,17 +9,18 @@ import (
 
 const (
 	// Base labels
-	metricsBaseLabelClientID  = "client_id"
-	metricsBaseLabelClientIDE = "client_ide"
-	metricsBaseLabelModel     = "model"
-	metricsBaseLabelUser      = "user"
-	metricsBaseLabelLoginFrom = "login_from"
-	metricsBaseLabelCaller    = "caller"
-	metricsBaseLabelSender    = "sender"
-	metricsBaseLabelDept1     = "dept_level1"
-	metricsBaseLabelDept2     = "dept_level2"
-	metricsBaseLabelDept3     = "dept_level3"
-	metricsBaseLabelDept4     = "dept_level4"
+	metricsBaseLabelClientID   = "client_id"
+	metricsBaseLabelClientIDE  = "client_ide"
+	metricsBaseLabelModel      = "model"
+	metricsBaseLabelUser       = "user"
+	metricsBaseLabelLoginFrom  = "login_from"
+	metricsBaseLabelCaller     = "caller"
+	metricsBaseLabelSender     = "sender"
+	metricsBaseLabelDept1      = "dept_level1"
+	metricsBaseLabelDept2      = "dept_level2"
+	metricsBaseLabelDept3      = "dept_level3"
+	metricsBaseLabelDept4      = "dept_level4"
+	metricsBaseLabelPromptMode = "prompt_mode"
 
 	// Label names
 	metricsLabelCategory   = "category"
@@ -36,9 +37,16 @@ const (
 	metricTotalLatency          = "chat_rag_total_latency_ms"
 	metricResponseTokens        = "chat_rag_response_tokens_total"
 	metricErrorsTotal           = "chat_rag_errors_total"
+	metricTokenRatio            = "chat_rag_token_ratio"
 
 	// Default values
-	defaultCategory = "unknown"
+	defaultCategory    = "unknown"
+	defaultPromoptMode = "vibe"
+
+	// Token scope constants
+	tokenScopeSystem = "system"
+	tokenScopeUser   = "user"
+	tokenScopeAll    = "all"
 )
 
 // Bucket definitions
@@ -62,6 +70,7 @@ var metricsBaseLabels = []string{
 	metricsBaseLabelDept2,
 	metricsBaseLabelDept3,
 	metricsBaseLabelDept4,
+	metricsBaseLabelPromptMode,
 }
 
 // MetricsInterface defines the interface for metrics service
@@ -81,6 +90,7 @@ type MetricsService struct {
 	totalLatency          *prometheus.HistogramVec
 	responseTokens        *prometheus.CounterVec
 	errorsTotal           *prometheus.CounterVec
+	tokenRatio            *prometheus.GaugeVec
 }
 
 // NewMetricsService creates a new metrics service
@@ -96,6 +106,7 @@ func NewMetricsService() MetricsInterface {
 	ms.totalLatency = ms.createHistogramVec(metricTotalLatency, "Total processing latency in milliseconds", nil, modelLatencyBuckets)
 	ms.responseTokens = ms.createCounterVec(metricResponseTokens, "Total number of response tokens generated")
 	ms.errorsTotal = ms.createCounterVec(metricErrorsTotal, "Total number of errors encountered", metricsLabelErrorType)
+	ms.tokenRatio = ms.createGaugeVec(metricTokenRatio, "Token compression ratio by scope", metricsLabelTokenScope)
 
 	ms.registerMetrics()
 	return ms
@@ -132,6 +143,21 @@ func (ms *MetricsService) createHistogramVec(name, help string, extraLabels []st
 	)
 }
 
+// createGaugeVec creates a GaugeVec with base labels
+func (ms *MetricsService) createGaugeVec(name, help string, extraLabels ...string) *prometheus.GaugeVec {
+	labels := metricsBaseLabels
+	if len(extraLabels) > 0 {
+		labels = append(labels, extraLabels...)
+	}
+	return prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: name,
+			Help: help,
+		},
+		labels,
+	)
+}
+
 // registerMetrics registers all metrics
 func (ms *MetricsService) registerMetrics() {
 	prometheus.MustRegister(
@@ -144,6 +170,7 @@ func (ms *MetricsService) registerMetrics() {
 		ms.totalLatency,
 		ms.responseTokens,
 		ms.errorsTotal,
+		ms.tokenRatio,
 	)
 }
 
@@ -159,6 +186,7 @@ func (ms *MetricsService) RecordChatLog(log *model.ChatLog) {
 	ms.recordLatencyMetrics(log, labels)
 	ms.recordResponseMetrics(log, labels)
 	ms.recordErrorMetrics(log, labels)
+	ms.recordTokenRatioMetrics(log, labels)
 }
 
 // recordRequestMetrics records request related metrics
@@ -173,10 +201,10 @@ func (ms *MetricsService) recordRequestMetrics(log *model.ChatLog, labels promet
 // recordTokenMetrics records token related metrics
 func (ms *MetricsService) recordTokenMetrics(log *model.ChatLog, labels prometheus.Labels) {
 	// Record original tokens
-	ms.recordTokenCount(ms.originalTokensTotal, log.OriginalTokens, labels)
+	ms.recordTokenCount(ms.originalTokensTotal, log.Tokens.Original, labels)
 
 	// Record compressed tokens
-	ms.recordTokenCount(ms.compressedTokensTotal, log.ProcessedTokens, labels)
+	ms.recordTokenCount(ms.compressedTokensTotal, log.Tokens.Processed, labels)
 }
 
 // recordTokenCount records token count
@@ -197,24 +225,24 @@ func (ms *MetricsService) recordTokenCount(metric *prometheus.CounterVec, tokens
 		metric.With(ms.addLabel(labels, metricsLabelTokenScope, scope)).Add(float64(count))
 	}
 
-	record("system", tokens.SystemTokens)
-	record("user", tokens.UserTokens)
-	record("all", tokens.All)
+	record(tokenScopeSystem, tokens.SystemTokens)
+	record(tokenScopeUser, tokens.UserTokens)
+	record(tokenScopeAll, tokens.All)
 }
 
 // recordLatencyMetrics records latency related metrics
 func (ms *MetricsService) recordLatencyMetrics(log *model.ChatLog, labels prometheus.Labels) {
-	if log.MainModelLatency > 0 {
-		ms.mainModelLatency.With(labels).Observe(float64(log.MainModelLatency))
+	if log.Latency.MainModelLatency > 0 {
+		ms.mainModelLatency.With(labels).Observe(float64(log.Latency.MainModelLatency))
 	}
-	if log.TotalLatency > 0 {
-		ms.totalLatency.With(labels).Observe(float64(log.TotalLatency))
+	if log.Latency.TotalLatency > 0 {
+		ms.totalLatency.With(labels).Observe(float64(log.Latency.TotalLatency))
 	}
-	if log.FirstTokenLatency > 0 {
-		ms.fistTokenLatency.With(labels).Observe(float64(log.FirstTokenLatency))
+	if log.Latency.FirstTokenLatency > 0 {
+		ms.fistTokenLatency.With(labels).Observe(float64(log.Latency.FirstTokenLatency))
 	}
-	if log.WindowLatency > 0 {
-		ms.windowLatency.With(labels).Observe(float64(log.WindowLatency))
+	if log.Latency.WindowLatency > 0 {
+		ms.windowLatency.With(labels).Observe(float64(log.Latency.WindowLatency))
 	}
 }
 
@@ -238,14 +266,20 @@ func (ms *MetricsService) recordErrorMetrics(log *model.ChatLog, labels promethe
 
 // getBaseLabels creates base labels map
 func (ms *MetricsService) getBaseLabels(log *model.ChatLog) prometheus.Labels {
+	promptMode := log.Params.PromptMode
+	if promptMode == "" {
+		promptMode = defaultPromoptMode
+	}
+
 	labels := prometheus.Labels{
-		metricsBaseLabelClientID:  log.Identity.ClientID,
-		metricsBaseLabelClientIDE: log.Identity.ClientIDE,
-		metricsBaseLabelModel:     log.Params.Model,
-		metricsBaseLabelUser:      log.Identity.UserName,
-		metricsBaseLabelLoginFrom: log.Identity.LoginFrom,
-		metricsBaseLabelCaller:    log.Identity.Caller,
-		metricsBaseLabelSender:    log.Identity.Sender,
+		metricsBaseLabelClientID:   log.Identity.ClientID,
+		metricsBaseLabelClientIDE:  log.Identity.ClientIDE,
+		metricsBaseLabelModel:      log.Params.Model,
+		metricsBaseLabelUser:       log.Identity.UserName,
+		metricsBaseLabelLoginFrom:  log.Identity.LoginFrom,
+		metricsBaseLabelCaller:     log.Identity.Caller,
+		metricsBaseLabelSender:     log.Identity.Sender,
+		metricsBaseLabelPromptMode: promptMode,
 	}
 
 	if log.Identity.UserInfo != nil &&
@@ -280,4 +314,25 @@ func (ms *MetricsService) addLabel(baseLabels prometheus.Labels, key, value stri
 // GetRegistry returns the Prometheus registry
 func (ms *MetricsService) GetRegistry() *prometheus.Registry {
 	return prometheus.DefaultRegisterer.(*prometheus.Registry)
+}
+
+// recordTokenRatioMetrics records token ratio related metrics
+func (ms *MetricsService) recordTokenRatioMetrics(log *model.ChatLog, labels prometheus.Labels) {
+	// Record system token ratio
+	if log.Tokens.Ratios.SystemRatio >= 0 {
+		ratioLabels := ms.addLabel(labels, metricsLabelTokenScope, tokenScopeSystem)
+		ms.tokenRatio.With(ratioLabels).Set(log.Tokens.Ratios.SystemRatio)
+	}
+
+	// Record user token ratio
+	if log.Tokens.Ratios.UserRatio >= 0 {
+		ratioLabels := ms.addLabel(labels, metricsLabelTokenScope, tokenScopeUser)
+		ms.tokenRatio.With(ratioLabels).Set(log.Tokens.Ratios.UserRatio)
+	}
+
+	// Record all token ratio
+	if log.Tokens.Ratios.AllRatio >= 0 {
+		ratioLabels := ms.addLabel(labels, metricsLabelTokenScope, tokenScopeAll)
+		ms.tokenRatio.With(ratioLabels).Set(log.Tokens.Ratios.AllRatio)
+	}
 }

@@ -48,7 +48,7 @@ func NewRagWithRuleProcessor(
 
 // buildProcessorChain constructs and connects the processor chain
 func (r *RagWithRuleProcessor) buildProcessorChain() error {
-	r.userMsgFilter = processor.NewUserMsgFilter()
+	r.userMsgFilter = processor.NewUserMsgFilter(r.config.PreciseContextConfig.EnableEnvDetailsFilter)
 	r.xmlToolAdapter = processor.NewXmlToolAdapter(r.ctx, r.toolsExecutor)
 	r.ruleInjector = processor.NewRulesInjector(r.promptMode, r.rulesConfig)
 	r.userCompressor = processor.NewUserCompressor(

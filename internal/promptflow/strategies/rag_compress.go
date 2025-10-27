@@ -110,7 +110,7 @@ func (p *RagCompressProcessor) Arrange(messages []types.Message) (*ds.ProcessedP
 
 // buildProcessorChain constructs and connects the processor chain
 func (p *RagCompressProcessor) buildProcessorChain() error {
-	p.userMsgFilter = processor.NewUserMsgFilter()
+	p.userMsgFilter = processor.NewUserMsgFilter(p.config.PreciseContextConfig.EnableEnvDetailsFilter)
 	p.xmlToolAdapter = processor.NewXmlToolAdapter(p.ctx, p.toolsExecutor)
 	// p.functionAdapter = processor.NewFunctionAdapter(
 	// 	p.modelName,

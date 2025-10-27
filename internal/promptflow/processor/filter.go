@@ -6,15 +6,20 @@ import (
 
 	"github.com/zgsm-ai/chat-rag/internal/logger"
 	"github.com/zgsm-ai/chat-rag/internal/types"
+	"github.com/zgsm-ai/chat-rag/internal/utils"
 	"go.uber.org/zap"
 )
 
 type UserMsgFilter struct {
 	BaseProcessor
+
+	enableEnvDetailsFilter bool
 }
 
-func NewUserMsgFilter() *UserMsgFilter {
-	return &UserMsgFilter{}
+func NewUserMsgFilter(enableEnvDetailsFilter bool) *UserMsgFilter {
+	return &UserMsgFilter{
+		enableEnvDetailsFilter: enableEnvDetailsFilter,
+	}
 }
 
 func (u *UserMsgFilter) Execute(promptMsg *PromptMsg) {
@@ -37,8 +42,11 @@ func (u *UserMsgFilter) Execute(promptMsg *PromptMsg) {
 	originalCount := len(promptMsg.olderUserMsgList)
 	u.filterDuplicateMessages(promptMsg)
 	u.filterAssistantToolPatterns(promptMsg)
-	removedCount := originalCount - len(promptMsg.olderUserMsgList)
+	if u.enableEnvDetailsFilter {
+		u.filterEnvironmentDetails(promptMsg)
+	}
 
+	removedCount := originalCount - len(promptMsg.olderUserMsgList)
 	logger.Info("User message filter completed",
 		zap.Int("removed duplicate content count", removedCount),
 		zap.String("method", method))
@@ -148,4 +156,64 @@ func (u *UserMsgFilter) indexOf(s, pattern string) int {
 		}
 	}
 	return -1
+}
+
+// filterEnvironmentDetails removes environment details content from user messages
+// Keeps the first occurrence of <environment_details> and removes subsequent ones
+func (u *UserMsgFilter) filterEnvironmentDetails(promptMsg *PromptMsg) {
+	const method = "UserMsgFilter.filterEnvironmentDetails"
+	const environment_details = "<environment_details>"
+
+	removedCount := 0
+	environmentDetailsCount := 0
+
+	for i := range promptMsg.olderUserMsgList {
+		msg := &promptMsg.olderUserMsgList[i]
+
+		// Only process user messages
+		if msg.Role != types.RoleUser {
+			continue
+		}
+
+		// Check if msg.Content is a list
+		contentList, ok := msg.Content.([]interface{})
+		if !ok {
+			continue
+		}
+
+		// Filter out environment details from content list in place
+		for j := 0; j < len(contentList); {
+			item := contentList[j]
+
+			// Try to extract text from the content item
+			textStr := utils.ExtractTextFromContent(item)
+			if textStr == "" {
+				j++
+				continue
+			}
+
+			// Check if this is environment details
+			if strings.HasPrefix(textStr, environment_details) {
+				environmentDetailsCount++
+				if environmentDetailsCount > 1 {
+					// Remove this element by slicing it out (skip the first one)
+					contentList = append(contentList[:j], contentList[j+1:]...)
+					removedCount++
+					// Don't increment j since we removed the current element
+					continue
+				}
+			}
+
+			// Move to next element
+			j++
+		}
+
+		// Update msg.Content with the modified slice
+		msg.Content = contentList
+
+	}
+
+	logger.Info("[environment details] filtering completed",
+		zap.Int("removed_count", removedCount),
+		zap.String("method", method))
 }
