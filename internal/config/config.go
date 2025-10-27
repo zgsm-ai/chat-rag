@@ -14,6 +14,11 @@ type RedisConfig struct {
 }
 
 type ToolConfig struct {
+	// Global switch to control whether all tools are disabled, default is false
+	DisableTools bool
+	// Control which agents in which modes cannot use tools
+	DisabledAgents map[string][]string
+
 	SemanticSearch   SemanticSearchConfig
 	DefinitionSearch DefinitionSearchConfig
 	ReferenceSearch  ReferenceSearchConfig
@@ -66,8 +71,16 @@ type ContextCompressConfig struct {
 }
 
 type PreciseContextConfig struct {
+	// AgentsMatch configuration
+	AgentsMatch []AgentMatchConfig
 	// filter "environment_details" user prompt in context
 	EnableEnvDetailsFilter bool
+}
+
+// AgentMatchConfig holds configuration for a specific agent matching
+type AgentMatchConfig struct {
+	AgentName string
+	MatchKey  string
 }
 
 // Config holds all service configuration
@@ -97,12 +110,12 @@ type Config struct {
 
 // AgentConfig holds configuration for a specific agent
 type AgentConfig struct {
-	MatchKeys  []string `mapstructure:"match_keys"`
-	MatchModes []string `mapstructure:"match_modes"`
-	Rules      string   `mapstructure:"rules"`
+	MatchAgents []string `mapstructure:"match_agents"`
+	MatchModes  []string `mapstructure:"match_modes"`
+	Rules       string   `mapstructure:"rules"`
 }
 
 // RulesConfig holds the rules configuration for agents
 type RulesConfig struct {
-	Agents map[string]AgentConfig `yaml:"agents"`
+	Agents []AgentConfig `yaml:"agents"`
 }

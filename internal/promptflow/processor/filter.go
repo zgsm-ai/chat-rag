@@ -24,7 +24,6 @@ func NewUserMsgFilter(enableEnvDetailsFilter bool) *UserMsgFilter {
 
 func (u *UserMsgFilter) Execute(promptMsg *PromptMsg) {
 	const method = "UserMsgFilter.Execute"
-	logger.Info("Start user message filter to prompts", zap.String("method", method))
 
 	if promptMsg == nil {
 		u.Err = fmt.Errorf("received prompt message is empty")

@@ -13,7 +13,6 @@ import (
 type RagWithRuleProcessor struct {
 	RagCompressProcessor
 
-	promptMode   string
 	rulesConfig  *config.RulesConfig
 	ruleInjector *processor.RulesInjector
 }
@@ -27,7 +26,7 @@ func NewRagWithRuleProcessor(
 	modelName string,
 	promoptMode string,
 ) (*RagWithRuleProcessor, error) {
-	ragCompressProcessor, err := NewRagCompressProcessor(ctx, svcCtx, headers, identity, modelName)
+	ragCompressProcessor, err := NewRagCompressProcessor(ctx, svcCtx, headers, identity, modelName, promoptMode)
 	if err != nil {
 		return nil, err
 	}
@@ -37,10 +36,6 @@ func NewRagWithRuleProcessor(
 		rulesConfig:          svcCtx.RulesConfig,
 	}
 
-	if promoptMode == "" {
-		promoptMode = "default"
-	}
-	processor.promptMode = promoptMode
 	processor.chainBuilder = processor
 
 	return processor, nil
@@ -49,8 +44,8 @@ func NewRagWithRuleProcessor(
 // buildProcessorChain constructs and connects the processor chain
 func (r *RagWithRuleProcessor) buildProcessorChain() error {
 	r.userMsgFilter = processor.NewUserMsgFilter(r.config.PreciseContextConfig.EnableEnvDetailsFilter)
-	r.xmlToolAdapter = processor.NewXmlToolAdapter(r.ctx, r.toolsExecutor)
-	r.ruleInjector = processor.NewRulesInjector(r.promptMode, r.rulesConfig)
+	r.xmlToolAdapter = processor.NewXmlToolAdapter(r.ctx, r.toolsExecutor, &r.config.Tools, r.agentName, r.promptMode)
+	r.ruleInjector = processor.NewRulesInjector(r.promptMode, r.rulesConfig, r.agentName)
 	r.userCompressor = processor.NewUserCompressor(
 		r.ctx,
 		r.config,

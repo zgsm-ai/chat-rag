@@ -82,7 +82,6 @@ func NewUserCompressor(
 
 func (u *UserCompressor) Execute(promptMsg *PromptMsg) {
 	const method = "UserCompressor.Execute"
-	logger.Info("starting user prompt compression", zap.String("method", method))
 
 	if promptMsg == nil {
 		logger.Error("nil prompt message received", zap.String("method", method))

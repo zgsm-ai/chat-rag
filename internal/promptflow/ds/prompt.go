@@ -14,4 +14,5 @@ type ProcessedPrompt struct {
 	SummaryErr             error            `json:"summary_err"`
 	IsUserPromptCompressed bool             `json:"is_user_prompt_compressed"`
 	Tools                  []types.Function `json:"tools"`
+	Agent                  string           `json:"agent"`
 }

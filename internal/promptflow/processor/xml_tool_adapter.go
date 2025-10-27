@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/zgsm-ai/chat-rag/internal/config"
 	"github.com/zgsm-ai/chat-rag/internal/functions"
 	"github.com/zgsm-ai/chat-rag/internal/logger"
 	"go.uber.org/zap"
@@ -16,22 +17,34 @@ type XmlToolAdapter struct {
 
 	ctx          context.Context
 	toolExecutor functions.ToolExecutor
+	toolConfig   *config.ToolConfig
+	agentName    string
+	promptMode   string
 }
 
-func NewXmlToolAdapter(ctx context.Context, toolExecutor functions.ToolExecutor) *XmlToolAdapter {
+func NewXmlToolAdapter(ctx context.Context, toolExecutor functions.ToolExecutor, toolConfig *config.ToolConfig, agentName string, promptMode string) *XmlToolAdapter {
 	return &XmlToolAdapter{
 		ctx:          ctx,
 		toolExecutor: toolExecutor,
+		toolConfig:   toolConfig,
+		agentName:    agentName,
+		promptMode:   promptMode,
 	}
 }
 
 func (x *XmlToolAdapter) Execute(promptMsg *PromptMsg) {
 	const method = "XmlToolAdapter.Execute"
-	logger.InfoC(x.ctx, "Start adapt xml tool to prompts", zap.String("method", method))
 
 	if promptMsg == nil {
 		x.Err = fmt.Errorf("received prompt message is empty")
 		logger.Error(x.Err.Error(), zap.String("method", method))
+		return
+	}
+
+	// Check if all tools are disabled globally
+	if x.toolConfig != nil && x.toolConfig.DisableTools {
+		logger.InfoC(x.ctx, "All tools are disabled globally", zap.String("method", method))
+		x.passToNext(promptMsg)
 		return
 	}
 
@@ -41,6 +54,14 @@ func (x *XmlToolAdapter) Execute(promptMsg *PromptMsg) {
 			zap.String("method", method),
 			zap.Error(err))
 		x.Err = fmt.Errorf("failed to extract system message content: %w", err)
+		x.passToNext(promptMsg)
+		return
+	}
+
+	// Check if this agent is disabled from using tools
+	if x.toolConfig != nil && x.isAgentDisabled(x.agentName, x.promptMode) {
+		logger.InfoC(x.ctx, "Agent is disabled from using tools",
+			zap.String("agent", x.agentName), zap.String("mode", x.promptMode), zap.String("method", method))
 		x.passToNext(promptMsg)
 		return
 	}
@@ -185,4 +206,26 @@ func insertContentAfterMarker(content, marker, newContent string) (string, error
 	// For other markers, insert immediately after the marker
 	insertPos := markerIndex + len(marker)
 	return content[:insertPos] + newContent + content[insertPos:], nil
+}
+
+// isAgentDisabled checks if the agent is disabled from using tools in the current mode
+func (x *XmlToolAdapter) isAgentDisabled(agentName, mode string) bool {
+	if x.toolConfig == nil || x.toolConfig.DisabledAgents == nil {
+		return false
+	}
+
+	// Check if the mode exists in the disabled agents configuration
+	disabledAgents, exists := x.toolConfig.DisabledAgents[mode]
+	if !exists {
+		return false
+	}
+
+	// Check if the agent is in the disabled list for this mode
+	for _, disabledAgent := range disabledAgents {
+		if disabledAgent == agentName {
+			return true
+		}
+	}
+
+	return false
 }
