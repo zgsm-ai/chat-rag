@@ -52,7 +52,6 @@ type KnowledgeSearchConfig struct {
 // LogConfig holds logging configuration
 type LogConfig struct {
 	LogFilePath          string
-	LokiEndpoint         string
 	LogScanIntervalSec   int
 	ClassifyModel        string
 	EnableClassification bool
