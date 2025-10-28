@@ -75,6 +75,8 @@ type PreciseContextConfig struct {
 	AgentsMatch []AgentMatchConfig
 	// filter "environment_details" user prompt in context
 	EnableEnvDetailsFilter bool
+	// Control which agents in which modes cannot use ModesChange
+	DisabledModesChangeAgents map[string][]string
 }
 
 // AgentMatchConfig holds configuration for a specific agent matching

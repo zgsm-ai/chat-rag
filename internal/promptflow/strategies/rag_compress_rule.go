@@ -43,22 +43,19 @@ func NewRagWithRuleProcessor(
 
 // buildProcessorChain constructs and connects the processor chain
 func (r *RagWithRuleProcessor) buildProcessorChain() error {
-	r.userMsgFilter = processor.NewUserMsgFilter(r.config.PreciseContextConfig.EnableEnvDetailsFilter)
-	r.xmlToolAdapter = processor.NewXmlToolAdapter(r.ctx, r.toolsExecutor, &r.config.Tools, r.agentName, r.promptMode)
-	r.ruleInjector = processor.NewRulesInjector(r.promptMode, r.rulesConfig, r.agentName)
-	r.userCompressor = processor.NewUserCompressor(
-		r.ctx,
-		r.config,
-		r.llmClient,
-		r.tokenCounter,
-	)
+	// First build the parent chain
+	err := r.RagCompressProcessor.buildProcessorChain()
+	if err != nil {
+		return err
+	}
 
-	// build chain
-	r.start.SetNext(r.ruleInjector)
-	r.ruleInjector.SetNext(r.userMsgFilter)
-	r.userMsgFilter.SetNext(r.xmlToolAdapter)
-	r.xmlToolAdapter.SetNext(r.userCompressor)
-	r.userCompressor.SetNext(r.end)
+	// Create rule injector
+	r.ruleInjector = processor.NewRulesInjector(r.promptMode, r.rulesConfig, r.agentName)
+
+	// Rebuild chain with rule injector inserted at the beginning
+	r.xmlToolAdapter.SetNext(r.ruleInjector)
+	r.ruleInjector.SetNext(r.end)
+	// The rest of the chain remains the same as in parent
 
 	return nil
 }

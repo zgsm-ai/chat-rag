@@ -39,7 +39,7 @@ type RagCompressProcessor struct {
 
 	userMsgFilter *processor.UserMsgFilter
 	// functionAdapter *processor.FunctionAdapter
-	userCompressor *processor.UserCompressor
+	// userCompressor *processor.UserCompressor
 	xmlToolAdapter *processor.XmlToolAdapter
 	start          *processor.Start
 	end            *processor.End
@@ -130,20 +130,31 @@ func (p *RagCompressProcessor) Arrange(messages []types.Message) (*ds.ProcessedP
 
 // buildProcessorChain constructs and connects the processor chain
 func (p *RagCompressProcessor) buildProcessorChain() error {
-	p.userMsgFilter = processor.NewUserMsgFilter(p.config.PreciseContextConfig.EnableEnvDetailsFilter)
-	p.xmlToolAdapter = processor.NewXmlToolAdapter(p.ctx, p.toolsExecutor, &p.config.Tools, p.agentName, p.promptMode)
-	p.userCompressor = processor.NewUserCompressor(
-		p.ctx,
-		p.config,
-		p.llmClient,
+	p.userMsgFilter = processor.NewUserMsgFilter(
+		&p.config.PreciseContextConfig,
+		p.promptMode,
+		p.agentName,
 		p.tokenCounter,
 	)
+	p.xmlToolAdapter = processor.NewXmlToolAdapter(
+		p.ctx,
+		p.toolsExecutor,
+		&p.config.Tools,
+		p.agentName,
+		p.promptMode,
+	)
+	// p.userCompressor = processor.NewUserCompressor(
+	// 	p.ctx,
+	// 	p.config,
+	// 	p.llmClient,
+	// 	p.tokenCounter,
+	// )
 
 	// execute chain
 	p.start.SetNext(p.userMsgFilter)
 	p.userMsgFilter.SetNext(p.xmlToolAdapter)
-	p.xmlToolAdapter.SetNext(p.userCompressor)
-	p.userCompressor.SetNext(p.end)
+	// p.xmlToolAdapter.SetNext(p.userCompressor)
+	p.xmlToolAdapter.SetNext(p.end)
 
 	return nil
 }
@@ -154,12 +165,10 @@ func (p *RagCompressProcessor) createProcessedPrompt(
 ) *ds.ProcessedPrompt {
 	processedMsgs := processor.SetLanguage(p.identity.Language, promptMsg.AssemblePrompt())
 	return &ds.ProcessedPrompt{
-		Messages:               processedMsgs,
-		SummaryLatency:         p.userCompressor.Latency,
-		SummaryErr:             p.userCompressor.Err,
-		IsUserPromptCompressed: p.userCompressor.Handled,
-		Tools:                  promptMsg.GetTools(),
-		Agent:                  p.agentName,
+		Messages:     processedMsgs,
+		Tools:        promptMsg.GetTools(),
+		Agent:        p.agentName,
+		TokenMetrics: p.userMsgFilter.TokenMetrics,
 	}
 }
 

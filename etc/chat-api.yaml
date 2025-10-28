@@ -20,6 +20,17 @@ ContextCompressConfig:
 
 PreciseContextConfig:
   EnableEnvDetailsFilter: true
+  # Control which agents in which modes cannot use ModesChange
+  DisabledModesChangeAgents:
+    strict:
+      - "strict"
+      - "requirements"
+      - "architect"
+      - "task"
+      - "review"
+    vibe:
+      - "review"
+
   AgentsMatch:
     - AgentName: "strict"
       MatchKey: "a strict strategic workflow controller"
