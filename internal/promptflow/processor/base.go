@@ -3,6 +3,7 @@ package processor
 import (
 	"github.com/zgsm-ai/chat-rag/internal/functions"
 	"github.com/zgsm-ai/chat-rag/internal/logger"
+	"github.com/zgsm-ai/chat-rag/internal/model"
 	"github.com/zgsm-ai/chat-rag/internal/types"
 	"github.com/zgsm-ai/chat-rag/internal/utils"
 	"go.uber.org/zap"
@@ -53,8 +54,16 @@ func (p *PromptMsg) GetTools() []types.Function {
 
 func (p *PromptMsg) UpdateSystemMsg(content string) {
 	p.systemMsg = &types.Message{
-		Role:    types.RoleSystem,
-		Content: content,
+		Role: types.RoleSystem,
+		Content: []model.Content{
+			{
+				Type: model.ContTypeText,
+				Text: content,
+				CacheControl: map[string]interface{}{
+					"type": "ephemeral",
+				},
+			},
+		},
 	}
 }
 
