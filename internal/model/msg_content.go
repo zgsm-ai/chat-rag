@@ -44,6 +44,12 @@ func (p *Content) ExtractMsgContent(msg *types.Message) ([]Content, error) {
 	case []interface{}:
 		return p.extractFromContentList(v)
 
+	case []Content:
+		logger.Info("message content is []Content type",
+			zap.String("method", "ExtractMsgContent"),
+		)
+		return v, nil
+
 	default:
 		return nil, fmt.Errorf("unsupported content type: %T", msg.Content)
 	}

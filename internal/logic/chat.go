@@ -103,8 +103,8 @@ func (l *ChatCompletionLogic) newChatLog(startTime time.Time) *model.ChatLog {
 			MaxCompletionTokens: l.request.MaxCompletionTokens,
 			Temperature:         l.request.Temperature,
 		},
-		Tokens: model.TokenMetrics{
-			Original: model.TokenStats{
+		Tokens: types.TokenMetrics{
+			Original: types.TokenStats{
 				SystemTokens: allTokens - userTokens,
 				UserTokens:   userTokens,
 				All:          allTokens,
@@ -117,26 +117,19 @@ func (l *ChatCompletionLogic) newChatLog(startTime time.Time) *model.ChatLog {
 // updateChatLog updates the chat log with information from the processed prompt
 func (l *ChatCompletionLogic) updateChatLog(chatLog *model.ChatLog, processedPrompt *ds.ProcessedPrompt) {
 	// Update log with processed prompt info
-	chatLog.IsUserPromptCompressed = processedPrompt.IsUserPromptCompressed
 	allTokens := l.countTokensInMessages(processedPrompt.Messages)
 	userTokens := l.countTokensInMessages(utils.GetUserMsgs(processedPrompt.Messages))
 
-	chatLog.Tokens.Processed = model.TokenStats{
+	chatLog.Tokens.Processed = types.TokenStats{
 		SystemTokens: allTokens - userTokens,
 		UserTokens:   userTokens,
 		All:          allTokens,
 	}
 	// Calculate ratios after setting processed tokens
-	chatLog.Tokens.CalculateRatios()
+	chatLog.Tokens.Ratios = processedPrompt.TokenMetrics.Ratios
 
 	chatLog.ProcessedPrompt = processedPrompt.Messages
-
-	if processedPrompt.SemanticErr != nil {
-		chatLog.AddError(types.ErrSemantic, processedPrompt.SemanticErr)
-	}
-	if processedPrompt.SummaryErr != nil {
-		chatLog.AddError(types.ErrSummary, processedPrompt.SummaryErr)
-	}
+	chatLog.Agent = processedPrompt.Agent
 }
 
 func (l *ChatCompletionLogic) logCompletion(chatLog *model.ChatLog) {

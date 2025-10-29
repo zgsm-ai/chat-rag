@@ -82,9 +82,6 @@ func (p *RagOnlyProcessor) createProcessedPrompt(
 ) *ds.ProcessedPrompt {
 	processedMsgs := processor.SetLanguage(p.identity.Language, promptMsg.AssemblePrompt())
 	return &ds.ProcessedPrompt{
-		Messages:        processedMsgs,
-		SemanticLatency: p.semanticSearch.Latency,
-		SemanticContext: p.semanticSearch.SemanticResult,
-		SemanticErr:     p.semanticSearch.Err,
+		Messages: processedMsgs,
 	}
 }

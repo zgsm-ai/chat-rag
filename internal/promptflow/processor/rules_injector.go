@@ -2,7 +2,6 @@ package processor
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/zgsm-ai/chat-rag/internal/config"
 	"github.com/zgsm-ai/chat-rag/internal/logger"
@@ -14,18 +13,19 @@ type RulesInjector struct {
 
 	promptMode  string
 	rulesConfig *config.RulesConfig
+	agentName   string
 }
 
-func NewRulesInjector(promptMode string, rulesConfig *config.RulesConfig) *RulesInjector {
+func NewRulesInjector(promptMode string, rulesConfig *config.RulesConfig, agentName string) *RulesInjector {
 	return &RulesInjector{
 		promptMode:  promptMode,
 		rulesConfig: rulesConfig,
+		agentName:   agentName,
 	}
 }
 
 func (r *RulesInjector) Execute(promptMsg *PromptMsg) {
 	const method = "RulesInjector.Execute"
-	logger.Info("Start injecting rules into system prompt", zap.String("method", method))
 
 	if promptMsg == nil {
 		r.Err = fmt.Errorf("received prompt message is empty")
@@ -72,17 +72,11 @@ func (r *RulesInjector) Execute(promptMsg *PromptMsg) {
 
 // injectRulesIntoSystemContent injects rules based on the agent type detected in system content
 func (r *RulesInjector) injectRulesIntoSystemContent(content string) (string, error) {
-	if len(r.rulesConfig.Agents) > 0 {
-		content = content + "\n\nRules:\n"
+	if len(r.rulesConfig.Agents) == 0 {
+		return content, nil
 	}
 
-	// Extract the first paragraph content (separated by the first newline or empty line)
-	firstParagraph := content
-	if idx := strings.IndexAny(content, "\n\r"); idx != -1 {
-		firstParagraph = content[:idx]
-	}
-
-	for agentName, agentConfig := range r.rulesConfig.Agents {
+	for _, agentConfig := range r.rulesConfig.Agents {
 		// Check if current promptMode is in match_modes list
 		if len(agentConfig.MatchModes) == 0 {
 			continue // Skip this rule if match_modes is empty
@@ -99,16 +93,27 @@ func (r *RulesInjector) injectRulesIntoSystemContent(content string) (string, er
 			continue // Skip this rule if mode doesn't match
 		}
 
-		// Iterate through all match keys for each agent
-		for _, matchKey := range agentConfig.MatchKeys {
-			if strings.Contains(firstParagraph, matchKey) {
-				logger.Info("Detected agent and adding rules",
-					zap.String("agent_type", agentName),
-					zap.String("matched_key", matchKey))
-				// Add the rules to the end of the system content
-				content = content + "\n\n# Rules from " + agentName + "\n" + agentConfig.Rules
+		// Check if current agentName is in match_agents list
+		if len(agentConfig.MatchAgents) == 0 {
+			continue // Skip this rule if match_agents is empty
+		}
+
+		agentMatched := false
+		for _, agent := range agentConfig.MatchAgents {
+			if agent == r.agentName {
+				agentMatched = true
+				break
 			}
 		}
+		if !agentMatched {
+			continue // Skip this rule if agent doesn't match
+		}
+
+		// Add rules to the end of the system content
+		logger.Info("rules matchde agent and adding rules",
+			zap.String("prompt_mode", r.promptMode),
+			zap.String("matched_agent", r.agentName))
+		content = content + "\n\n====\n\nRules from " + r.agentName + "\n\n" + agentConfig.Rules
 	}
 
 	return content, nil

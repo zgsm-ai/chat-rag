@@ -1,8 +1,6 @@
 package processor
 
 import (
-	"fmt"
-
 	"github.com/zgsm-ai/chat-rag/internal/functions"
 	"github.com/zgsm-ai/chat-rag/internal/logger"
 	"github.com/zgsm-ai/chat-rag/internal/model"
@@ -56,8 +54,16 @@ func (p *PromptMsg) GetTools() []types.Function {
 
 func (p *PromptMsg) UpdateSystemMsg(content string) {
 	p.systemMsg = &types.Message{
-		Role:    types.RoleSystem,
-		Content: content,
+		Role: types.RoleSystem,
+		Content: []model.Content{
+			{
+				Type: model.ContTypeText,
+				Text: content,
+				CacheControl: map[string]interface{}{
+					"type": "ephemeral",
+				},
+			},
+		},
 	}
 }
 
@@ -66,6 +72,11 @@ func (p *PromptMsg) AssemblePrompt() []types.Message {
 	messages = append(messages, p.olderUserMsgList...)
 	messages = append(messages, *p.lastUserMsg)
 	return messages
+}
+
+// GetSystemMsg returns the system message
+func (p *PromptMsg) GetSystemMsg() *types.Message {
+	return p.systemMsg
 }
 
 // Processor is an interface for processing a prompt message
@@ -141,15 +152,5 @@ func (b *BaseProcessor) passToNext(promptMsg *PromptMsg) {
 
 // extractSystemContent extracts content from system message
 func (b *BaseProcessor) extractSystemContent(systemMsg *types.Message) (string, error) {
-	var content model.Content
-	contents, err := content.ExtractMsgContent(systemMsg)
-	if err != nil {
-		return "", fmt.Errorf("failed to extract message content: %w", err)
-	}
-
-	if len(contents) != 1 {
-		return "", fmt.Errorf("expected one system content, got %d", len(contents))
-	}
-
-	return contents[0].Text, nil
+	return utils.ExtractSystemContent(systemMsg)
 }

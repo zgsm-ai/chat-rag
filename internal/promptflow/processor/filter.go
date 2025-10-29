@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/zgsm-ai/chat-rag/internal/config"
 	"github.com/zgsm-ai/chat-rag/internal/logger"
+	"github.com/zgsm-ai/chat-rag/internal/tokenizer"
 	"github.com/zgsm-ai/chat-rag/internal/types"
 	"github.com/zgsm-ai/chat-rag/internal/utils"
 	"go.uber.org/zap"
@@ -13,18 +15,28 @@ import (
 type UserMsgFilter struct {
 	BaseProcessor
 
-	enableEnvDetailsFilter bool
+	preciseContextConfig *config.PreciseContextConfig
+	promptMode           string
+	agentName            string
+	tokenCounter         *tokenizer.TokenCounter
+	TokenMetrics         types.TokenMetrics
 }
 
-func NewUserMsgFilter(enableEnvDetailsFilter bool) *UserMsgFilter {
+func NewUserMsgFilter(
+	preciseContextConfig *config.PreciseContextConfig,
+	promptMode, agentName string,
+	tokenCounter *tokenizer.TokenCounter,
+) *UserMsgFilter {
 	return &UserMsgFilter{
-		enableEnvDetailsFilter: enableEnvDetailsFilter,
+		preciseContextConfig: preciseContextConfig,
+		promptMode:           promptMode,
+		agentName:            agentName,
+		tokenCounter:         tokenCounter,
 	}
 }
 
 func (u *UserMsgFilter) Execute(promptMsg *PromptMsg) {
 	const method = "UserMsgFilter.Execute"
-	logger.Info("Start user message filter to prompts", zap.String("method", method))
 
 	if promptMsg == nil {
 		u.Err = fmt.Errorf("received prompt message is empty")
@@ -32,24 +44,30 @@ func (u *UserMsgFilter) Execute(promptMsg *PromptMsg) {
 		return
 	}
 
-	// Skip processing if there are no older messages
-	if len(promptMsg.olderUserMsgList) == 0 {
-		logger.Debug("No older user messages to filter", zap.String("method", method))
-		u.passToNext(promptMsg)
-		return
-	}
+	// Calculate original token counts before filtering
+	u.calculateTokenStats(promptMsg, true)
 
-	originalCount := len(promptMsg.olderUserMsgList)
 	u.filterDuplicateMessages(promptMsg)
-	u.filterAssistantToolPatterns(promptMsg)
-	if u.enableEnvDetailsFilter {
-		u.filterEnvironmentDetails(promptMsg)
-	}
 
-	removedCount := originalCount - len(promptMsg.olderUserMsgList)
-	logger.Info("User message filter completed",
-		zap.Int("removed duplicate content count", removedCount),
-		zap.String("method", method))
+	u.filterAssistantToolPatterns(promptMsg)
+
+	u.filterEnvironmentDetails(promptMsg)
+
+	u.filterModesChangeContent(promptMsg)
+
+	// Calculate processed token counts after filtering
+	u.calculateTokenStats(promptMsg, false)
+
+	// Calculate ratios and log metrics
+	if u.tokenCounter != nil {
+		u.TokenMetrics.CalculateRatios()
+
+		logger.Info("Token metrics calculated",
+			zap.Int("original_tokens", u.TokenMetrics.Original.All),
+			zap.Int("processed_tokens", u.TokenMetrics.Processed.All),
+			zap.Float64("token_ratio", u.TokenMetrics.Ratios.AllRatio),
+			zap.String("method", method))
+	}
 
 	u.Handled = true
 	u.passToNext(promptMsg)
@@ -57,6 +75,14 @@ func (u *UserMsgFilter) Execute(promptMsg *PromptMsg) {
 
 // filterDuplicateMessages removes duplicate string content messages, keeping the last occurrence
 func (u *UserMsgFilter) filterDuplicateMessages(promptMsg *PromptMsg) {
+	const method = "UserMsgFilter.filterDuplicateMessages"
+
+	// Skip processing if there are no older messages
+	if len(promptMsg.olderUserMsgList) == 0 {
+		return
+	}
+
+	originalCount := len(promptMsg.olderUserMsgList)
 	seenContents := make(map[string]struct{})
 	filteredMessages := make([]types.Message, 0, len(promptMsg.olderUserMsgList))
 
@@ -87,6 +113,11 @@ func (u *UserMsgFilter) filterDuplicateMessages(promptMsg *PromptMsg) {
 	}
 
 	promptMsg.olderUserMsgList = filteredMessages
+
+	removedCount := originalCount - len(promptMsg.olderUserMsgList)
+	logger.Info("removed duplicate content count",
+		zap.Int("removedCount", removedCount),
+		zap.String("method", method))
 }
 
 // TODO this func will be removed when client apapted tool status dispply
@@ -164,6 +195,12 @@ func (u *UserMsgFilter) filterEnvironmentDetails(promptMsg *PromptMsg) {
 	const method = "UserMsgFilter.filterEnvironmentDetails"
 	const environment_details = "<environment_details>"
 
+	// Check if environment details filter is enabled
+	if !u.preciseContextConfig.EnableEnvDetailsFilter {
+		logger.Info("environment details filter is disabled, skipping", zap.String("method", method))
+		return
+	}
+
 	removedCount := 0
 	environmentDetailsCount := 0
 
@@ -216,4 +253,112 @@ func (u *UserMsgFilter) filterEnvironmentDetails(promptMsg *PromptMsg) {
 	logger.Info("[environment details] filtering completed",
 		zap.Int("removed_count", removedCount),
 		zap.String("method", method))
+}
+
+// filterModesChangeContent removes ModesChange related content from system message
+// based on DisabledModesChangeAgents configuration
+func (u *UserMsgFilter) filterModesChangeContent(promptMsg *PromptMsg) {
+	const method = "UserMsgFilter.filterModesChangeContent"
+
+	// Check if DisabledModesChangeAgents is configured
+	if u.preciseContextConfig.DisabledModesChangeAgents == nil {
+		return
+	}
+
+	// Check if current prompt mode is in the disabled configuration
+	agents, exists := u.preciseContextConfig.DisabledModesChangeAgents[u.promptMode]
+	if !exists {
+		return
+	}
+
+	// Check if current agent is in the disabled list for this mode
+	shouldFilter := false
+	for _, agent := range agents {
+		if agent == u.agentName {
+			shouldFilter = true
+			break
+		}
+	}
+
+	if !shouldFilter {
+		return
+	}
+
+	// Filter ModesChange content from system message
+	if promptMsg.systemMsg == nil {
+		return
+	}
+
+	systemContent, err := u.extractSystemContent(promptMsg.systemMsg)
+	if err != nil {
+		logger.Warn("Failed to extract system message content for ModesChange filtering",
+			zap.String("method", method),
+			zap.Error(err))
+		return
+	}
+
+	// Remove content sections using helper function
+	result := systemContent
+	result = u.removeContentSection(result, "## switch_mode", "\n##", "switch_mode", method)
+	result = u.removeContentSection(result, "====\n\nMODES", "\n====", "modes_desc", method)
+
+	// Update system message content
+	promptMsg.UpdateSystemMsg(result)
+}
+
+// removeContentSection removes a section of content between startPattern and endPattern
+// Returns the modified content string
+func (u *UserMsgFilter) removeContentSection(content, startPattern, endPattern, sectionName, method string) string {
+	startIndex := strings.Index(content, startPattern)
+	if startIndex == -1 {
+		return content
+	}
+
+	// Find the end of the section
+	endIndex := strings.Index(content[startIndex:], endPattern)
+	if endIndex == -1 {
+		return content
+	}
+
+	endIndex += startIndex // Adjust to original string index
+
+	// Remove the section
+	result := content[:startIndex] + content[endIndex:]
+	logger.Info(fmt.Sprintf("removed %s content from system message", sectionName),
+		zap.String("prompt_mode", u.promptMode),
+		zap.String("agent", u.agentName),
+		zap.String("method", method))
+
+	return result
+}
+
+// calculateTokenStats calculates token statistics for the given prompt message
+// isOriginal indicates whether to calculate for original (true) or processed (false) state
+func (u *UserMsgFilter) calculateTokenStats(promptMsg *PromptMsg, isOriginal bool) {
+	if u.tokenCounter == nil {
+		return
+	}
+
+	// Count tokens for older user messages
+	userTokens := u.tokenCounter.CountMessagesTokens(promptMsg.olderUserMsgList)
+
+	// Count tokens for system message if exists
+	systemTokens := 0
+	if promptMsg.systemMsg != nil {
+		systemTokens = u.tokenCounter.CountOneMessageTokens(*promptMsg.systemMsg)
+	}
+
+	// Create token stats
+	tokenStats := types.TokenStats{
+		SystemTokens: systemTokens,
+		UserTokens:   userTokens,
+		All:          systemTokens + userTokens,
+	}
+
+	// Set to appropriate field based on isOriginal flag
+	if isOriginal {
+		u.TokenMetrics.Original = tokenStats
+	} else {
+		u.TokenMetrics.Processed = tokenStats
+	}
 }

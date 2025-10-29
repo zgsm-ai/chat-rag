@@ -5,7 +5,6 @@ Port: 8888
 # Logging configuration
 Log:
   LogFilePath: "logs/"
-  LokiEndpoint: "http://localhost:3100/loki/api/v1/push"
   LogScanIntervalSec: 10
   EnableClassification: false
   ClassifyModel: "gpt-oss-120b"
@@ -20,6 +19,34 @@ ContextCompressConfig:
 
 PreciseContextConfig:
   EnableEnvDetailsFilter: true
+  # Control which agents in which modes cannot use ModesChange
+  DisabledModesChangeAgents:
+    strict:
+      - "strict"
+      - "requirements"
+      - "architect"
+      - "task"
+      - "review"
+    vibe:
+      - "review"
+
+  AgentsMatch:
+    - AgentName: "strict"
+      MatchKey: "a strict strategic workflow controller"
+    - AgentName: "requirements"
+      MatchKey: "an experienced requirements analyst specializing"
+    - AgentName: "code"
+      MatchKey: "a highly skilled software engineer"
+    - AgentName: "architect"
+      MatchKey: "an experienced technical leader"
+    - AgentName: "task"
+      MatchKey: "a project manager specializing in task decomposition"
+    - AgentName: "test"
+      MatchKey: "a professional testing engineer"
+    - AgentName: "testguide"
+      MatchKey: "a senior architect and testing expert"
+    - AgentName: "review"
+      MatchKey: "a code review expert skilled at analyzing issues"
 
 # Department configuration
 DepartmentApiEndpoint: "http://localhost:1234/work_id?work_id="
@@ -29,16 +56,18 @@ LLM:
   # Endpoint: "https://zgsm.sangfor.com/chat-rag/api/v1/chat/completions"
   Endpoint: "http://127.0.0.1:30616/v1/chat/completions"
   # Endpoint: "http://127.0.0.1:32325/model/glm-4.5-fp8/v1/chat/completions"
-  FuncCallingModels:
-    - "deepseek-v3"
-    - "qwen3*"
-    - "claude*"
 
 Redis:
   Addr: "127.0.0.1:6379"
 
 # Semantic API configuration
 Tools:
+  # Control which agents in which modes cannot use tools
+  DisabledAgents:
+    strict:
+      - "strict"
+      - "task"
+
   SemanticSearch:
     SearchEndpoint: "http://123.58.64.57:30080/codebase-embedder/api/v1/search/semantic"
     ApiReadyEndpoint: "http://123.58.64.57:30080/codebase-embedder/api/v1/embeddings/summary"

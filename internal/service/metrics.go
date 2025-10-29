@@ -4,6 +4,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/zgsm-ai/chat-rag/internal/logger"
 	"github.com/zgsm-ai/chat-rag/internal/model"
+	"github.com/zgsm-ai/chat-rag/internal/types"
 	"go.uber.org/zap"
 )
 
@@ -208,7 +209,7 @@ func (ms *MetricsService) recordTokenMetrics(log *model.ChatLog, labels promethe
 }
 
 // recordTokenCount records token count
-func (ms *MetricsService) recordTokenCount(metric *prometheus.CounterVec, tokens model.TokenStats, labels prometheus.Labels) {
+func (ms *MetricsService) recordTokenCount(metric *prometheus.CounterVec, tokens types.TokenStats, labels prometheus.Labels) {
 	record := func(scope string, count int) {
 		if count < 0 {
 			logger.Warn("WARNING: negative token count",

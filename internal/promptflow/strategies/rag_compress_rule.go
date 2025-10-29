@@ -13,7 +13,6 @@ import (
 type RagWithRuleProcessor struct {
 	RagCompressProcessor
 
-	promptMode   string
 	rulesConfig  *config.RulesConfig
 	ruleInjector *processor.RulesInjector
 }
@@ -27,7 +26,7 @@ func NewRagWithRuleProcessor(
 	modelName string,
 	promoptMode string,
 ) (*RagWithRuleProcessor, error) {
-	ragCompressProcessor, err := NewRagCompressProcessor(ctx, svcCtx, headers, identity, modelName)
+	ragCompressProcessor, err := NewRagCompressProcessor(ctx, svcCtx, headers, identity, modelName, promoptMode)
 	if err != nil {
 		return nil, err
 	}
@@ -37,10 +36,6 @@ func NewRagWithRuleProcessor(
 		rulesConfig:          svcCtx.RulesConfig,
 	}
 
-	if promoptMode == "" {
-		promoptMode = "default"
-	}
-	processor.promptMode = promoptMode
 	processor.chainBuilder = processor
 
 	return processor, nil
@@ -48,22 +43,19 @@ func NewRagWithRuleProcessor(
 
 // buildProcessorChain constructs and connects the processor chain
 func (r *RagWithRuleProcessor) buildProcessorChain() error {
-	r.userMsgFilter = processor.NewUserMsgFilter(r.config.PreciseContextConfig.EnableEnvDetailsFilter)
-	r.xmlToolAdapter = processor.NewXmlToolAdapter(r.ctx, r.toolsExecutor)
-	r.ruleInjector = processor.NewRulesInjector(r.promptMode, r.rulesConfig)
-	r.userCompressor = processor.NewUserCompressor(
-		r.ctx,
-		r.config,
-		r.llmClient,
-		r.tokenCounter,
-	)
+	// First build the parent chain
+	err := r.RagCompressProcessor.buildProcessorChain()
+	if err != nil {
+		return err
+	}
 
-	// build chain
-	r.start.SetNext(r.ruleInjector)
-	r.ruleInjector.SetNext(r.userMsgFilter)
-	r.userMsgFilter.SetNext(r.xmlToolAdapter)
-	r.xmlToolAdapter.SetNext(r.userCompressor)
-	r.userCompressor.SetNext(r.end)
+	// Create rule injector
+	r.ruleInjector = processor.NewRulesInjector(r.promptMode, r.rulesConfig, r.agentName)
+
+	// Rebuild chain with rule injector inserted at the beginning
+	r.xmlToolAdapter.SetNext(r.ruleInjector)
+	r.ruleInjector.SetNext(r.end)
+	// The rest of the chain remains the same as in parent
 
 	return nil
 }
