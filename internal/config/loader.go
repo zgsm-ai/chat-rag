@@ -35,6 +35,31 @@ func MustLoadConfig(configPath string) Config {
 		panic("Failed to load config: " + err.Error())
 	}
 
+	// Apply defaults: if fallbackModelName not set, use the first candidate
+	if c != nil && c.Router.Semantic.Routing.FallbackModelName == "" {
+		if len(c.Router.Semantic.Routing.Candidates) > 0 {
+			c.Router.Semantic.Routing.FallbackModelName = c.Router.Semantic.Routing.Candidates[0].ModelName
+		}
+	}
+
+	// Align rule engine prefix defaults with original plugin logic
+	if c != nil {
+		if c.Router.Semantic.RuleEngine.BodyPrefix == "" {
+			c.Router.Semantic.RuleEngine.BodyPrefix = "body."
+		}
+		if c.Router.Semantic.RuleEngine.HeaderPrefix == "" {
+			c.Router.Semantic.RuleEngine.HeaderPrefix = "header."
+		}
+	}
+
+	// Align stripCodeFences default behavior with plugin:
+	// default to true when the key is not explicitly set in YAML
+	if c != nil {
+		if !viper.IsSet("router.semantic.inputExtraction.stripCodeFences") {
+			c.Router.Semantic.InputExtraction.StripCodeFences = true
+		}
+	}
+
 	logger.Info("loaded config", zap.Any("config", c))
 	return *c
 }

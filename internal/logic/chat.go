@@ -2,6 +2,7 @@ package logic
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -17,6 +18,7 @@ import (
 	"github.com/zgsm-ai/chat-rag/internal/model"
 	"github.com/zgsm-ai/chat-rag/internal/promptflow"
 	"github.com/zgsm-ai/chat-rag/internal/promptflow/ds"
+	"github.com/zgsm-ai/chat-rag/internal/router"
 	"github.com/zgsm-ai/chat-rag/internal/tokenizer"
 	"github.com/zgsm-ai/chat-rag/internal/types"
 	"github.com/zgsm-ai/chat-rag/internal/utils"
@@ -141,6 +143,28 @@ func (l *ChatCompletionLogic) logCompletion(chatLog *model.ChatLog) {
 
 // ChatCompletion handles chat completion requests
 func (l *ChatCompletionLogic) ChatCompletion() (resp *types.ChatCompletionResponse, err error) {
+	// Router: select model before prompt processing & LLM client creation
+	if l.svcCtx.Config.Router.Enabled && strings.EqualFold(l.request.Model, "auto") {
+		if runner := router.NewRunner(l.svcCtx.Config.Router); runner != nil {
+			selected, current, rerr := runner.Run(l.ctx, l.svcCtx, l.headers, l.request)
+			if rerr == nil && selected != "" {
+				l.request.Model = selected
+				if l.writer != nil {
+					l.writer.Header().Set(types.HeaderSelectLLm, selected)
+					if current != "" {
+						safe := sanitizeHeaderValue(current)
+						if safe != "" {
+							encodedCur := base64.StdEncoding.EncodeToString([]byte(safe))
+							if encodedCur != "" {
+								l.writer.Header().Set(types.HeaderUserInput, encodedCur)
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
 	chatLog, processedPrompt, err := l.processRequest()
 
 	defer l.logCompletion(chatLog)
@@ -187,6 +211,28 @@ func (l *ChatCompletionLogic) ChatCompletion() (resp *types.ChatCompletionRespon
 
 // ChatCompletionStream handles streaming chat completion with SSE
 func (l *ChatCompletionLogic) ChatCompletionStream() error {
+	// Router: select model before streaming LLM client creation
+	if l.svcCtx.Config.Router.Enabled && strings.EqualFold(l.request.Model, "auto") {
+		if runner := router.NewRunner(l.svcCtx.Config.Router); runner != nil {
+			selected, current, rerr := runner.Run(l.ctx, l.svcCtx, l.headers, l.request)
+			if rerr == nil && selected != "" {
+				l.request.Model = selected
+				if l.writer != nil {
+					l.writer.Header().Set(types.HeaderSelectLLm, selected)
+					if current != "" {
+						safe := sanitizeHeaderValue(current)
+						if safe != "" {
+							encodedCur := base64.StdEncoding.EncodeToString([]byte(safe))
+							if encodedCur != "" {
+								l.writer.Header().Set(types.HeaderUserInput, encodedCur)
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
 	chatLog, processedPrompt, err := l.processRequest()
 
 	defer l.logCompletion(chatLog)
@@ -716,6 +762,29 @@ func (l *ChatCompletionLogic) handleRawModeStream(
 		zap.Int64("modelLatency", chatLog.Latency.MainModelLatency))
 
 	return nil
+}
+
+// sanitizeHeaderValue removes CR/LF and control characters from header values and trims length.
+// This mirrors the plugin behavior to prevent header injection/breakages.
+func sanitizeHeaderValue(val string) string {
+	if strings.TrimSpace(val) == "" {
+		return ""
+	}
+	// remove CR/LF and other CTLs
+	runes := make([]rune, 0, len(val))
+	for _, r := range val {
+		if r == '\r' || r == '\n' || r == 0x7f || r < 0x20 {
+			continue
+		}
+		runes = append(runes, r)
+	}
+	out := strings.TrimSpace(string(runes))
+	// limit length to avoid very long headers
+	const maxLen = 128
+	if len(out) > maxLen {
+		out = out[:maxLen]
+	}
+	return out
 }
 
 func (l *ChatCompletionLogic) countTokensInMessages(messages []types.Message) int {

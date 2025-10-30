@@ -107,6 +107,76 @@ type Config struct {
 	Redis RedisConfig
 
 	LLM LLMConfig
+
+	// Router configuration
+	Router RouterConfig `mapstructure:"router" yaml:"router"`
+}
+
+// RouterConfig holds router related configuration
+type RouterConfig struct {
+	Enabled  bool           `mapstructure:"enabled" yaml:"enabled"`
+	Strategy string         `mapstructure:"strategy" yaml:"strategy"`
+	Semantic SemanticConfig `mapstructure:"semantic" yaml:"semantic"`
+}
+
+// SemanticConfig holds semantic router strategy configuration
+type SemanticConfig struct {
+	Analyzer        AnalyzerConfig        `mapstructure:"analyzer" yaml:"analyzer"`
+	InputExtraction InputExtractionConfig `mapstructure:"inputExtraction" yaml:"inputExtraction"`
+	Routing         RoutingConfig         `mapstructure:"routing" yaml:"routing"`
+	RuleEngine      RuleEngineConfig      `mapstructure:"ruleEngine" yaml:"ruleEngine"`
+}
+
+// AnalyzerConfig only keeps model and timeoutMs per requirements
+type AnalyzerConfig struct {
+	Model          string `mapstructure:"model" yaml:"model"`
+	TimeoutMs      int    `mapstructure:"timeoutMs" yaml:"timeoutMs"`
+	TotalTimeoutMs int    `mapstructure:"totalTimeoutMs" yaml:"totalTimeoutMs"`
+	MaxInputBytes  int    `mapstructure:"maxInputBytes" yaml:"maxInputBytes"`
+	// Optional fields; ignored if empty
+	PromptTemplate string               `mapstructure:"promptTemplate" yaml:"promptTemplate"`
+	AnalysisLabels []string             `mapstructure:"analysisLabels" yaml:"analysisLabels"`
+	DynamicMetrics DynamicMetricsConfig `mapstructure:"dynamicMetrics" yaml:"dynamicMetrics"`
+}
+
+// InputExtractionConfig controls how to extract input and history
+type InputExtractionConfig struct {
+	Protocol        string `mapstructure:"protocol" yaml:"protocol"`
+	UserJoinSep     string `mapstructure:"userJoinSep" yaml:"userJoinSep"`
+	StripCodeFences bool   `mapstructure:"stripCodeFences" yaml:"stripCodeFences"`
+	CodeFenceRegex  string `mapstructure:"codeFenceRegex" yaml:"codeFenceRegex"`
+	MaxUserMessages int    `mapstructure:"maxUserMessages" yaml:"maxUserMessages"`
+	MaxHistoryBytes int    `mapstructure:"maxHistoryBytes" yaml:"maxHistoryBytes"`
+}
+
+// RoutingConfig holds candidate model routing configuration
+type RoutingConfig struct {
+	Candidates        []RoutingCandidate `mapstructure:"candidates" yaml:"candidates"`
+	MinScore          int                `mapstructure:"minScore" yaml:"minScore"`
+	TieBreakOrder     []string           `mapstructure:"tieBreakOrder" yaml:"tieBreakOrder"`
+	FallbackModelName string             `mapstructure:"fallbackModelName" yaml:"fallbackModelName"`
+}
+
+// RoutingCandidate defines a candidate model and its scores
+type RoutingCandidate struct {
+	ModelName string         `mapstructure:"modelName" yaml:"modelName"`
+	Enabled   bool           `mapstructure:"enabled" yaml:"enabled"`
+	Scores    map[string]int `mapstructure:"scores" yaml:"scores"`
+}
+
+// RuleEngineConfig is optional and configurable
+type RuleEngineConfig struct {
+	Enabled      bool     `mapstructure:"enabled" yaml:"enabled"`
+	InlineRules  []string `mapstructure:"inlineRules" yaml:"inlineRules"`
+	BodyPrefix   string   `mapstructure:"bodyPrefix" yaml:"bodyPrefix"`
+	HeaderPrefix string   `mapstructure:"headerPrefix" yaml:"headerPrefix"`
+}
+
+// DynamicMetricsConfig controls dynamic metrics loading for candidate filtering
+type DynamicMetricsConfig struct {
+	Enabled     bool     `mapstructure:"enabled" yaml:"enabled"`
+	RedisPrefix string   `mapstructure:"redisPrefix" yaml:"redisPrefix"`
+	Metrics     []string `mapstructure:"metrics" yaml:"metrics"`
 }
 
 // AgentConfig holds configuration for a specific agent
