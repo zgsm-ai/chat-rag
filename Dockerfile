@@ -11,6 +11,8 @@ WORKDIR /app
 # Copy go module files
 COPY go.mod go.sum ./
 
+ARG GOPROXY
+ENV GOPROXY=${GOPROXY}
 # Download dependencies
 RUN go mod download
 
