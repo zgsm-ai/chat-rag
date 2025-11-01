@@ -146,6 +146,7 @@ func (l *ChatCompletionLogic) logCompletion(chatLog *model.ChatLog) {
 // ChatCompletion handles chat completion requests
 func (l *ChatCompletionLogic) ChatCompletion() (resp *types.ChatCompletionResponse, err error) {
 	// Router: select model before prompt processing & LLM client creation
+	origModel := l.request.Model
 	if l.svcCtx.Config.Router.Enabled && strings.EqualFold(l.request.Model, "auto") {
 		logger.InfoC(l.ctx, "semantic router: auto mode routing start",
 			zap.String("strategy", l.svcCtx.Config.Router.Strategy),
@@ -155,6 +156,10 @@ func (l *ChatCompletionLogic) ChatCompletion() (resp *types.ChatCompletionRespon
 			if rerr == nil && selected != "" {
 				l.request.Model = selected
 				l.orderedModels = ordered
+				// mark original model via request header for upstream
+				if l.headers != nil && strings.EqualFold(origModel, "auto") {
+					l.headers.Set(types.HeaderOriginalModel, "Auto")
+				}
 				if l.writer != nil {
 					l.writer.Header().Set(types.HeaderSelectLLm, selected)
 					if current != "" {
@@ -234,6 +239,7 @@ func (l *ChatCompletionLogic) ChatCompletion() (resp *types.ChatCompletionRespon
 // ChatCompletionStream handles streaming chat completion with SSE
 func (l *ChatCompletionLogic) ChatCompletionStream() error {
 	// Router: select model before streaming LLM client creation
+	origModel := l.request.Model
 	if l.svcCtx.Config.Router.Enabled && strings.EqualFold(l.request.Model, "auto") {
 		logger.InfoC(l.ctx, "semantic router: auto mode routing start",
 			zap.String("strategy", l.svcCtx.Config.Router.Strategy),
@@ -243,6 +249,10 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 			if rerr == nil && selected != "" {
 				l.request.Model = selected
 				l.orderedModels = ordered
+				// mark original model via request header for upstream
+				if l.headers != nil && strings.EqualFold(origModel, "auto") {
+					l.headers.Set(types.HeaderOriginalModel, "Auto")
+				}
 				if l.writer != nil {
 					l.writer.Header().Set(types.HeaderSelectLLm, selected)
 					if current != "" {
@@ -282,11 +292,25 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 		return fmt.Errorf("streaming not supported")
 	}
 
-	// Streaming degradation: only switch model if failure occurs before first token
-	models := l.orderedModels
-	if len(models) == 0 {
-		models = []string{l.request.Model}
+	// Streaming degradation only for auto mode (when orderedModels is present)
+	if len(l.orderedModels) == 0 {
+		// No degradation list → single model streaming (non-auto path)
+		llmClient, err := client.NewLLMClient(l.svcCtx.Config.LLM, l.request.Model, l.headers)
+		if err != nil {
+			l.responseHandler.sendSSEError(l.writer, err)
+			chatLog.AddError(types.ErrServerError, err)
+			return fmt.Errorf("LLM client creation failed: %w", err)
+		}
+		llmClient.SetTools(processedPrompt.Tools)
+		logger.InfoC(l.ctx, "Start to handle streaming response ...", zap.String("model", l.request.Model))
+		if err := l.handleStreamingWithTools(llmClient, flusher, chatLog, MaxToolCallDepth); err != nil {
+			return l.handleStreamError(err, chatLog)
+		}
+		return nil
 	}
+
+	// Degradation enabled (auto mode): only switch model if failure occurs before first token
+	models := l.orderedModels
 	deadline := time.Now().Add(30 * time.Second)
 	var lastErr error
 	for _, modelName := range models {
@@ -468,7 +492,7 @@ func (l *ChatCompletionLogic) handleStreamChunk(
 	if state.firstToken && content != "[DONE]" {
 		// Mark streaming committed and set selected model header
 		l.streamCommitted = true
-		if l.writer != nil {
+		if l.writer != nil && len(l.orderedModels) > 0 {
 			l.writer.Header().Set(types.HeaderSelectLLm, l.request.Model)
 		}
 		firstTokenLatency := time.Since(state.modelStart)
