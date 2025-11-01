@@ -37,15 +37,17 @@ func (s *Strategy) Run(
 	svcCtx *bootstrap.ServiceContext,
 	headers *http.Header,
 	req *types.ChatCompletionRequest,
-) (string, string, error) {
+) (string, string, []string, error) {
 	if req == nil || len(req.Messages) == 0 {
-		return "", "", nil
+		return "", "", nil, nil
 	}
 
 	// Only trigger when request model is Auto
 	if !strings.EqualFold(req.Model, "auto") {
-		return "", "", nil
+		return "", "", nil, nil
 	}
+
+	start := time.Now()
 
 	// 1) Extract inputs first (will also apply head-only truncation inside)
 	current, history := s.extractInputs(req)
@@ -55,7 +57,7 @@ func (s *Strategy) Run(
 	if s.cfg.RuleEngine.Enabled && len(s.cfg.RuleEngine.InlineRules) > 0 {
 		filtered, forcedFallback := s.applyRuleEngine(ctx, svcCtx, headers, req, cands)
 		if forcedFallback {
-			return s.selectFallback(req), current, nil
+			return s.selectFallback(req), current, s.orderCandidatesByLabel("", req.Model, cands), nil
 		}
 		if len(filtered) > 0 {
 			cands = filtered
@@ -64,6 +66,9 @@ func (s *Strategy) Run(
 
 	// 3) Build prompt for analyzer
 	prompt := s.buildPrompt(current, history)
+	logger.InfoC(ctx, "semantic router: analyzer prompt",
+		zap.String("prompt", prompt),
+	)
 
 	// Analyzer timeout and total timeout with retry
 	perTimeout := time.Duration(s.cfg.Analyzer.TimeoutMs) * time.Millisecond
@@ -78,18 +83,30 @@ func (s *Strategy) Run(
 
 	llmClient, err := client.NewLLMClient(svcCtx.Config.LLM, s.cfg.Analyzer.Model, headers)
 	if err != nil {
-		logger.WarnC(ctx, "semantic router: failed to create analyzer client", zap.Error(err))
-		return s.selectFallback(req), current, nil
+		logger.WarnC(ctx, "semantic router: fallback used",
+			zap.String("reason", "analyzer_client_error"),
+			zap.Error(err),
+			zap.String("selected_model", s.selectFallback(req)),
+		)
+		return s.selectFallback(req), current, s.orderCandidatesByLabel("", req.Model, cands), nil
 	}
 
 	retries := 0
 	for {
 		remaining := time.Until(deadline)
 		if remaining <= 0 {
-			logger.WarnC(ctx, "semantic router: total timeout reached before analyzer call")
-			return s.selectFallback(req), current, nil
+			logger.WarnC(ctx, "semantic router: fallback used",
+				zap.String("reason", "total_timeout"),
+				zap.String("selected_model", s.selectFallback(req)),
+			)
+			return s.selectFallback(req), current, s.orderCandidatesByLabel("", req.Model, cands), nil
 		}
 		actx, cancel := context.WithTimeout(ctx, minDuration(perTimeout, remaining))
+		logger.InfoC(ctx, "semantic router: analyzer request start",
+			zap.String("model", s.cfg.Analyzer.Model),
+			zap.Int("timeout_ms", int(minDuration(perTimeout, remaining).Milliseconds())),
+		)
+		attemptStart := time.Now()
 		r, err := llmClient.ChatLLMWithMessagesRaw(actx, types.LLMRequestParams{Messages: []types.Message{{Role: types.RoleUser, Content: prompt}}})
 		cancel()
 		if err != nil {
@@ -99,8 +116,12 @@ func (s *Strategy) Run(
 				logger.WarnC(ctx, "semantic router: analyzer retry due to error", zap.Error(err), zap.Int("retry", retries))
 				continue
 			}
-			logger.WarnC(ctx, "semantic router: analyzer error, using fallback", zap.Error(err))
-			return s.selectFallback(req), current, nil
+			logger.WarnC(ctx, "semantic router: fallback used",
+				zap.String("reason", "analyzer_error"),
+				zap.Error(err),
+				zap.String("selected_model", s.selectFallback(req)),
+			)
+			return s.selectFallback(req), current, s.orderCandidatesByLabel("", req.Model, cands), nil
 		}
 
 		// success response, parse label
@@ -109,6 +130,10 @@ func (s *Strategy) Run(
 			text = utils.GetContentAsString(r.Choices[0].Message.Content)
 		}
 		label := s.parseLabel(text)
+		logger.InfoC(ctx, "semantic router: analyzer response",
+			zap.String("label", label),
+			zap.Int64("analyzer_latency_ms", time.Since(attemptStart).Milliseconds()),
+		)
 		if label == "" {
 			// retry on empty/unknown label up to 3 times total
 			if retries < 3 {
@@ -116,13 +141,110 @@ func (s *Strategy) Run(
 				logger.WarnC(ctx, "semantic router: empty label from analyzer, retrying", zap.Int("retry", retries))
 				continue
 			}
-			logger.WarnC(ctx, "semantic router: empty label after retries, using fallback")
-			return s.selectFallback(req), current, nil
+			logger.WarnC(ctx, "semantic router: fallback used",
+				zap.String("reason", "empty_label"),
+				zap.String("selected_model", s.selectFallback(req)),
+			)
+			return s.selectFallback(req), current, s.orderCandidatesByLabel("", req.Model, cands), nil
 		}
 
 		selected := s.selectByLabelFromCandidates(label, req.Model, cands)
-		return selected, current, nil
+		ordered := s.orderCandidatesByLabel(label, req.Model, cands)
+		logger.InfoC(ctx, "semantic router: selected model",
+			zap.String("label", label),
+			zap.String("selected_model", selected),
+			zap.Int("candidates", len(cands)),
+			zap.Int64("latency_ms", time.Since(start).Milliseconds()),
+		)
+		return selected, current, ordered, nil
 	}
+}
+
+// orderCandidatesByLabel returns candidate model names sorted by score(desc), tieBreakOrder, then name asc.
+// If label is empty, order by tieBreakOrder then name asc.
+// Always appends fallback model (if configured) at the end when not already included.
+func (s *Strategy) orderCandidatesByLabel(label string, orig string, candidates []config.RoutingCandidate) []string {
+	type scored struct {
+		name  string
+		score int
+	}
+	// default order: by tieBreakOrder then name
+	if label == "" {
+		names := make([]string, 0, len(candidates))
+		for _, c := range candidates {
+			names = append(names, c.ModelName)
+		}
+		if len(s.cfg.Routing.TieBreakOrder) > 0 {
+			order := indexMap(s.cfg.Routing.TieBreakOrder)
+			sort.SliceStable(names, func(i, j int) bool { return order[names[i]] < order[names[j]] })
+		} else {
+			sort.Strings(names)
+		}
+		// ensure fallback appended if not exists
+		out := dedup(names)
+		if s.cfg.Routing.FallbackModelName != "" && !contains(out, s.cfg.Routing.FallbackModelName) {
+			out = append(out, s.cfg.Routing.FallbackModelName)
+		}
+		return out
+	}
+
+	arr := make([]scored, 0, len(candidates))
+	for _, c := range candidates {
+		arr = append(arr, scored{name: c.ModelName, score: c.Scores[label]})
+	}
+	// sort by score desc
+	sort.SliceStable(arr, func(i, j int) bool { return arr[i].score > arr[j].score })
+	// group by score for tie-break
+	// apply tieBreakOrder inside same score bucket
+	if len(s.cfg.Routing.TieBreakOrder) > 0 {
+		order := indexMap(s.cfg.Routing.TieBreakOrder)
+		i := 0
+		for i < len(arr) {
+			j := i + 1
+			for j < len(arr) && arr[j].score == arr[i].score {
+				j++
+			}
+			sort.SliceStable(arr[i:j], func(a, b int) bool {
+				ai := i + a
+				bi := i + b
+				return order[arr[ai].name] < order[arr[bi].name]
+			})
+			i = j
+		}
+	}
+	// produce list
+	out := make([]string, 0, len(arr))
+	for _, s2 := range arr {
+		out = append(out, s2.name)
+	}
+	out = dedup(out)
+	// append fallback if not present
+	if s.cfg.Routing.FallbackModelName != "" && !contains(out, s.cfg.Routing.FallbackModelName) {
+		out = append(out, s.cfg.Routing.FallbackModelName)
+	}
+	return out
+}
+
+func dedup(in []string) []string {
+	seen := map[string]struct{}{}
+	out := make([]string, 0, len(in))
+	for _, v := range in {
+		if _, ok := seen[v]; ok {
+			continue
+		}
+		seen[v] = struct{}{}
+		out = append(out, v)
+	}
+	return out
+}
+
+func contains(arr []string, s string) bool {
+	for _, v := range arr {
+		if v == s {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Strategy) extractInputs(req *types.ChatCompletionRequest) (current string, history string) {
@@ -651,6 +773,10 @@ func (s *Strategy) applyRuleEngine(
 	if !s.cfg.RuleEngine.Enabled || len(s.cfg.RuleEngine.InlineRules) == 0 {
 		return cands, false
 	}
+
+	logger.InfoC(ctx, "semantic router: rule engine enabled",
+		zap.Int("rules", len(s.cfg.RuleEngine.InlineRules)),
+	)
 
 	// 1) parse inline rules (JSON strings) into ruleengine.Rule
 	rules := make([]ruleengine.Rule, 0, len(s.cfg.RuleEngine.InlineRules))

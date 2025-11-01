@@ -55,8 +55,26 @@ func MustLoadConfig(configPath string) Config {
 	// Align stripCodeFences default behavior with plugin:
 	// default to true when the key is not explicitly set in YAML
 	if c != nil {
+		// inputExtraction.protocol default
+		if c.Router.Semantic.InputExtraction.Protocol == "" {
+			c.Router.Semantic.InputExtraction.Protocol = "openai"
+		}
+		// inputExtraction.userJoinSep default
+		if c.Router.Semantic.InputExtraction.UserJoinSep == "" {
+			c.Router.Semantic.InputExtraction.UserJoinSep = "\n\n"
+		}
+		// inputExtraction.stripCodeFences default (only when key not set)
 		if !viper.IsSet("router.semantic.inputExtraction.stripCodeFences") {
 			c.Router.Semantic.InputExtraction.StripCodeFences = true
+		}
+		// inputExtraction.codeFenceRegex default is empty string (no-op) — keep if unset
+		// inputExtraction.maxUserMessages default
+		if !viper.IsSet("router.semantic.inputExtraction.maxUserMessages") || c.Router.Semantic.InputExtraction.MaxUserMessages == 0 {
+			c.Router.Semantic.InputExtraction.MaxUserMessages = 100
+		}
+		// inputExtraction.maxHistoryBytes default
+		if !viper.IsSet("router.semantic.inputExtraction.maxHistoryBytes") || c.Router.Semantic.InputExtraction.MaxHistoryBytes == 0 {
+			c.Router.Semantic.InputExtraction.MaxHistoryBytes = 4096
 		}
 	}
 

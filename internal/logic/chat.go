@@ -34,6 +34,8 @@ type ChatCompletionLogic struct {
 	responseHandler *ResponseHandler
 	toolExecutor    functions.ToolExecutor
 	usage           *types.Usage
+	orderedModels   []string
+	streamCommitted bool
 }
 
 func NewChatCompletionLogic(
@@ -145,10 +147,14 @@ func (l *ChatCompletionLogic) logCompletion(chatLog *model.ChatLog) {
 func (l *ChatCompletionLogic) ChatCompletion() (resp *types.ChatCompletionResponse, err error) {
 	// Router: select model before prompt processing & LLM client creation
 	if l.svcCtx.Config.Router.Enabled && strings.EqualFold(l.request.Model, "auto") {
+		logger.InfoC(l.ctx, "semantic router: auto mode routing start",
+			zap.String("strategy", l.svcCtx.Config.Router.Strategy),
+		)
 		if runner := router.NewRunner(l.svcCtx.Config.Router); runner != nil {
-			selected, current, rerr := runner.Run(l.ctx, l.svcCtx, l.headers, l.request)
+			selected, current, ordered, rerr := runner.Run(l.ctx, l.svcCtx, l.headers, l.request)
 			if rerr == nil && selected != "" {
 				l.request.Model = selected
+				l.orderedModels = ordered
 				if l.writer != nil {
 					l.writer.Header().Set(types.HeaderSelectLLm, selected)
 					if current != "" {
@@ -161,6 +167,10 @@ func (l *ChatCompletionLogic) ChatCompletion() (resp *types.ChatCompletionRespon
 						}
 					}
 				}
+				logger.InfoC(l.ctx, "semantic router: auto mode routing selected",
+					zap.String("selected_model", selected),
+					zap.Int("user_input_len", len([]byte(current))),
+				)
 			}
 		}
 	}
@@ -179,27 +189,39 @@ func (l *ChatCompletionLogic) ChatCompletion() (resp *types.ChatCompletionRespon
 		chatLog.IsPromptProceed = false
 	}
 
-	// Create LLM client for main model
-	llmClient, err := client.NewLLMClient(l.svcCtx.Config.LLM, l.request.Model, l.headers)
-	if err != nil {
-		chatLog.AddError(types.ErrServerError, err)
-		return nil, fmt.Errorf("failed to create LLM client: %w", err)
-	}
-
 	modelStart := time.Now()
-	// Generate completion using structured messages
-	response, err := llmClient.ChatLLMWithMessagesRaw(l.ctx, l.request.LLMRequestParams)
-	if err != nil {
-		if l.isContextLengthError(err) {
-			logger.ErrorC(l.ctx, "Input context too long, exceeded limit.", zap.Error(err))
-			lengthErr := types.NewContextTooLongError()
-			l.responseHandler.sendSSEError(l.writer, lengthErr)
-			chatLog.AddError(types.ErrContextExceeded, lengthErr)
-			return nil, lengthErr
+	var response types.ChatCompletionResponse
+	// Smart degradation when ordered models are available
+	if len(l.orderedModels) > 0 {
+		logger.InfoC(l.ctx, "degradation: attempting ordered models",
+			zap.Strings("ordered", l.orderedModels),
+		)
+		resp, derr := l.callWithDegradation(l.request.LLMRequestParams)
+		if derr != nil {
+			chatLog.AddError(types.ErrApiError, derr)
+			return nil, derr
 		}
-
-		chatLog.AddError(types.ErrApiError, err)
-		return nil, err
+		response = resp
+	} else {
+		// Fallback to single attempt
+		llmClient, err := client.NewLLMClient(l.svcCtx.Config.LLM, l.request.Model, l.headers)
+		if err != nil {
+			chatLog.AddError(types.ErrServerError, err)
+			return nil, fmt.Errorf("failed to create LLM client: %w", err)
+		}
+		var err2 error
+		response, err2 = llmClient.ChatLLMWithMessagesRaw(l.ctx, l.request.LLMRequestParams)
+		if err2 != nil {
+			if l.isContextLengthError(err2) {
+				logger.ErrorC(l.ctx, "Input context too long, exceeded limit.", zap.Error(err2))
+				lengthErr := types.NewContextTooLongError()
+				l.responseHandler.sendSSEError(l.writer, lengthErr)
+				chatLog.AddError(types.ErrContextExceeded, lengthErr)
+				return nil, lengthErr
+			}
+			chatLog.AddError(types.ErrApiError, err2)
+			return nil, err2
+		}
 	}
 
 	chatLog.Latency.MainModelLatency = time.Since(modelStart).Milliseconds()
@@ -213,10 +235,14 @@ func (l *ChatCompletionLogic) ChatCompletion() (resp *types.ChatCompletionRespon
 func (l *ChatCompletionLogic) ChatCompletionStream() error {
 	// Router: select model before streaming LLM client creation
 	if l.svcCtx.Config.Router.Enabled && strings.EqualFold(l.request.Model, "auto") {
+		logger.InfoC(l.ctx, "semantic router: auto mode routing start",
+			zap.String("strategy", l.svcCtx.Config.Router.Strategy),
+		)
 		if runner := router.NewRunner(l.svcCtx.Config.Router); runner != nil {
-			selected, current, rerr := runner.Run(l.ctx, l.svcCtx, l.headers, l.request)
+			selected, current, ordered, rerr := runner.Run(l.ctx, l.svcCtx, l.headers, l.request)
 			if rerr == nil && selected != "" {
 				l.request.Model = selected
+				l.orderedModels = ordered
 				if l.writer != nil {
 					l.writer.Header().Set(types.HeaderSelectLLm, selected)
 					if current != "" {
@@ -229,6 +255,10 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 						}
 					}
 				}
+				logger.InfoC(l.ctx, "semantic router: auto mode routing selected",
+					zap.String("selected_model", selected),
+					zap.Int("user_input_len", len([]byte(current))),
+				)
 			}
 		}
 	}
@@ -247,21 +277,78 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 		chatLog.IsPromptProceed = false
 	}
 
-	llmClient, err := client.NewLLMClient(l.svcCtx.Config.LLM, l.request.Model, l.headers)
-	llmClient.SetTools(processedPrompt.Tools)
-	if err != nil {
-		l.responseHandler.sendSSEError(l.writer, err)
-		chatLog.AddError(types.ErrServerError, err)
-		return fmt.Errorf("LLM client creation failed: %w", err)
-	}
-
 	flusher, ok := l.writer.(http.Flusher)
 	if !ok {
 		return fmt.Errorf("streaming not supported")
 	}
 
-	logger.InfoC(l.ctx, "Start to handle streaming response ...", zap.String("model", l.request.Model))
-	return l.handleStreamingWithTools(llmClient, flusher, chatLog, MaxToolCallDepth)
+	// Streaming degradation: only switch model if failure occurs before first token
+	models := l.orderedModels
+	if len(models) == 0 {
+		models = []string{l.request.Model}
+	}
+	deadline := time.Now().Add(30 * time.Second)
+	var lastErr error
+	for _, modelName := range models {
+		attempt := 0
+		for attempt < 2 {
+			remaining := time.Until(deadline)
+			if remaining <= 0 {
+				if lastErr == nil {
+					lastErr = types.NewModelServiceUnavailableError()
+				}
+				return l.handleStreamError(lastErr, chatLog)
+			}
+
+			logger.InfoC(l.ctx, "degradation(stream): attempting model",
+				zap.String("model", modelName),
+				zap.Int("attempt", attempt+1),
+				zap.Int64("remaining_ms", remaining.Milliseconds()),
+			)
+
+			l.request.Model = modelName
+			l.streamCommitted = false
+			llmClient, err := client.NewLLMClient(l.svcCtx.Config.LLM, modelName, l.headers)
+			if err != nil {
+				lastErr = err
+				logger.WarnC(l.ctx, "degradation(stream): failed to create llm client",
+					zap.String("model", modelName), zap.Error(err))
+				break
+			}
+			llmClient.SetTools(processedPrompt.Tools)
+
+			err = l.handleStreamingWithTools(llmClient, flusher, chatLog, MaxToolCallDepth)
+			if err == nil {
+				return nil
+			}
+
+			lastErr = err
+			if l.streamCommitted {
+				// Already started streaming; report error to client and stop
+				return l.handleStreamError(err, chatLog)
+			}
+
+			retryable := isRetryableAPIError(err)
+			logger.WarnC(l.ctx, "degradation(stream): attempt failed before first token",
+				zap.String("model", modelName),
+				zap.Bool("retryable", retryable),
+				zap.Error(err),
+			)
+			if retryable && attempt == 0 {
+				sleepDur := 5 * time.Second
+				if r := time.Until(deadline); r < sleepDur {
+					sleepDur = r
+				}
+				if sleepDur > 0 {
+					time.Sleep(sleepDur)
+				}
+				attempt++
+				continue
+			}
+			break
+		}
+	}
+	return l.handleStreamError(lastErr, chatLog)
 }
 
 // streamState holds the state for streaming processing
@@ -307,7 +394,8 @@ func (l *ChatCompletionLogic) handleStreamingWithTools(
 	// Phase 1: Process streaming response
 	toolDetected, err := l.processStream(llmClient, flusher, state, remainingDepth, chatLog)
 	if err != nil {
-		return l.handleStreamError(err, chatLog)
+		// Do not send SSE error here; let caller decide based on commit status
+		return err
 	}
 
 	// Phase 2: Handle tool execution or complete response
@@ -378,6 +466,11 @@ func (l *ChatCompletionLogic) handleStreamChunk(
 
 	// Log first token response
 	if state.firstToken && content != "[DONE]" {
+		// Mark streaming committed and set selected model header
+		l.streamCommitted = true
+		if l.writer != nil {
+			l.writer.Header().Set(types.HeaderSelectLLm, l.request.Model)
+		}
 		firstTokenLatency := time.Since(state.modelStart)
 		chatLog.Latency.FirstTokenLatency = firstTokenLatency.Milliseconds()
 		logger.InfoC(l.ctx, "[first-token] first token received, and response",
@@ -691,6 +784,113 @@ func (l *ChatCompletionLogic) isContextLengthError(err error) bool {
 	errMsg := err.Error()
 	return strings.Contains(errMsg, "This model's maximum context length") ||
 		strings.Contains(errMsg, "Input text is too long")
+}
+
+// callWithDegradation attempts models in l.orderedModels under a 30s total budget.
+// Retry the same model once after 5s sleep on timeout or 5xx errors; otherwise move to next.
+func (l *ChatCompletionLogic) callWithDegradation(params types.LLMRequestParams) (types.ChatCompletionResponse, error) {
+	nilResp := types.ChatCompletionResponse{}
+	if len(l.orderedModels) == 0 {
+		return nilResp, fmt.Errorf("degradation: ordered models is empty")
+	}
+	// ensure unique order and place current at front
+	ordered := make([]string, 0, len(l.orderedModels))
+	seen := map[string]struct{}{}
+	for _, m := range l.orderedModels {
+		if m == "" {
+			continue
+		}
+		if _, ok := seen[m]; ok {
+			continue
+		}
+		seen[m] = struct{}{}
+		ordered = append(ordered, m)
+	}
+	if len(ordered) == 0 {
+		return nilResp, fmt.Errorf("degradation: no valid model in order list")
+	}
+
+	deadline := time.Now().Add(30 * time.Second)
+	var lastErr error
+	for _, modelName := range ordered {
+		attempt := 0
+		for attempt < 2 {
+			remaining := time.Until(deadline)
+			if remaining <= 0 {
+				if lastErr == nil {
+					lastErr = types.NewModelServiceUnavailableError()
+				}
+				return nilResp, lastErr
+			}
+
+			logger.InfoC(l.ctx, "degradation: calling model",
+				zap.String("model", modelName),
+				zap.Int("attempt", attempt+1),
+				zap.Int64("remaining_ms", remaining.Milliseconds()),
+			)
+
+			llmClient, err := client.NewLLMClient(l.svcCtx.Config.LLM, modelName, l.headers)
+			if err != nil {
+				// client creation error: treat as non-retryable for this model
+				logger.WarnC(l.ctx, "degradation: failed to create llm client", zap.String("model", modelName), zap.Error(err))
+				lastErr = err
+				break
+			}
+
+			// use context with remaining time
+			actx, cancel := context.WithTimeout(l.ctx, remaining)
+			resp, err := llmClient.ChatLLMWithMessagesRaw(actx, params)
+			cancel()
+			if err == nil {
+				// success
+				l.request.Model = modelName
+				l.writer.Header().Set(types.HeaderSelectLLm, modelName)
+				logger.InfoC(l.ctx, "degradation: model succeeded", zap.String("model", modelName))
+				return resp, nil
+			}
+
+			lastErr = err
+			retryable := isRetryableAPIError(err)
+			logger.WarnC(l.ctx, "degradation: model attempt failed",
+				zap.String("model", modelName),
+				zap.Bool("retryable", retryable),
+				zap.Error(err),
+			)
+
+			if retryable && attempt == 0 {
+				// sleep up to 5s or remaining time, whichever smaller
+				sleepDur := 5 * time.Second
+				if r := time.Until(deadline); r < sleepDur {
+					sleepDur = r
+				}
+				if sleepDur > 0 {
+					time.Sleep(sleepDur)
+				}
+				attempt++
+				continue
+			}
+			// move to next model
+			break
+		}
+	}
+	return nilResp, lastErr
+}
+
+// isRetryableAPIError returns true when we should retry the same model: timeout/network/5xx
+func isRetryableAPIError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if apiErr, ok := err.(*types.APIError); ok {
+		if apiErr.StatusCode >= http.StatusInternalServerError ||
+			apiErr.Code == types.ErrCodeServerBusy ||
+			apiErr.Code == types.ErrCodeModelServiceUnavailable {
+			return true
+		}
+		return false
+	}
+	// fallback: retry once for non-APIError
+	return true
 }
 
 // handleRawModeStream handles raw mode streaming by directly passing through LLM response
