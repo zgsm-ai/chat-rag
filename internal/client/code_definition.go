@@ -2,7 +2,6 @@ package client
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"time"
 
@@ -23,9 +22,7 @@ type DefinitionRequest struct {
 	ClientId      string `json:"clientId"`
 	CodebasePath  string `json:"codebasePath"`
 	FilePath      string `json:"filePath,omitempty"`
-	StartLine     *int   `json:"startLine,omitempty"`
-	EndLine       *int   `json:"endLine,omitempty"`
-	SymbolName    string `json:"symbolName,omitempty"`
+	SymbolNames   string `json:"symbolNames,omitempty"`
 	Authorization string `json:"authorization"`
 	ClientVersion string `json:"clientVersion"`
 }
@@ -105,18 +102,12 @@ func (b *DefinitionRequestBuilder) BuildRequest(req DefinitionRequest) Request {
 	}
 
 	// Add parameters based on query method
-	if req.SymbolName != "" {
-		queryParams["symbolName"] = req.SymbolName
+	if req.SymbolNames != "" {
+		queryParams["symbolNames"] = req.SymbolNames
 	} else {
-		// Use file path and line number query method
+		// Use file path query method
 		if req.FilePath != "" {
 			queryParams["filePath"] = req.FilePath
-		}
-		if req.StartLine != nil {
-			queryParams["startLine"] = fmt.Sprintf("%d", *req.StartLine)
-		}
-		if req.EndLine != nil {
-			queryParams["endLine"] = fmt.Sprintf("%d", *req.EndLine)
 		}
 	}
 
