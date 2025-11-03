@@ -74,7 +74,11 @@ func MustLoadConfig(configPath string) Config {
 		}
 		// inputExtraction.maxHistoryBytes default
 		if !viper.IsSet("router.semantic.inputExtraction.maxHistoryBytes") || c.Router.Semantic.InputExtraction.MaxHistoryBytes == 0 {
-			c.Router.Semantic.InputExtraction.MaxHistoryBytes = 4096
+			c.Router.Semantic.InputExtraction.MaxHistoryBytes = 2048
+		}
+		// inputExtraction.maxHistoryMessages default
+		if !viper.IsSet("router.semantic.inputExtraction.maxHistoryMessages") || c.Router.Semantic.InputExtraction.MaxHistoryMessages == 0 {
+			c.Router.Semantic.InputExtraction.MaxHistoryMessages = 5
 		}
 	}
 

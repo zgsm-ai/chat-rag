@@ -331,8 +331,10 @@ func (s *Strategy) extractInputs(req *types.ChatCompletionRequest) (current stri
 	}
 
 	// unified scan from newest to oldest
+	// Optimization: disable default assistant inclusion; record at most ONE candidate assistant for disambiguation use
 	found := false
 	histParts := make([]string, 0)
+	firstAssistantRaw := ""
 	for i := len(msgs) - 1; i >= 0; i-- {
 		role := msgs[i].Role
 		raw := strings.TrimSpace(getRaw(msgs[i].Content))
@@ -354,9 +356,12 @@ func (s *Strategy) extractInputs(req *types.ChatCompletionRequest) (current stri
 			}
 			continue
 		}
-		// after current found, collect older assistant or tagged user into history
+		// after current found, collect older tagged user into history
+		// assistant messages are NOT included by default; only record the first candidate for possible disambiguation later
 		if role == types.RoleAssistant {
-			histParts = append(histParts, raw)
+			if firstAssistantRaw == "" {
+				firstAssistantRaw = raw
+			}
 			continue
 		}
 		if role == types.RoleUser {
@@ -377,7 +382,51 @@ func (s *Strategy) extractInputs(req *types.ChatCompletionRequest) (current stri
 	if sep == "" {
 		sep = "\n\n"
 	}
+
+	// Decide whether to include at most one recent assistant for disambiguation
+	isDisambig := func(s2 string) bool {
+		st := strings.TrimSpace(s2)
+		if st == "" {
+			return false
+		}
+		// short current input
+		if len([]rune(st)) <= 8 {
+			return true
+		}
+		// keyword triggers
+		re := regexp.MustCompile(`(?i)^(继续|同上|重试|再来一次|go on|continue|same as above|retry)\b`)
+		return re.MatchString(st)
+	}
+
+	if isDisambig(current) && strings.TrimSpace(firstAssistantRaw) != "" {
+		// append as the newest historical item
+		histParts = append(histParts, firstAssistantRaw)
+	}
+
+	// Enforce count limit: keep only the most recent N history items (older->newer order means keep tail)
+	if s.cfg.InputExtraction.MaxHistoryMessages > 0 && len(histParts) > s.cfg.InputExtraction.MaxHistoryMessages {
+		histParts = histParts[len(histParts)-s.cfg.InputExtraction.MaxHistoryMessages:]
+	}
+
 	history = strings.Join(histParts, sep)
+
+	// Strictly clean tool/noise blocks from assistant/user history before code fence stripping
+	cleanHistoryNoise := func(s2 string) string {
+		patterns := []string{
+			`(?s)<think>.*?</think>`,
+			`(?s)<attempt_completion>.*?</attempt_completion>`,
+			`(?s)<environment_details>.*?</environment_details>`,
+			`(?m)^\[attempt_completion\].*$\n?`,
+		}
+		out := s2
+		for _, p := range patterns {
+			re := regexp.MustCompile(p)
+			out = re.ReplaceAllString(out, "")
+		}
+		return out
+	}
+
+	history = cleanHistoryNoise(history)
 
 	// strip code fences if configured, using plugin default pattern when empty
 	if s.cfg.InputExtraction.StripCodeFences {
@@ -415,7 +464,7 @@ func (s *Strategy) buildPrompt(current, history string) string {
 	}
 	// default prompt from design doc
 	return fmt.Sprintf(
-		"You are a classification specialist. Classify ONLY based on the CURRENT turn. Use history strictly for disambiguation of short messages (e.g., \"retry\", \"continue\", \"same as above\").\n\nLabels and definitions:\n1) simple_request: Non-technical, conversational queries. Includes greetings (e.g., \"hello\"), identity questions (e.g., \"who are you?\"), or general chat not involving programming/code/dev tasks.\n2) planning_request: Requests for analysis/planning/explanation about code or a task without directly writing or editing code. Examples: review code and give feedback, create a technical plan/outline, discuss architecture, explain an algorithm.\n3) code_modification: Requests that require generating, editing, or modifying code. Examples: implement a function, fix a bug, add a new feature, refactor, translate comments, or convert code between languages.\n\nSpecial rules:\n- Classify ONLY using the Current section below. Do NOT summarize or rewrite anything.\n- History may be referenced only to interpret very short Current inputs.\n- If Current contains file paths, line ranges (e.g., foo.go:12-20), diffs, or code blocks indicating an edit intent, prefer code_modification unless clearly chit-chat.\n- If the Current contains imperative phrases indicating immediate implementation (e.g., \"实施\", \"实现\", \"开始实现\", \"开始编码\", \"按计划实施\", \"落地\", \"修改\", \"修复\", \"apply the plan\", \"go ahead and implement\", \"implement now\"), classify as code_modification.\n\nHistory:\n%s\n\nCurrent:\n%s\n\nInstructions:\n- Output exactly one of: simple_request, planning_request, code_modification\n- Output the label only. No extra words.", history, current)
+		"You are a classification specialist. Classify ONLY based on the CURRENT turn. Use history strictly for disambiguation of short messages (e.g., \"retry\", \"continue\", \"same as above\").\n\nLabels and definitions:\n1) simple_request: Non-technical, conversational queries. Includes greetings (e.g., \"hello\"), identity questions (e.g., \"who are you?\"), or general chat not involving programming/code/dev tasks.\n2) planning_request: Requests for analysis/planning/explanation about code or a task without directly writing or editing code. Examples: review code and give feedback, create a technical plan/outline, discuss architecture, explain an algorithm.\n3) code_modification: Requests that require generating, editing, or modifying code. Examples: implement a function, fix a bug, add a new feature, refactor, translate comments, or convert code between languages.\n\nSpecial rules:\n- Classify ONLY using the Current section below. Do NOT summarize or rewrite anything.\n- History may be referenced only to interpret very short Current inputs.\n- If Current contains file paths, line ranges (e.g., foo.go:12-20), diffs, or code blocks indicating an edit intent, prefer code_modification unless clearly chit-chat.\n- If the Current contains imperative phrases indicating immediate implementation (e.g., \"实施\", \"实现\", \"开始实现\", \"开始编码\", \"按计划实施\", \"落地\", \"修改\", \"修复\", \"apply the plan\", \"go ahead and implement\", \"implement now\"), classify as code_modification.\n- If the Current requests or instructs USING TOOLS (e.g., calling/using tools, running step-by-step tool executions, specifying tool tags/steps), classify as code_modification.\n\nHistory:\n%s\n\nCurrent:\n%s\n\nInstructions:\n- Output exactly one of: simple_request, planning_request, code_modification\n- Output the label only. No extra words.", history, current)
 }
 
 // buildRequestContextFromRules builds request_context by scanning rule facts with prefixes
