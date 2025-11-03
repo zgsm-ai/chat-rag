@@ -1,5 +1,7 @@
 .PHONY: build run clean test fmt vet deps api-gen
 
+GOPROXY := $(shell go env GOPROXY)
+
 # Build the application
 build:
 	go build -o bin/chat-rag main.go
@@ -60,8 +62,16 @@ docker-run:
 # Build, tag and push Docker image with version
 docker-release:
 	docker build -t chat-rag:$(VERSION) --build-arg IMAGE_VERSION=$(VERSION) .
-	docker tag chat-rag:$(VERSION) zgsm/chat-rag:$(VERSION)
+	docker tag chat-rag:$(VERSION) ${REGISTRY}/chat-rag:$(VERSION)
 	docker push zgsm/chat-rag:$(VERSION)
+
+# Build the container image with the wasm plugin
+build-release-aliyun:
+	docker build -t chat-rag:$(VERSION) --build-arg IMAGE_VERSION=$(VERSION) \
+		--build-arg GOPROXY=$(GOPROXY) \
+		.
+	docker tag chat-rag:$(VERSION) ${REGISTRY}/chat-rag:$(VERSION)
+	docker push ${REGISTRY}/chat-rag:$(VERSION)
 
 # Create necessary directories
 init-dirs:

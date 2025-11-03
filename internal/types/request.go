@@ -48,6 +48,7 @@ const (
 	HeaderAuthorization = "authorization"
 	HeaderProjectPath   = "zgsm-project-path"
 	HeaderClientVersion = "X-Costrict-Version"
+	HeaderOriginalModel = "x-original-model"
 
 	// Response Headers
 	HeaderUserInput = "x-user-input"
