@@ -81,7 +81,25 @@ func (s *Strategy) Run(
 	}
 	deadline := time.Now().Add(totalWindow)
 
-	llmClient, err := client.NewLLMClient(svcCtx.Config.LLM, s.cfg.Analyzer.Model, headers)
+	// Build analyzer-specific LLM client (non-streaming) with optional endpoint/token overrides
+	llmCfg := svcCtx.Config.LLM
+	if s.cfg.Analyzer.Endpoint != "" {
+		llmCfg.Endpoint = s.cfg.Analyzer.Endpoint
+	}
+	analyzerHeaders := headers
+	if s.cfg.Analyzer.ApiToken != "" {
+		cloned := headers.Clone()
+		token := s.cfg.Analyzer.ApiToken
+		// Ensure Bearer prefix
+		if !strings.HasPrefix(strings.ToLower(token), "bearer ") {
+			token = "Bearer " + token
+		}
+		cloned.Set("Authorization", token)
+		cloned.Set(types.HeaderAuthorization, token)
+		analyzerHeaders = &cloned
+	}
+
+	llmClient, err := client.NewLLMClient(llmCfg, s.cfg.Analyzer.Model, analyzerHeaders)
 	if err != nil {
 		logger.WarnC(ctx, "semantic router: fallback used",
 			zap.String("reason", "analyzer_client_error"),

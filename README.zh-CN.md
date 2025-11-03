@@ -140,6 +140,9 @@ router:
     analyzer:
       model: gpt-4o-mini
       timeoutMs: 3000
+      # 可为 analyzer 单独覆盖全局 LLM 的端点与令牌
+      # endpoint: "http://higress-gateway.costrict.svc.cluster.local/v1/chat/completions"
+      # apiToken: "<你的令牌>"
       # 可选高级项：
       # totalTimeoutMs: 5000
       # maxInputBytes: 8192
@@ -200,7 +203,7 @@ router:
 - Redis：可选；用于工具状态、路由动态指标等
 - router（语义路由）
   - enabled/strategy：开启语义路由；当前策略为 `semantic`
-  - semantic.analyzer：分类所用模型与超时；可自定义 Prompt 与标签；可选动态指标（Redis）
+  - semantic.analyzer：分类模型/超时；支持仅对 analyzer 覆盖 endpoint/apiToken；在 auto 模式下使用独立的非流式客户端；可自定义 Prompt 与标签；可选动态指标（Redis）
   - semantic.inputExtraction：控制用户输入与历史的抽取方式，支持去除代码块、限制历史长度
   - semantic.routing：候选模型评分表；通过 `tieBreakOrder` 解决同分，`fallbackModelName` 兜底
   - semantic.ruleEngine：可选的规则引擎预筛模型，默认关闭

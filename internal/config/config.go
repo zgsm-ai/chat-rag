@@ -133,6 +133,9 @@ type AnalyzerConfig struct {
 	TimeoutMs      int    `mapstructure:"timeoutMs" yaml:"timeoutMs"`
 	TotalTimeoutMs int    `mapstructure:"totalTimeoutMs" yaml:"totalTimeoutMs"`
 	MaxInputBytes  int    `mapstructure:"maxInputBytes" yaml:"maxInputBytes"`
+    // Optional: override endpoint and token for analyzer-only requests
+    Endpoint string `mapstructure:"endpoint" yaml:"endpoint"`
+    ApiToken string `mapstructure:"apiToken" yaml:"apiToken"`
 	// Optional fields; ignored if empty
 	PromptTemplate string               `mapstructure:"promptTemplate" yaml:"promptTemplate"`
 	AnalysisLabels []string             `mapstructure:"analysisLabels" yaml:"analysisLabels"`

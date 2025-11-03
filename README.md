@@ -140,6 +140,9 @@ router:
     analyzer:
       model: gpt-4o-mini
       timeoutMs: 3000
+      # endpoint and apiToken can override global LLM only for analyzer
+      # endpoint: "http://higress-gateway.costrict.svc.cluster.local/v1/chat/completions"
+      # apiToken: "<your-token>"
       # Optional advanced fields:
       # totalTimeoutMs: 5000
       # maxInputBytes: 8192
@@ -200,7 +203,7 @@ router:
 - Redis: Optional; used by tools, router dynamic metrics, and transient statuses.
 - router (Semantic Router)
   - enabled/strategy: Enable semantic router; current strategy is `semantic`.
-  - semantic.analyzer: Classification model and timeouts; optional custom prompt/labels; optional dynamic metrics via Redis.
+  - semantic.analyzer: Classification model/timeouts; can override endpoint/apiToken for analyzer-only calls; uses a separate non-streaming client in auto mode; optional custom prompt/labels; optional dynamic metrics via Redis.
   - semantic.inputExtraction: Controls extraction of current user input and bounded history; supports stripping code fences.
   - semantic.routing: Candidate model score table; tie-break via `tieBreakOrder`; fallback via `fallbackModelName`.
   - semantic.ruleEngine: Optional rule engine to pre-filter candidates (disabled by default).
