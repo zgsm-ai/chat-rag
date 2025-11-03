@@ -77,7 +77,7 @@ Tools:
     SearchEndpoint: "http://127.0.0.1:9001/codebase-indexer/api/v1/search/definition"
     ApiReadyEndpoint: "http://127.0.0.1:9001/codebase-indexer/api/v1/index/summary"
   ReferenceSearch:
-    SearchEndpoint: "http://127.0.0.1:9001/codebase-indexer/api/v1/calgraph"
+    SearchEndpoint: "http://127.0.0.1:9001/codebase-indexer/api/v1/callgraph"
     ApiReadyEndpoint: "http://127.0.0.1:9001/codebase-indexer/api/v1/index/summary"
   KnowledgeSearch:
     SearchEndpoint: "http://127.0.0.1:9001/codebase-embedder/api/v1/search/document"
