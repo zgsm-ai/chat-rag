@@ -15,6 +15,8 @@ type SemanticInterface interface {
 	Search(ctx context.Context, req SemanticRequest) (string, error)
 	// CheckReady checks if the semantic search service is available
 	CheckReady(ctx context.Context, req ReadyRequest) (bool, error)
+	// Close gracefully closes the semantic client
+	Close() error
 }
 
 // SemanticRequest represents the request structure for semantic search
@@ -103,6 +105,13 @@ func (b *SemanticRequestBuilder) BuildRequest(req SemanticRequest) Request {
 		Authorization: req.Authorization,
 		Body:          req,
 	}
+}
+
+// Close gracefully closes the semantic client
+func (c *SemanticClient) Close() error {
+	// BaseClient doesn't hold persistent connections that need explicit closing
+	// This method is provided for interface consistency and future extensibility
+	return nil
 }
 
 func (b *SemanticRequestBuilder) BuildReadyRequest(req ReadyRequest) Request {
