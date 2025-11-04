@@ -61,9 +61,11 @@ docker-run:
 
 # Build, tag and push Docker image with version
 docker-release:
-	docker build -t chat-rag:$(VERSION) --build-arg IMAGE_VERSION=$(VERSION) .
+	docker build -t chat-rag:$(VERSION) --build-arg IMAGE_VERSION=$(VERSION) \
+	--build-arg GOPROXY=$(GOPROXY) \
+	.
 	docker tag chat-rag:$(VERSION) ${REGISTRY}/chat-rag:$(VERSION)
-	docker push zgsm/chat-rag:$(VERSION)
+	docker push ${REGISTRY}/chat-rag:$(VERSION)
 
 # Build the container image with the wasm plugin
 build-release-aliyun:
@@ -72,6 +74,20 @@ build-release-aliyun:
 		.
 	docker tag chat-rag:$(VERSION) ${REGISTRY}/chat-rag:$(VERSION)
 	docker push ${REGISTRY}/chat-rag:$(VERSION)
+
+build-release:
+	docker build -t chat-rag:$(VERSION) --build-arg IMAGE_VERSION=$(VERSION) \
+	--build-arg GOPROXY=$(GOPROXY) \
+	.
+	docker tag chat-rag:$(VERSION) ${REGISTRY}/chat-rag:$(VERSION)
+	cd ~/sangfor/upload-docker-images/images-zgsm/ && \
+	rm -f * && \
+	docker save -o chat-rag-$(VERSION).tar ${REGISTRY}/chat-rag:$(VERSION) && \
+	git add -A && \
+	git commit -m "feat: add chat-rag-$(VERSION).tar" && \
+	git push origin main
+
+
 
 # Create necessary directories
 init-dirs:

@@ -4,8 +4,10 @@ import (
 	"github.com/zgsm-ai/chat-rag/internal/client"
 	"github.com/zgsm-ai/chat-rag/internal/config"
 	"github.com/zgsm-ai/chat-rag/internal/functions"
+	"github.com/zgsm-ai/chat-rag/internal/logger"
 	"github.com/zgsm-ai/chat-rag/internal/service"
 	"github.com/zgsm-ai/chat-rag/internal/tokenizer"
+	"go.uber.org/zap"
 )
 
 // ServiceContext holds all service dependencies
@@ -76,7 +78,41 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 // Stop gracefully stops all services
 func (svc *ServiceContext) Stop() {
+	logger.Info("Starting graceful shutdown of all services...")
+
+	// Stop logger service first to ensure all logs are processed
 	if svc.LoggerService != nil {
+		logger.Info("Stopping logger service...")
 		svc.LoggerService.Stop()
+		logger.Info("Logger service stopped")
 	}
+
+	// Close Redis connections
+	if svc.RedisClient != nil {
+		logger.Info("Closing Redis connections...")
+		if err := svc.RedisClient.Close(); err != nil {
+			logger.Error("Failed to close Redis connection",
+				zap.Error(err))
+		} else {
+			logger.Info("Redis connections closed successfully")
+		}
+	}
+
+	// Close semantic client
+	if svc.SemanticClient != nil {
+		logger.Info("Closing semantic client...")
+		if err := svc.SemanticClient.Close(); err != nil {
+			logger.Error("Failed to close semantic client",
+				zap.Error(err))
+		} else {
+			logger.Info("Semantic client closed successfully")
+		}
+	}
+
+	// Note: MetricsService doesn't need explicit close as it uses Prometheus
+	// which handles cleanup automatically
+	// Note: TokenCounter doesn't need explicit close
+	// Note: ToolExecutor cleanup is handled by the individual components
+
+	logger.Info("All services have been gracefully stopped")
 }
