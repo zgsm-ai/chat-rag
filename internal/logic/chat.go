@@ -513,7 +513,8 @@ func (l *ChatCompletionLogic) handleStreamChunk(
 	}
 
 	// Check for tool detection
-	if !state.toolDetected && l.toolExecutor != nil && remainingDepth > 0 {
+	if !state.toolDetected && l.toolExecutor != nil && remainingDepth > 0 &&
+		!l.svcCtx.Config.Tools.DisableTools {
 		if err := l.detectAndHandleTool(flusher, state); err != nil {
 			return err
 		}
