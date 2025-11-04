@@ -22,6 +22,9 @@ type RedisInterface interface {
 
 	// GetHash retrieves all field-value pairs from a Redis hash
 	GetHash(ctx context.Context, key string) (map[string]string, error)
+
+	// GetString retrieves a string value by key
+	GetString(ctx context.Context, key string) (string, error)
 }
 
 // RedisClient handles communication with Redis
@@ -121,4 +124,23 @@ func (c *RedisClient) GetHash(ctx context.Context, key string) (map[string]strin
 	}
 
 	return values, nil
+}
+
+// GetString retrieves a string value by key
+func (c *RedisClient) GetString(ctx context.Context, key string) (string, error) {
+	if c.client == nil {
+		if err := c.Connect(ctx); err != nil {
+			return "", fmt.Errorf("redis client not connected and failed to reconnect: %w", err)
+		}
+	}
+
+	value, err := c.client.Get(ctx, key).Result()
+	if err != nil {
+		if err == redis.Nil {
+			return "", fmt.Errorf("key does not exist: %s", key)
+		}
+		return "", fmt.Errorf("failed to get key from Redis: %w", err)
+	}
+
+	return value, nil
 }

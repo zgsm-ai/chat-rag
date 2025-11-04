@@ -35,6 +35,53 @@ func MustLoadConfig(configPath string) Config {
 		panic("Failed to load config: " + err.Error())
 	}
 
+	// Apply defaults: if fallbackModelName not set, use the first candidate
+	if c != nil && c.Router.Semantic.Routing.FallbackModelName == "" {
+		if len(c.Router.Semantic.Routing.Candidates) > 0 {
+			c.Router.Semantic.Routing.FallbackModelName = c.Router.Semantic.Routing.Candidates[0].ModelName
+		}
+	}
+
+	// Align rule engine prefix defaults with original plugin logic
+	if c != nil {
+		if c.Router.Semantic.RuleEngine.BodyPrefix == "" {
+			c.Router.Semantic.RuleEngine.BodyPrefix = "body."
+		}
+		if c.Router.Semantic.RuleEngine.HeaderPrefix == "" {
+			c.Router.Semantic.RuleEngine.HeaderPrefix = "header."
+		}
+	}
+
+	// Align stripCodeFences default behavior with plugin:
+	// default to true when the key is not explicitly set in YAML
+	if c != nil {
+		// inputExtraction.protocol default
+		if c.Router.Semantic.InputExtraction.Protocol == "" {
+			c.Router.Semantic.InputExtraction.Protocol = "openai"
+		}
+		// inputExtraction.userJoinSep default
+		if c.Router.Semantic.InputExtraction.UserJoinSep == "" {
+			c.Router.Semantic.InputExtraction.UserJoinSep = "\n\n"
+		}
+		// inputExtraction.stripCodeFences default (only when key not set)
+		if !viper.IsSet("router.semantic.inputExtraction.stripCodeFences") {
+			c.Router.Semantic.InputExtraction.StripCodeFences = true
+		}
+		// inputExtraction.codeFenceRegex default is empty string (no-op) — keep if unset
+		// inputExtraction.maxUserMessages default
+		if !viper.IsSet("router.semantic.inputExtraction.maxUserMessages") || c.Router.Semantic.InputExtraction.MaxUserMessages == 0 {
+			c.Router.Semantic.InputExtraction.MaxUserMessages = 100
+		}
+		// inputExtraction.maxHistoryBytes default
+		if !viper.IsSet("router.semantic.inputExtraction.maxHistoryBytes") || c.Router.Semantic.InputExtraction.MaxHistoryBytes == 0 {
+			c.Router.Semantic.InputExtraction.MaxHistoryBytes = 2048
+		}
+		// inputExtraction.maxHistoryMessages default
+		if !viper.IsSet("router.semantic.inputExtraction.maxHistoryMessages") || c.Router.Semantic.InputExtraction.MaxHistoryMessages == 0 {
+			c.Router.Semantic.InputExtraction.MaxHistoryMessages = 5
+		}
+	}
+
 	logger.Info("loaded config", zap.Any("config", c))
 	return *c
 }

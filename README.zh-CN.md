@@ -21,6 +21,7 @@ Chat-RAG 是一个高性能、企业级的聊天服务，结合了大语言模�
 - **📊 全面监控**：内置指标和日志记录，支持 Prometheus
 - **🔄 多模态支持**：支持各种 LLM 模型和函数调用
 - **🚀 高性能**：优化的低延迟响应和高吞吐量
+ - **🤖 语义路由（来自 ai-llm-router 迁移）**：可选开启，自动按语义选择下游模型；在响应头透出 `x-select-llm`、`x-user-input`
 
 ## 🏗️ 架构设计
 
@@ -80,64 +81,186 @@ make docker-run
 服务通过 YAML 文件进行配置。查看 [`etc/chat-api.yaml`](etc/chat-api.yaml) 了解默认配置：
 
 ```yaml
-Name: chat-rag
+# 服务
 Host: 0.0.0.0
-Port: 8888
+Port: 8080
 
-# LLM 配置
+# LLM 上游（单一端点；具体模型由请求体的 model 字段决定）
 LLM:
-  Endpoint: "http://127.0.0.1:30616/v1/chat/completions"
-  FuncCallingModels: ["gpt-4", "claude-3"]
+  Endpoint: "http://localhost:8000/v1/chat/completions"
+  # 可选：支持函数调用的模型清单
+  FuncCallingModels: ["gpt-4o-mini", "o4-mini"]
 
-# Redis 配置
+# 上下文压缩
+ContextCompressConfig:
+  EnableCompress: true
+  TokenThreshold: 5000
+  SummaryModel: "deepseek-v3"
+  SummaryModelTokenThreshold: 4000
+  RecentUserMsgUsedNums: 4
+
+# 工具（RAG 后端）
+Tools:
+  SemanticSearch:
+    SearchEndpoint: "http://localhost:8002/codebase-indexer/api/v1/semantics"
+    ApiReadyEndpoint: "http://localhost:8002/healthz"
+    TopK: 5
+    ScoreThreshold: 0.3
+  DefinitionSearch:
+    SearchEndpoint: "http://localhost:8002/codebase-indexer/api/v1/definitions"
+    ApiReadyEndpoint: "http://localhost:8002/healthz"
+  ReferenceSearch:
+    SearchEndpoint: "http://localhost:8002/codebase-indexer/api/v1/references"
+    ApiReadyEndpoint: "http://localhost:8002/healthz"
+  KnowledgeSearch:
+    SearchEndpoint: "http://localhost:8003/knowledge/api/v1/search"
+    ApiReadyEndpoint: "http://localhost:8003/healthz"
+    TopK: 5
+    ScoreThreshold: 0.3
+
+# 日志与分类
+Log:
+  LogFilePath: "logs/chat-rag.log"
+  LokiEndpoint: "http://localhost:3100/loki/api/v1/push"
+  LogScanIntervalSec: 60
+  ClassifyModel: "deepseek-v3"
+  EnableClassification: true
+
+# Redis（可选）
 Redis:
   Addr: "127.0.0.1:6379"
   Password: ""
   DB: 0
 
-# 工具配置
-Tools:
-  SemanticSearch:
-    SearchEndpoint: "http://localhost:9001/api/v1/search/semantic"
-    TopK: 50
-    ScoreThreshold: 0.7
+# 语义路由（从 ai-llm-router 迁移而来，需将请求体 model 置为 "auto" 才触发）
+router:
+  enabled: true
+  strategy: semantic
+  semantic:
+    analyzer:
+      model: gpt-4o-mini
+      timeoutMs: 3000
+      # 可为 analyzer 单独覆盖全局 LLM 的端点与令牌
+      # endpoint: "http://higress-gateway.costrict.svc.cluster.local/v1/chat/completions"
+      # apiToken: "<你的令牌>"
+      # 可选高级项：
+      # totalTimeoutMs: 5000
+      # maxInputBytes: 8192
+      # promptTemplate: ""   # 自定义分类 Prompt，不配置则使用内置默认
+      # analysisLabels: ["simple_request", "planning_request", "code_modification"]
+      # dynamicMetrics:
+      #   enabled: false
+      #   redisPrefix: "ai_router:metrics:"
+      #   metrics: ["error_rate", "p99", "circuit"]
+    inputExtraction:
+      protocol: openai
+      userJoinSep: "\n\n"
+      stripCodeFences: true
+      codeFenceRegex: ""
+      maxUserMessages: 100
+      maxHistoryBytes: 4096
+    routing:
+      candidates:
+        - modelName: "gpt-4o-mini"
+          enabled: true
+          scores:
+            simple_request: 10
+            planning_request: 5
+            code_modification: 3
+        - modelName: "o4-mini"
+          enabled: true
+          scores:
+            simple_request: 4
+            planning_request: 8
+            code_modification: 6
+      minScore: 0
+      tieBreakOrder: ["o4-mini", "gpt-4o-mini"]
+      fallbackModelName: "gpt-4o-mini"
+    ruleEngine:
+      enabled: false
+      inlineRules: []
+      bodyPrefix: "body."
+      headerPrefix: "header."
 ```
+
+#### 配置字段详解（节选）
+
+- LLM
+  - Endpoint：统一的 Chat Completions 端点；最终模型名通过请求体 `model` 传递
+  - FuncCallingModels：具备函数调用能力的模型清单，便于按需启用工具
+- ContextCompressConfig
+  - EnableCompress：是否开启长上下文压缩
+  - TokenThreshold：超过此阈值触发压缩
+  - SummaryModel / SummaryModelTokenThreshold：用于摘要压缩的模型与阈值
+  - RecentUserMsgUsedNums：压缩流程中参照的最近用户消息数量
+- Tools（RAG）
+  - 各搜索模块提供 HTTP 端点；TopK/ScoreThreshold 控制召回数量与质量
+- Log
+  - LogFilePath：本地日志文件路径；后台进程会批量上传至 Loki
+  - LokiEndpoint：Loki Push 端点
+  - LogScanIntervalSec：日志扫描与上传周期
+  - ClassifyModel / EnableClassification：是否使用 LLM 对日志分类
+- Redis：可选；用于工具状态、路由动态指标等
+- router（语义路由）
+  - enabled/strategy：开启语义路由；当前策略为 `semantic`
+  - semantic.analyzer：分类模型/超时；支持仅对 analyzer 覆盖 endpoint/apiToken；在 auto 模式下使用独立的非流式客户端；可自定义 Prompt 与标签；可选动态指标（Redis）
+  - semantic.inputExtraction：控制用户输入与历史的抽取方式，支持去除代码块、限制历史长度
+  - semantic.routing：候选模型评分表；通过 `tieBreakOrder` 解决同分，`fallbackModelName` 兜底
+  - semantic.ruleEngine：可选的规则引擎预筛模型，默认关闭
 
 ## 📡 API 端点
 
-### 聊天完成
+### 聊天完成（非流式）
 
-```http
-POST /chat-rag/api/v1/chat/completions
-Content-Type: application/json
-Authorization: Bearer <token>
-
-{
-  "model": "gpt-4",
-  "messages": [
-    {
-      "role": "user",
-      "content": "今天天气怎么样？"
-    }
-  ],
-  "stream": true,
-  "extra_body": {
-    "prompt_mode": "rag_compress"
-  }
-}
+```bash
+curl -X POST http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4o-mini",
+    "messages": [
+      {"role": "user", "content": "今天天气怎么样？"}
+    ],
+    "stream": false
+  }'
 ```
 
-### 请求状态
+### 启用语义路由（自动选型）
 
-```http
-GET /chat-rag/api/v1/chat/requests/{requestId}/status
+将请求体中的 `model` 置为 `auto`，并在配置中开启 `router.enabled: true`：
+
+```bash
+curl -i -X POST http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "auto",
+    "messages": [
+      {"role": "user", "content": "给我一个详细的改造方案并产出代码示例"}
+    ],
+    "stream": false
+  }'
+```
+
+响应头将包含：
+- `x-select-llm`：最终选择的下游模型名
+- `x-user-input`：用于分类的用户输入（已清洗并进行 base64 编码）
+
+### 流式响应
+
+```bash
+curl -X POST http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4o-mini",
+    "messages": [
+      {"role": "user", "content": "写一个 Python 函数"}
+    ],
+    "stream": true
+  }'
 ```
 
 ### 指标监控
 
-```http
-GET /metrics
-```
+Prometheus 指标暴露在 `/metrics`，详见 `METRICS.md`。
 
 ## 🔧 开发指南
 
@@ -148,6 +271,7 @@ chat-rag/
 ├── internal/
 │   ├── handler/          # HTTP 处理器
 │   ├── logic/           # 业务逻辑
+│   ├── router/          # 语义路由（策略 + 工厂）
 │   ├── client/          # 外部服务客户端
 │   ├── promptflow/      # 提示处理管道
 │   ├── functions/       # 工具执行引擎
@@ -191,9 +315,10 @@ go test -cover ./...
 ```yaml
 ContextCompressConfig:
   EnableCompress: true
-  TokenThreshold: 100000
-  SummaryModel: "qwen2.5-coder-32b"
-  RecentUserMsgUsedNums: 3
+  TokenThreshold: 5000
+  SummaryModel: "deepseek-v3"
+  SummaryModelTokenThreshold: 4000
+  RecentUserMsgUsedNums: 4
 ```
 
 ### 工具集成
@@ -204,6 +329,16 @@ ContextCompressConfig:
 - **定义搜索**：代码定义查询
 - **引用搜索**：代码引用分析
 - **知识搜索**：文档知识库查询
+
+### 语义路由（来自 ai-llm-router 迁移）
+
+当 `router.enabled: true` 且请求体 `model` 为 `auto` 时，将自动选择最合适的下游模型：
+
+1. 输入抽取：按 `router.semantic.inputExtraction` 提取当前输入与少量历史，可选移除代码块
+2. 语义分类：调用 `router.semantic.analyzer.model` 获取标签（默认：simple_request / planning_request / code_modification）
+3. 候选打分：在 `routing.candidates` 中按标签取分；支持 `minScore` 和动态指标（可选）
+4. Tie-break 与回退：用 `tieBreakOrder` 破同分；失败或低于阈值则使用 `fallbackModelName`
+5. 可观测性：在响应头写入 `x-select-llm` 与 `x-user-input`（后者做过清洗并 base64 编码）
 
 ### 基于代理的处理
 
