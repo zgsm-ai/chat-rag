@@ -1,7 +1,6 @@
 package processor
 
 import (
-	"github.com/zgsm-ai/chat-rag/internal/functions"
 	"github.com/zgsm-ai/chat-rag/internal/logger"
 	"github.com/zgsm-ai/chat-rag/internal/model"
 	"github.com/zgsm-ai/chat-rag/internal/types"
@@ -38,14 +37,6 @@ func NewPromptMsg(messages []types.Message) (*PromptMsg, error) {
 		olderUserMsgList: olderUserMsg,
 		lastUserMsg:      &lastUserMsg,
 	}, nil
-}
-
-func (p *PromptMsg) AddTool(tool *functions.Tool) {
-	if p.tools == nil {
-		p.tools = make([]types.Function, 0)
-	}
-	fnDef := tool.ToFunctionDefinition()
-	p.tools = append(p.tools, fnDef)
 }
 
 func (p *PromptMsg) GetTools() []types.Function {
