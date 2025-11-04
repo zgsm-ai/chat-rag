@@ -98,17 +98,6 @@ func (svc *ServiceContext) Stop() {
 		}
 	}
 
-	// Close semantic client
-	if svc.SemanticClient != nil {
-		logger.Info("Closing semantic client...")
-		if err := svc.SemanticClient.Close(); err != nil {
-			logger.Error("Failed to close semantic client",
-				zap.Error(err))
-		} else {
-			logger.Info("Semantic client closed successfully")
-		}
-	}
-
 	// Note: MetricsService doesn't need explicit close as it uses Prometheus
 	// which handles cleanup automatically
 	// Note: TokenCounter doesn't need explicit close
