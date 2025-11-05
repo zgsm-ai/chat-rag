@@ -36,6 +36,7 @@ type ChatCompletionLogic struct {
 	usage           *types.Usage
 	orderedModels   []string
 	streamCommitted bool
+	originalModel   string
 }
 
 func NewChatCompletionLogic(
@@ -55,6 +56,7 @@ func NewChatCompletionLogic(
 		writer:          writer,
 		headers:         headers,
 		toolExecutor:    svcCtx.ToolExecutor,
+		originalModel:   request.Model,
 	}
 }
 
@@ -97,11 +99,16 @@ func (l *ChatCompletionLogic) newChatLog(startTime time.Time) *model.ChatLog {
 	originalPrompt := make([]types.Message, len(l.request.Messages))
 	copy(originalPrompt, l.request.Messages)
 
+	modelName := l.originalModel
+	if modelName == "" {
+		modelName = l.request.Model
+	}
+
 	return &model.ChatLog{
 		Identity:  *l.identity,
 		Timestamp: startTime,
 		Params: model.RequestParams{
-			Model:               l.request.Model,
+			Model:               modelName,
 			PromptMode:          string(l.request.ExtraBody.PromptMode),
 			MaxTokens:           l.request.MaxTokens,
 			MaxCompletionTokens: l.request.MaxCompletionTokens,
