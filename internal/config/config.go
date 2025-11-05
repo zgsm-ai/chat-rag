@@ -6,6 +6,11 @@ type LLMConfig struct {
 	FuncCallingModels []string
 }
 
+type LLMRetryConfig struct {
+	TotalTimeoutMs   int `mapstructure:"totalTimeoutMs" yaml:"totalTimeoutMs"`
+	RequestTimeoutMs int `mapstructure:"requestTimeoutMs" yaml:"requestTimeoutMs"`
+}
+
 // RedisConfig holds Redis configuration
 type RedisConfig struct {
 	Addr     string
@@ -107,6 +112,8 @@ type Config struct {
 	Redis RedisConfig
 
 	LLM LLMConfig
+
+	LLMRetry LLMRetryConfig `mapstructure:"llmRetry" yaml:"llmRetry"`
 
 	// Router configuration
 	Router RouterConfig `mapstructure:"router" yaml:"router"`

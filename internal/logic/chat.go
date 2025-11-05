@@ -215,7 +215,10 @@ func (l *ChatCompletionLogic) ChatCompletion() (resp *types.ChatCompletionRespon
 			return nil, fmt.Errorf("failed to create LLM client: %w", err)
 		}
 		var err2 error
-		response, err2 = llmClient.ChatLLMWithMessagesRaw(l.ctx, l.request.LLMRequestParams)
+		_, perAttemptTimeout := l.llmRetryDurations()
+		actx, cancel := context.WithTimeout(l.ctx, perAttemptTimeout)
+		response, err2 = llmClient.ChatLLMWithMessagesRaw(actx, l.request.LLMRequestParams)
+		cancel()
 		if err2 != nil {
 			if l.isContextLengthError(err2) {
 				logger.ErrorC(l.ctx, "Input context too long, exceeded limit.", zap.Error(err2))
@@ -303,7 +306,10 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 		}
 		llmClient.SetTools(processedPrompt.Tools)
 		logger.InfoC(l.ctx, "Start to handle streaming response ...", zap.String("model", l.request.Model))
-		if err := l.handleStreamingWithTools(llmClient, flusher, chatLog, MaxToolCallDepth); err != nil {
+		_, perAttemptTimeout := l.llmRetryDurations()
+		ctx, cancel := context.WithTimeout(l.ctx, perAttemptTimeout)
+		defer cancel()
+		if err := l.handleStreamingWithTools(ctx, llmClient, flusher, chatLog, MaxToolCallDepth); err != nil {
 			return l.handleStreamError(err, chatLog)
 		}
 		return nil
@@ -311,7 +317,8 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 
 	// Degradation enabled (auto mode): only switch model if failure occurs before first token
 	models := l.orderedModels
-	deadline := time.Now().Add(30 * time.Second)
+	totalTimeout, perAttemptTimeout := l.llmRetryDurations()
+	deadline := time.Now().Add(totalTimeout)
 	var lastErr error
 	for _, modelName := range models {
 		attempt := 0
@@ -328,6 +335,7 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 				zap.String("model", modelName),
 				zap.Int("attempt", attempt+1),
 				zap.Int64("remaining_ms", remaining.Milliseconds()),
+				zap.Int64("per_attempt_timeout_ms", perAttemptTimeout.Milliseconds()),
 			)
 
 			l.request.Model = modelName
@@ -341,7 +349,9 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 			}
 			llmClient.SetTools(processedPrompt.Tools)
 
-			err = l.handleStreamingWithTools(llmClient, flusher, chatLog, MaxToolCallDepth)
+			attemptCtx, cancel := context.WithTimeout(l.ctx, perAttemptTimeout)
+			err = l.handleStreamingWithTools(attemptCtx, llmClient, flusher, chatLog, MaxToolCallDepth)
+			cancel()
 			if err == nil {
 				return nil
 			}
@@ -359,13 +369,10 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 				zap.Error(err),
 			)
 			if retryable && attempt == 0 {
-				sleepDur := 5 * time.Second
-				if r := time.Until(deadline); r < sleepDur {
-					sleepDur = r
+				if time.Until(deadline) <= 5*time.Second {
+					return l.handleStreamError(err, chatLog)
 				}
-				if sleepDur > 0 {
-					time.Sleep(sleepDur)
-				}
+				time.Sleep(5 * time.Second)
 				attempt++
 				continue
 			}
@@ -397,12 +404,13 @@ func newStreamState() *streamState {
 }
 
 func (l *ChatCompletionLogic) handleStreamingWithTools(
+	ctx context.Context,
 	llmClient client.LLMInterface,
 	flusher http.Flusher,
 	chatLog *model.ChatLog,
 	remainingDepth int,
 ) error {
-	logger.InfoC(l.ctx, "starting to handle streaming with tools",
+	logger.InfoC(ctx, "starting to handle streaming with tools",
 		zap.Int("remainingDepth", remainingDepth),
 		zap.Int("MaxToolCallDepth", MaxToolCallDepth),
 		zap.String("promptMode", string(l.request.ExtraBody.PromptMode)),
@@ -410,13 +418,13 @@ func (l *ChatCompletionLogic) handleStreamingWithTools(
 
 	// If raw mode, directly pass through results to client
 	if l.request.ExtraBody.PromptMode == types.Raw {
-		return l.handleRawModeStream(llmClient, flusher, chatLog)
+		return l.handleRawModeStream(ctx, llmClient, flusher, chatLog)
 	}
 
 	state := newStreamState()
 
 	// Phase 1: Process streaming response
-	toolDetected, err := l.processStream(llmClient, flusher, state, remainingDepth, chatLog)
+	toolDetected, err := l.processStream(ctx, llmClient, flusher, state, remainingDepth, chatLog)
 	if err != nil {
 		// Do not send SSE error here; let caller decide based on commit status
 		return err
@@ -424,7 +432,7 @@ func (l *ChatCompletionLogic) handleStreamingWithTools(
 
 	// Phase 2: Handle tool execution or complete response
 	if toolDetected {
-		return l.handleToolExecution(llmClient, flusher, chatLog, state, remainingDepth)
+		return l.handleToolExecution(ctx, llmClient, flusher, chatLog, state, remainingDepth)
 	}
 
 	return l.completeStreamResponse(flusher, chatLog, state)
@@ -432,19 +440,20 @@ func (l *ChatCompletionLogic) handleStreamingWithTools(
 
 // processStream handles the streaming response processing
 func (l *ChatCompletionLogic) processStream(
+	ctx context.Context,
 	llmClient client.LLMInterface,
 	flusher http.Flusher,
 	state *streamState,
 	remainingDepth int,
 	chatLog *model.ChatLog,
 ) (bool, error) {
-	err := llmClient.ChatLLMWithMessagesStreamRaw(l.ctx, l.request.LLMRequestParams, func(llmResp client.LLMResponse) error {
+	err := llmClient.ChatLLMWithMessagesStreamRaw(ctx, l.request.LLMRequestParams, func(llmResp client.LLMResponse) error {
 		l.handleResonseHeaders(llmResp.Header, []string{
 			types.HeaderUserInput,
 			types.HeaderSelectLLm,
 		}, chatLog)
 
-		return l.handleStreamChunk(flusher, llmResp.ResonseLine, state, remainingDepth, chatLog)
+		return l.handleStreamChunk(ctx, flusher, llmResp.ResonseLine, state, remainingDepth, chatLog)
 	})
 
 	return state.toolDetected, err
@@ -471,6 +480,7 @@ func (l *ChatCompletionLogic) handleResonseHeaders(header *http.Header, required
 
 // handleStreamChunk processes individual streaming chunks
 func (l *ChatCompletionLogic) handleStreamChunk(
+	ctx context.Context,
 	flusher http.Flusher,
 	rawLine string,
 	state *streamState,
@@ -497,7 +507,7 @@ func (l *ChatCompletionLogic) handleStreamChunk(
 		}
 		firstTokenLatency := time.Since(state.modelStart)
 		chatLog.Latency.FirstTokenLatency = firstTokenLatency.Milliseconds()
-		logger.InfoC(l.ctx, "[first-token] first token received, and response",
+		logger.InfoC(ctx, "[first-token] first token received, and response",
 			zap.String("model", l.request.Model), zap.Duration("firstTokenLatency", firstTokenLatency))
 		state.firstToken = false
 
@@ -514,7 +524,7 @@ func (l *ChatCompletionLogic) handleStreamChunk(
 
 	// Check for tool detection
 	if !state.toolDetected && l.toolExecutor != nil && remainingDepth > 0 {
-		if err := l.detectAndHandleTool(flusher, state); err != nil {
+		if err := l.detectAndHandleTool(ctx, flusher, state); err != nil {
 			return err
 		}
 	}
@@ -526,7 +536,7 @@ func (l *ChatCompletionLogic) handleStreamChunk(
 			state.windowSent = true
 			windowLatency := time.Since(state.modelStart)
 			chatLog.Latency.WindowLatency = windowLatency.Milliseconds()
-			logger.InfoC(l.ctx, "first window tokens sent to client",
+			logger.InfoC(ctx, "first window tokens sent to client",
 				zap.Duration("firstWindowTokenLatency", windowLatency))
 		}
 
@@ -540,9 +550,9 @@ func (l *ChatCompletionLogic) handleStreamChunk(
 }
 
 // detectAndHandleTool handles tool detection and pre-tool content sending
-func (l *ChatCompletionLogic) detectAndHandleTool(flusher http.Flusher, state *streamState) error {
+func (l *ChatCompletionLogic) detectAndHandleTool(ctx context.Context, flusher http.Flusher, state *streamState) error {
 	currentContent := strings.Join(state.window, "")
-	hasTool, name := l.toolExecutor.DetectTools(l.ctx, currentContent)
+	hasTool, name := l.toolExecutor.DetectTools(ctx, currentContent)
 
 	if !hasTool {
 		return nil
@@ -550,14 +560,14 @@ func (l *ChatCompletionLogic) detectAndHandleTool(flusher http.Flusher, state *s
 
 	state.toolDetected = true
 	state.toolName = name
-	logger.InfoC(l.ctx, "detected server xml tool", zap.String("name", name))
+	logger.InfoC(ctx, "detected server xml tool", zap.String("name", name))
 
 	// Send content before tool call
 	toolStartIndex := strings.Index(currentContent, "<"+name+">")
 	if toolStartIndex > 0 {
 		preToolContent := currentContent[:toolStartIndex]
 		if err := l.sendStreamContent(flusher, state.response, preToolContent); err != nil {
-			logger.ErrorC(l.ctx, "failed to sendStreamContent when detecting tool",
+			logger.ErrorC(ctx, "failed to sendStreamContent when detecting tool",
 				zap.String("preToolContent", preToolContent), zap.Error(err))
 			return err
 		}
@@ -569,13 +579,14 @@ func (l *ChatCompletionLogic) detectAndHandleTool(flusher http.Flusher, state *s
 
 // handleToolExecution executes the detected tool and continues processing
 func (l *ChatCompletionLogic) handleToolExecution(
+	ctx context.Context,
 	llmClient client.LLMInterface,
 	flusher http.Flusher,
 	chatLog *model.ChatLog,
 	state *streamState,
 	remainingDepth int,
 ) error {
-	logger.InfoC(l.ctx, "starting to call tool", zap.String("name", state.toolName))
+	logger.InfoC(ctx, "starting to call tool", zap.String("name", state.toolName))
 	toolContent := strings.Join(state.window, "")
 	toolCall := model.ToolCall{
 		ToolName:  state.toolName,
@@ -600,14 +611,14 @@ func (l *ChatCompletionLogic) handleToolExecution(
 
 	// execute and record tool call latency
 	toolStart := time.Now()
-	result, err := l.toolExecutor.ExecuteTools(l.ctx, state.toolName, toolContent)
+	result, err := l.toolExecutor.ExecuteTools(ctx, state.toolName, toolContent)
 	toolLatency := time.Since(toolStart).Milliseconds()
 	toolCall.Latency = toolLatency
 	toolCall.ToolOutput = result
 
 	status := types.ToolStatusSuccess
 	if err != nil {
-		logger.WarnC(l.ctx, "tool execute failed", zap.String("tool", state.toolName), zap.Error(err))
+		logger.WarnC(ctx, "tool execute failed", zap.String("tool", state.toolName), zap.Error(err))
 		status = types.ToolStatusFailed
 		result = fmt.Sprintf("%s execute failed, err: %v", state.toolName, err)
 		toolCall.Error = err.Error()
@@ -616,11 +627,11 @@ func (l *ChatCompletionLogic) handleToolExecution(
 		if len(logResult) > 400 {
 			logResult = logResult[:400] + "..."
 		}
-		logger.InfoC(l.ctx, "tool execute succeed", zap.String("tool", state.toolName),
+		logger.InfoC(ctx, "tool execute succeed", zap.String("tool", state.toolName),
 			zap.String("result", logResult), zap.Int("result length", len(result)))
 
 		if len(result) > MaxToolResultLength {
-			logger.WarnC(l.ctx, "tool result truncated due to excessive length",
+			logger.WarnC(ctx, "tool result truncated due to excessive length",
 				zap.String("tool", state.toolName),
 				zap.Int("original_length", len(result)),
 				zap.Int("truncated_length", MaxToolResultLength))
@@ -671,6 +682,7 @@ func (l *ChatCompletionLogic) handleToolExecution(
 
 	// Recursive processing
 	return l.handleStreamingWithTools(
+		ctx,
 		llmClient,
 		flusher,
 		chatLog,
@@ -810,8 +822,21 @@ func (l *ChatCompletionLogic) isContextLengthError(err error) bool {
 		strings.Contains(errMsg, "Input text is too long")
 }
 
-// callWithDegradation attempts models in l.orderedModels under a 30s total budget.
-// Retry the same model once after 5s sleep on timeout or 5xx errors; otherwise move to next.
+func (l *ChatCompletionLogic) llmRetryDurations() (time.Duration, time.Duration) {
+	config := l.svcCtx.Config.LLMRetry
+	total := time.Duration(config.TotalTimeoutMs) * time.Millisecond
+	perAttempt := time.Duration(config.RequestTimeoutMs) * time.Millisecond
+	if total <= 0 {
+		total = 30 * time.Second
+	}
+	if perAttempt <= 0 {
+		perAttempt = 30 * time.Second
+	}
+	return total, perAttempt
+}
+
+// callWithDegradation attempts models in l.orderedModels under the configured total timeout budget.
+// Retry the same model once (after 5s sleep when time allows) on timeout or 5xx errors; otherwise move to next.
 func (l *ChatCompletionLogic) callWithDegradation(params types.LLMRequestParams) (types.ChatCompletionResponse, error) {
 	nilResp := types.ChatCompletionResponse{}
 	if len(l.orderedModels) == 0 {
@@ -834,7 +859,8 @@ func (l *ChatCompletionLogic) callWithDegradation(params types.LLMRequestParams)
 		return nilResp, fmt.Errorf("degradation: no valid model in order list")
 	}
 
-	deadline := time.Now().Add(30 * time.Second)
+	totalTimeout, perAttemptTimeout := l.llmRetryDurations()
+	deadline := time.Now().Add(totalTimeout)
 	var lastErr error
 	for _, modelName := range ordered {
 		attempt := 0
@@ -851,6 +877,7 @@ func (l *ChatCompletionLogic) callWithDegradation(params types.LLMRequestParams)
 				zap.String("model", modelName),
 				zap.Int("attempt", attempt+1),
 				zap.Int64("remaining_ms", remaining.Milliseconds()),
+				zap.Int64("per_attempt_timeout_ms", perAttemptTimeout.Milliseconds()),
 			)
 
 			llmClient, err := client.NewLLMClient(l.svcCtx.Config.LLM, modelName, l.headers)
@@ -861,8 +888,7 @@ func (l *ChatCompletionLogic) callWithDegradation(params types.LLMRequestParams)
 				break
 			}
 
-			// use context with remaining time
-			actx, cancel := context.WithTimeout(l.ctx, remaining)
+			actx, cancel := context.WithTimeout(l.ctx, perAttemptTimeout)
 			resp, err := llmClient.ChatLLMWithMessagesRaw(actx, params)
 			cancel()
 			if err == nil {
@@ -882,14 +908,10 @@ func (l *ChatCompletionLogic) callWithDegradation(params types.LLMRequestParams)
 			)
 
 			if retryable && attempt == 0 {
-				// sleep up to 5s or remaining time, whichever smaller
-				sleepDur := 5 * time.Second
-				if r := time.Until(deadline); r < sleepDur {
-					sleepDur = r
+				if time.Until(deadline) <= 5*time.Second {
+					return nilResp, err
 				}
-				if sleepDur > 0 {
-					time.Sleep(sleepDur)
-				}
+				time.Sleep(5 * time.Second)
 				attempt++
 				continue
 			}
@@ -919,18 +941,19 @@ func isRetryableAPIError(err error) bool {
 
 // handleRawModeStream handles raw mode streaming by directly passing through LLM response
 func (l *ChatCompletionLogic) handleRawModeStream(
+	ctx context.Context,
 	llmClient client.LLMInterface,
 	flusher http.Flusher,
 	chatLog *model.ChatLog,
 ) error {
-	logger.InfoC(l.ctx, "handling raw mode streaming - direct passthrough")
+	logger.InfoC(ctx, "handling raw mode streaming - direct passthrough")
 
 	// Direct call LLM streaming interface and pass through results
 	modelStart := time.Now()
 	firstTokenReceived := false
 	var firstTokenTime time.Time
 
-	err := llmClient.ChatLLMWithMessagesStreamRaw(l.ctx, l.request.LLMRequestParams, func(llmResp client.LLMResponse) error {
+	err := llmClient.ChatLLMWithMessagesStreamRaw(ctx, l.request.LLMRequestParams, func(llmResp client.LLMResponse) error {
 		// Handle response headers
 		l.handleResonseHeaders(llmResp.Header, []string{
 			types.HeaderUserInput,
@@ -945,7 +968,7 @@ func (l *ChatCompletionLogic) handleRawModeStream(
 				firstTokenTime = time.Now()
 				firstTokenLatency := firstTokenTime.Sub(modelStart)
 				chatLog.Latency.FirstTokenLatency = firstTokenLatency.Milliseconds()
-				logger.InfoC(l.ctx, "[first-token][raw mode] first token received, and response",
+				logger.InfoC(ctx, "[first-token][raw mode] first token received, and response",
 					zap.String("model", l.request.Model), zap.Duration("firstTokenLatency", firstTokenLatency))
 			}
 
@@ -960,7 +983,7 @@ func (l *ChatCompletionLogic) handleRawModeStream(
 
 	if err != nil {
 		if l.isContextLengthError(err) {
-			logger.ErrorC(l.ctx, "Input context too long in raw mode", zap.Error(err))
+			logger.ErrorC(ctx, "Input context too long in raw mode", zap.Error(err))
 			lengthErr := types.NewContextTooLongError()
 			l.responseHandler.sendSSEError(l.writer, lengthErr)
 			chatLog.AddError(types.ErrContextExceeded, lengthErr)
@@ -978,11 +1001,11 @@ func (l *ChatCompletionLogic) handleRawModeStream(
 	chatLog.Latency.MainModelLatency = totalLatency.Milliseconds()
 
 	if firstTokenReceived {
-		logger.InfoC(l.ctx, "[last-token][raw mode] last token received",
+		logger.InfoC(ctx, "[last-token][raw mode] last token received",
 			zap.Duration("totalLatency", totalLatency))
 	}
 
-	logger.InfoC(l.ctx, "raw mode streaming completed",
+	logger.InfoC(ctx, "raw mode streaming completed",
 		zap.Int64("modelLatency", chatLog.Latency.MainModelLatency))
 
 	return nil
