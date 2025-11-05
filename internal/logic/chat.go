@@ -208,17 +208,11 @@ func (l *ChatCompletionLogic) ChatCompletion() (resp *types.ChatCompletionRespon
 		}
 		response = resp
 	} else {
-		// Fallback to single attempt
-		llmClient, err := client.NewLLMClient(l.svcCtx.Config.LLM, l.request.Model, l.headers)
-		if err != nil {
-			chatLog.AddError(types.ErrServerError, err)
-			return nil, fmt.Errorf("failed to create LLM client: %w", err)
-		}
+		// Fallback to single model with retry
 		var err2 error
-		_, perAttemptTimeout := l.llmRetryDurations()
-		actx, cancel := context.WithTimeout(l.ctx, perAttemptTimeout)
-		response, err2 = llmClient.ChatLLMWithMessagesRaw(actx, l.request.LLMRequestParams)
-		cancel()
+		totalTimeout, _ := l.llmRetryDurations()
+		deadline := time.Now().Add(totalTimeout)
+		response, err2 = l.callModelWithRetry(l.request.Model, l.request.LLMRequestParams, deadline)
 		if err2 != nil {
 			if l.isContextLengthError(err2) {
 				logger.ErrorC(l.ctx, "Input context too long, exceeded limit.", zap.Error(err2))
@@ -297,22 +291,65 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 
 	// Streaming degradation only for auto mode (when orderedModels is present)
 	if len(l.orderedModels) == 0 {
-		// No degradation list → single model streaming (non-auto path)
-		llmClient, err := client.NewLLMClient(l.svcCtx.Config.LLM, l.request.Model, l.headers)
-		if err != nil {
-			l.responseHandler.sendSSEError(l.writer, err)
-			chatLog.AddError(types.ErrServerError, err)
-			return fmt.Errorf("LLM client creation failed: %w", err)
+		// No degradation list → single model streaming (non-auto path) with retry
+		totalTimeout, perAttemptTimeout := l.llmRetryDurations()
+		deadline := time.Now().Add(totalTimeout)
+		var lastErr error
+		for attempt := 0; attempt < 2; attempt++ {
+			remaining := time.Until(deadline)
+			if remaining <= 0 {
+				if lastErr == nil {
+					lastErr = types.NewModelServiceUnavailableError()
+				}
+				return l.handleStreamError(lastErr, chatLog)
+			}
+
+			logger.InfoC(l.ctx, "single-model retry(stream): attempting model",
+				zap.String("model", l.request.Model),
+				zap.Int("attempt", attempt+1),
+				zap.Int64("remaining_ms", remaining.Milliseconds()),
+				zap.Int64("per_attempt_timeout_ms", perAttemptTimeout.Milliseconds()),
+			)
+
+			llmClient, err := client.NewLLMClient(l.svcCtx.Config.LLM, l.request.Model, l.headers)
+			if err != nil {
+				lastErr = err
+				l.responseHandler.sendSSEError(l.writer, err)
+				chatLog.AddError(types.ErrServerError, err)
+				return fmt.Errorf("LLM client creation failed: %w", err)
+			}
+			llmClient.SetTools(processedPrompt.Tools)
+			l.streamCommitted = false
+
+			attemptCtx, cancel := context.WithTimeout(l.ctx, perAttemptTimeout)
+			err = l.handleStreamingWithTools(attemptCtx, llmClient, flusher, chatLog, MaxToolCallDepth)
+			cancel()
+			if err == nil {
+				return nil
+			}
+
+			lastErr = err
+			if l.streamCommitted {
+				return l.handleStreamError(err, chatLog)
+			}
+
+			retryable := isRetryableAPIError(err)
+			logger.WarnC(l.ctx, "single-model retry(stream): attempt failed before first token",
+				zap.String("model", l.request.Model),
+				zap.Bool("retryable", retryable),
+				zap.Error(err),
+			)
+			if retryable && attempt == 0 {
+				if time.Until(deadline) <= 5*time.Second {
+					return l.handleStreamError(err, chatLog)
+				}
+				time.Sleep(5 * time.Second)
+				continue
+			}
+
+			break
 		}
-		llmClient.SetTools(processedPrompt.Tools)
-		logger.InfoC(l.ctx, "Start to handle streaming response ...", zap.String("model", l.request.Model))
-		_, perAttemptTimeout := l.llmRetryDurations()
-		ctx, cancel := context.WithTimeout(l.ctx, perAttemptTimeout)
-		defer cancel()
-		if err := l.handleStreamingWithTools(ctx, llmClient, flusher, chatLog, MaxToolCallDepth); err != nil {
-			return l.handleStreamError(err, chatLog)
-		}
-		return nil
+		return l.handleStreamError(lastErr, chatLog)
 	}
 
 	// Degradation enabled (auto mode): only switch model if failure occurs before first token
@@ -835,6 +872,71 @@ func (l *ChatCompletionLogic) llmRetryDurations() (time.Duration, time.Duration)
 	return total, perAttempt
 }
 
+func (l *ChatCompletionLogic) callModelWithRetry(modelName string, params types.LLMRequestParams, deadline time.Time) (types.ChatCompletionResponse, error) {
+	nilResp := types.ChatCompletionResponse{}
+	totalTimeout, perAttemptTimeout := l.llmRetryDurations()
+	if deadline.IsZero() {
+		deadline = time.Now().Add(totalTimeout)
+	}
+	var lastErr error
+
+	for attempt := 0; attempt < 2; attempt++ {
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			if lastErr == nil {
+				lastErr = types.NewModelServiceUnavailableError()
+			}
+			return nilResp, lastErr
+		}
+
+		logger.InfoC(l.ctx, "single-model retry: calling model",
+			zap.String("model", modelName),
+			zap.Int("attempt", attempt+1),
+			zap.Int64("remaining_ms", remaining.Milliseconds()),
+			zap.Int64("per_attempt_timeout_ms", perAttemptTimeout.Milliseconds()),
+		)
+
+		llmClient, err := client.NewLLMClient(l.svcCtx.Config.LLM, modelName, l.headers)
+		if err != nil {
+			logger.WarnC(l.ctx, "single-model retry: failed to create llm client",
+				zap.String("model", modelName), zap.Error(err))
+			return nilResp, err
+		}
+
+		actx, cancel := context.WithTimeout(l.ctx, perAttemptTimeout)
+		resp, err := llmClient.ChatLLMWithMessagesRaw(actx, params)
+		cancel()
+		if err == nil {
+			l.request.Model = modelName
+			if l.writer != nil {
+				l.writer.Header().Set(types.HeaderSelectLLm, modelName)
+			}
+			logger.InfoC(l.ctx, "single-model retry: model succeeded", zap.String("model", modelName))
+			return resp, nil
+		}
+
+		lastErr = err
+		retryable := isRetryableAPIError(err)
+		logger.WarnC(l.ctx, "single-model retry: attempt failed",
+			zap.String("model", modelName),
+			zap.Bool("retryable", retryable),
+			zap.Error(err),
+		)
+
+		if retryable && attempt == 0 {
+			if time.Until(deadline) <= 5*time.Second {
+				return nilResp, err
+			}
+			time.Sleep(5 * time.Second)
+			continue
+		}
+
+		break
+	}
+
+	return nilResp, lastErr
+}
+
 // callWithDegradation attempts models in l.orderedModels under the configured total timeout budget.
 // Retry the same model once (after 5s sleep when time allows) on timeout or 5xx errors; otherwise move to next.
 func (l *ChatCompletionLogic) callWithDegradation(params types.LLMRequestParams) (types.ChatCompletionResponse, error) {
@@ -859,65 +961,34 @@ func (l *ChatCompletionLogic) callWithDegradation(params types.LLMRequestParams)
 		return nilResp, fmt.Errorf("degradation: no valid model in order list")
 	}
 
-	totalTimeout, perAttemptTimeout := l.llmRetryDurations()
+	totalTimeout, _ := l.llmRetryDurations()
 	deadline := time.Now().Add(totalTimeout)
 	var lastErr error
 	for _, modelName := range ordered {
-		attempt := 0
-		for attempt < 2 {
-			remaining := time.Until(deadline)
-			if remaining <= 0 {
-				if lastErr == nil {
-					lastErr = types.NewModelServiceUnavailableError()
-				}
-				return nilResp, lastErr
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			if lastErr == nil {
+				lastErr = types.NewModelServiceUnavailableError()
 			}
-
-			logger.InfoC(l.ctx, "degradation: calling model",
-				zap.String("model", modelName),
-				zap.Int("attempt", attempt+1),
-				zap.Int64("remaining_ms", remaining.Milliseconds()),
-				zap.Int64("per_attempt_timeout_ms", perAttemptTimeout.Milliseconds()),
-			)
-
-			llmClient, err := client.NewLLMClient(l.svcCtx.Config.LLM, modelName, l.headers)
-			if err != nil {
-				// client creation error: treat as non-retryable for this model
-				logger.WarnC(l.ctx, "degradation: failed to create llm client", zap.String("model", modelName), zap.Error(err))
-				lastErr = err
-				break
-			}
-
-			actx, cancel := context.WithTimeout(l.ctx, perAttemptTimeout)
-			resp, err := llmClient.ChatLLMWithMessagesRaw(actx, params)
-			cancel()
-			if err == nil {
-				// success
-				l.request.Model = modelName
-				l.writer.Header().Set(types.HeaderSelectLLm, modelName)
-				logger.InfoC(l.ctx, "degradation: model succeeded", zap.String("model", modelName))
-				return resp, nil
-			}
-
-			lastErr = err
-			retryable := isRetryableAPIError(err)
-			logger.WarnC(l.ctx, "degradation: model attempt failed",
-				zap.String("model", modelName),
-				zap.Bool("retryable", retryable),
-				zap.Error(err),
-			)
-
-			if retryable && attempt == 0 {
-				if time.Until(deadline) <= 5*time.Second {
-					return nilResp, err
-				}
-				time.Sleep(5 * time.Second)
-				attempt++
-				continue
-			}
-			// move to next model
-			break
+			return nilResp, lastErr
 		}
+
+		logger.InfoC(l.ctx, "degradation: attempting model",
+			zap.String("model", modelName),
+			zap.Int64("remaining_ms", remaining.Milliseconds()),
+		)
+
+		resp, err := l.callModelWithRetry(modelName, params, deadline)
+		if err == nil {
+			logger.InfoC(l.ctx, "degradation: model succeeded", zap.String("model", modelName))
+			return resp, nil
+		}
+
+		lastErr = err
+		logger.WarnC(l.ctx, "degradation: model failed, moving to next",
+			zap.String("model", modelName),
+			zap.Error(err),
+		)
 	}
 	return nilResp, lastErr
 }
