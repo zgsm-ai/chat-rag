@@ -17,6 +17,7 @@ import (
 	"github.com/zgsm-ai/chat-rag/internal/client"
 	"github.com/zgsm-ai/chat-rag/internal/config"
 	"github.com/zgsm-ai/chat-rag/internal/logger"
+	"github.com/zgsm-ai/chat-rag/internal/timeout"
 	"github.com/zgsm-ai/chat-rag/internal/types"
 	"github.com/zgsm-ai/chat-rag/internal/utils"
 	"go.uber.org/zap"
@@ -99,7 +100,12 @@ func (s *Strategy) Run(
 		analyzerHeaders = &cloned
 	}
 
-	llmClient, err := client.NewLLMClient(llmCfg, s.cfg.Analyzer.Model, analyzerHeaders)
+	// Use default timeout config for analyzer
+	timeoutCfg := config.LLMTimeoutConfig{
+		IdleTimeoutMs:      30000,
+		TotalIdleTimeoutMs: 30000,
+	}
+	llmClient, err := client.NewLLMClient(llmCfg, timeoutCfg, s.cfg.Analyzer.Model, analyzerHeaders)
 	if err != nil {
 		logger.WarnC(ctx, "semantic router: fallback used",
 			zap.String("reason", "analyzer_client_error"),
@@ -119,13 +125,16 @@ func (s *Strategy) Run(
 			)
 			return s.selectFallback(req), current, s.orderCandidatesByLabel("", req.Model, cands), nil
 		}
-		actx, cancel := context.WithTimeout(ctx, minDuration(perTimeout, remaining))
+		// Create idle timer for analyzer request
+		tracker := timeout.NewIdleTracker(minDuration(perTimeout, remaining))
+		actx, cancel, idleTimer := timeout.NewIdleTimer(ctx, minDuration(perTimeout, remaining), tracker)
 		logger.InfoC(ctx, "semantic router: analyzer request start",
 			zap.String("model", s.cfg.Analyzer.Model),
 			zap.Int("timeout_ms", int(minDuration(perTimeout, remaining).Milliseconds())),
 		)
 		attemptStart := time.Now()
-		r, err := llmClient.ChatLLMWithMessagesRaw(actx, types.LLMRequestParams{Messages: []types.Message{{Role: types.RoleUser, Content: prompt}}})
+		r, err := llmClient.ChatLLMWithMessagesRaw(actx, types.LLMRequestParams{Messages: []types.Message{{Role: types.RoleUser, Content: prompt}}}, idleTimer)
+		idleTimer.Stop()
 		cancel()
 		if err != nil {
 			// retry on timeout/network up to 3 times total

@@ -155,7 +155,12 @@ func copyAndSetQuotaIdentity(headers *http.Header) *http.Header {
 
 // LogAsync logs a chat completion asynchronously
 func (ls *LoggerRecordService) LogAsync(logs *model.ChatLog, headers *http.Header) {
-	llmClient, err := client.NewLLMClient(ls.llmConfig, ls.classifyModel, copyAndSetQuotaIdentity(headers))
+	// Use default timeout config for log classification
+	timeoutCfg := config.LLMTimeoutConfig{
+		IdleTimeoutMs:      30000,
+		TotalIdleTimeoutMs: 30000,
+	}
+	llmClient, err := client.NewLLMClient(ls.llmConfig, timeoutCfg, ls.classifyModel, copyAndSetQuotaIdentity(headers))
 	if err != nil {
 		logger.Error("Failed to create LLM client",
 			zap.String("operation", "LogAsync"),

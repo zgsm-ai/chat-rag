@@ -59,6 +59,11 @@ const (
 
 	ErrCodeServerBusy = "chat-rag.server_busy"
 	ErrMsgServerBusy  = "Server is busy. Please try again later."
+
+	ErrCodeStreamIdleTimeout      = "chat-rag.stream_idle_timeout"
+	ErrMsgStreamIdleTimeout       = "Request idle timeout: no data received within the allowed idle period."
+	ErrCodeTotalStreamIdleTimeout = "chat-rag.total_stream_idle_timeout"
+	ErrMsgTotalStreamIdleTimeout  = "Total idle timeout: cumulative idle time across retries exceeded the allowed limit."
 )
 
 type APIError struct {
@@ -136,4 +141,38 @@ func NewHTTPStatusError(statusCode int, bodyStr string) *APIError {
 
 func (e *APIError) Error() string {
 	return fmt.Sprintf(`{"code":"%s","message":"%s","success":%v}`, e.Code, e.Message, e.Success)
+}
+
+// IdleTimeoutError represents an idle timeout error
+type IdleTimeoutError struct {
+	Total      bool   // true if total idle budget exhausted
+	StatusCode int    // HTTP status code (504)
+	Code       string // Error code
+	Message    string // Error message
+}
+
+func NewStreamIdleTimeoutError() *IdleTimeoutError {
+	return &IdleTimeoutError{
+		Total:      false,
+		StatusCode: http.StatusGatewayTimeout,
+		Code:       ErrCodeStreamIdleTimeout,
+		Message:    ErrMsgStreamIdleTimeout,
+	}
+}
+
+func NewTotalIdleTimeoutError() *IdleTimeoutError {
+	return &IdleTimeoutError{
+		Total:      true,
+		StatusCode: http.StatusGatewayTimeout,
+		Code:       ErrCodeTotalStreamIdleTimeout,
+		Message:    ErrMsgTotalStreamIdleTimeout,
+	}
+}
+
+func (e *IdleTimeoutError) Error() string {
+	timeoutType := "single"
+	if e.Total {
+		timeoutType = "total"
+	}
+	return fmt.Sprintf("idle timeout (%s): %s", timeoutType, e.Message)
 }

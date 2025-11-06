@@ -67,8 +67,14 @@ func NewRagCompressProcessor(
 	modelName string,
 	promptMode string,
 ) (*RagCompressProcessor, error) {
+	// Use default timeout config for summary
+	timeoutCfg := config.LLMTimeoutConfig{
+		IdleTimeoutMs:      30000,
+		TotalIdleTimeoutMs: 30000,
+	}
 	llmClient, err := client.NewLLMClient(
 		svcCtx.Config.LLM,
+		timeoutCfg,
 		svcCtx.Config.ContextCompressConfig.SummaryModel,
 		copyAndSetQuotaIdentity(headers),
 	)
