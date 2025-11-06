@@ -63,6 +63,12 @@ LLMRetry:
   # 单次调用 LLM 的超时时间上限（毫秒）
   RequestTimeoutMs: 30000
 
+LLMTimeout:
+  # 单次连续空闲阈值（毫秒），默认 30000ms
+  IdleTimeoutMs: 30000
+  # 总空闲预算（毫秒），跨重试/降级累计空闲时长上限，默认 30000ms
+  TotalIdleTimeoutMs: 30000
+
 Redis:
   Addr: "127.0.0.1:6379"
 
