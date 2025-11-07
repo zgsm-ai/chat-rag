@@ -154,7 +154,7 @@ type IdleTimeoutError struct {
 func NewStreamIdleTimeoutError() *IdleTimeoutError {
 	return &IdleTimeoutError{
 		Total:      false,
-		StatusCode: http.StatusGatewayTimeout,
+		StatusCode: http.StatusOK,
 		Code:       ErrCodeStreamIdleTimeout,
 		Message:    ErrMsgStreamIdleTimeout,
 	}
@@ -163,7 +163,7 @@ func NewStreamIdleTimeoutError() *IdleTimeoutError {
 func NewTotalIdleTimeoutError() *IdleTimeoutError {
 	return &IdleTimeoutError{
 		Total:      true,
-		StatusCode: http.StatusGatewayTimeout,
+		StatusCode: http.StatusOK,
 		Code:       ErrCodeTotalStreamIdleTimeout,
 		Message:    ErrMsgTotalStreamIdleTimeout,
 	}
