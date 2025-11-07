@@ -221,7 +221,7 @@ func (l *ChatCompletionLogic) ChatCompletion() (resp *types.ChatCompletionRespon
 	} else {
 		// Fallback to single model with retry
 		var err2 error
-		response, err2 = l.callModelWithRetry(l.request.Model, l.request.LLMRequestParams, time.Time{}, idleTracker)
+		response, err2 = l.callModelWithRetry(l.request.Model, l.request.LLMRequestParams, idleTracker)
 		if err2 != nil {
 			if l.isContextLengthError(err2) {
 				logger.ErrorC(l.ctx, "Input context too long, exceeded limit.", zap.Error(err2))
@@ -870,7 +870,7 @@ func (l *ChatCompletionLogic) isContextLengthError(err error) bool {
 		strings.Contains(errMsg, "Input text is too long")
 }
 
-func (l *ChatCompletionLogic) callModelWithRetry(modelName string, params types.LLMRequestParams, deadline time.Time, idleTrackerOpt ...*timeout.IdleTracker) (types.ChatCompletionResponse, error) {
+func (l *ChatCompletionLogic) callModelWithRetry(modelName string, params types.LLMRequestParams, idleTrackerOpt ...*timeout.IdleTracker) (types.ChatCompletionResponse, error) {
 	nilResp := types.ChatCompletionResponse{}
 
 	// Use provided idle tracker if available, otherwise create a new one for this call
@@ -966,7 +966,7 @@ func (l *ChatCompletionLogic) callWithDegradation(params types.LLMRequestParams,
 			zap.String("model", modelName),
 		)
 
-		resp, err := l.callModelWithRetry(modelName, params, time.Time{}, idleTracker)
+		resp, err := l.callModelWithRetry(modelName, params, idleTracker)
 		if err == nil {
 			logger.InfoC(l.ctx, "degradation: model succeeded", zap.String("model", modelName))
 			return resp, nil
