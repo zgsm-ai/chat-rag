@@ -367,6 +367,11 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 
 	var lastErr error
 	for _, modelName := range models {
+		// Update header immediately when switching to a different model in auto mode
+		if l.writer != nil {
+			l.writer.Header().Set(types.HeaderSelectLLm, modelName)
+		}
+
 		attempt := 0
 		for attempt < 2 {
 			remaining := time.Until(deadline)
