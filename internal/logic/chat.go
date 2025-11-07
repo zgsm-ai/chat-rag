@@ -221,9 +221,7 @@ func (l *ChatCompletionLogic) ChatCompletion() (resp *types.ChatCompletionRespon
 	} else {
 		// Fallback to single model with retry
 		var err2 error
-		totalTimeout, _ := l.llmRetryDurations()
-		deadline := time.Now().Add(totalTimeout)
-		response, err2 = l.callModelWithRetry(l.request.Model, l.request.LLMRequestParams, deadline, idleTracker)
+		response, err2 = l.callModelWithRetry(l.request.Model, l.request.LLMRequestParams, time.Time{}, idleTracker)
 		if err2 != nil {
 			if l.isContextLengthError(err2) {
 				logger.ErrorC(l.ctx, "Input context too long, exceeded limit.", zap.Error(err2))
@@ -306,24 +304,11 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 	// Streaming degradation only for auto mode (when orderedModels is present)
 	if len(l.orderedModels) == 0 {
 		// No degradation list → single model streaming (non-auto path) with retry
-		totalTimeout, perAttemptTimeout := l.llmRetryDurations()
-		deadline := time.Now().Add(totalTimeout)
-
 		var lastErr error
 		for attempt := 0; attempt < 2; attempt++ {
-			remaining := time.Until(deadline)
-			if remaining <= 0 {
-				if lastErr == nil {
-					lastErr = types.NewModelServiceUnavailableError()
-				}
-				return l.handleStreamError(lastErr, chatLog)
-			}
-
 			logger.InfoC(l.ctx, "single-model retry(stream): attempting model",
 				zap.String("model", l.request.Model),
 				zap.Int("attempt", attempt+1),
-				zap.Int64("remaining_ms", remaining.Milliseconds()),
-				zap.Int64("per_attempt_timeout_ms", perAttemptTimeout.Milliseconds()),
 			)
 
 			llmClient, err := client.NewLLMClient(l.svcCtx.Config.LLM, l.svcCtx.Config.LLMTimeout, l.request.Model, l.headers)
@@ -336,9 +321,7 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 			llmClient.SetTools(processedPrompt.Tools)
 			l.streamCommitted = false
 
-			attemptCtx, cancel := context.WithTimeout(l.ctx, perAttemptTimeout)
-			err = l.handleStreamingWithTools(attemptCtx, llmClient, flusher, chatLog, MaxToolCallDepth, idleTracker)
-			cancel()
+			err = l.handleStreamingWithTools(l.ctx, llmClient, flusher, chatLog, MaxToolCallDepth, idleTracker)
 			if err == nil {
 				return nil
 			}
@@ -355,8 +338,12 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 				zap.Error(err),
 			)
 			if retryable && attempt == 0 {
-				if time.Until(deadline) <= 5*time.Second {
-					return l.handleStreamError(err, chatLog)
+				// Check if we have enough idle budget remaining for retry
+				remainingIdleBudget := idleTracker.Remaining()
+				if remainingIdleBudget < 5*time.Second {
+					logger.WarnC(l.ctx, "single-model retry(stream): insufficient idle budget for retry",
+						zap.Duration("remainingIdleBudget", remainingIdleBudget))
+					break
 				}
 				time.Sleep(5 * time.Second)
 				continue
@@ -369,8 +356,6 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 
 	// Degradation enabled (auto mode): only switch model if failure occurs before first token
 	models := l.orderedModels
-	totalTimeout, perAttemptTimeout := l.llmRetryDurations()
-	deadline := time.Now().Add(totalTimeout)
 
 	var lastErr error
 	for _, modelName := range models {
@@ -381,19 +366,9 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 
 		attempt := 0
 		for attempt < 2 {
-			remaining := time.Until(deadline)
-			if remaining <= 0 {
-				if lastErr == nil {
-					lastErr = types.NewModelServiceUnavailableError()
-				}
-				return l.handleStreamError(lastErr, chatLog)
-			}
-
 			logger.InfoC(l.ctx, "degradation(stream): attempting model",
 				zap.String("model", modelName),
 				zap.Int("attempt", attempt+1),
-				zap.Int64("remaining_ms", remaining.Milliseconds()),
-				zap.Int64("per_attempt_timeout_ms", perAttemptTimeout.Milliseconds()),
 			)
 
 			l.request.Model = modelName
@@ -407,9 +382,7 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 			}
 			llmClient.SetTools(processedPrompt.Tools)
 
-			attemptCtx, cancel := context.WithTimeout(l.ctx, perAttemptTimeout)
-			err = l.handleStreamingWithTools(attemptCtx, llmClient, flusher, chatLog, MaxToolCallDepth, idleTracker)
-			cancel()
+			err = l.handleStreamingWithTools(l.ctx, llmClient, flusher, chatLog, MaxToolCallDepth, idleTracker)
 			if err == nil {
 				return nil
 			}
@@ -427,8 +400,13 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 				zap.Error(err),
 			)
 			if retryable && attempt == 0 {
-				if time.Until(deadline) <= 5*time.Second {
-					return l.handleStreamError(err, chatLog)
+				// Check if we have enough idle budget remaining for retry
+				remainingIdleBudget := idleTracker.Remaining()
+				if remainingIdleBudget < 5*time.Second {
+					logger.WarnC(l.ctx, "degradation(stream): insufficient idle budget for retry",
+						zap.String("model", modelName),
+						zap.Duration("remainingIdleBudget", remainingIdleBudget))
+					break
 				}
 				time.Sleep(5 * time.Second)
 				attempt++
@@ -892,25 +870,8 @@ func (l *ChatCompletionLogic) isContextLengthError(err error) bool {
 		strings.Contains(errMsg, "Input text is too long")
 }
 
-func (l *ChatCompletionLogic) llmRetryDurations() (time.Duration, time.Duration) {
-	config := l.svcCtx.Config.LLMRetry
-	total := time.Duration(config.TotalTimeoutMs) * time.Millisecond
-	perAttempt := time.Duration(config.RequestTimeoutMs) * time.Millisecond
-	if total <= 0 {
-		total = 30 * time.Second
-	}
-	if perAttempt <= 0 {
-		perAttempt = 30 * time.Second
-	}
-	return total, perAttempt
-}
-
 func (l *ChatCompletionLogic) callModelWithRetry(modelName string, params types.LLMRequestParams, deadline time.Time, idleTrackerOpt ...*timeout.IdleTracker) (types.ChatCompletionResponse, error) {
 	nilResp := types.ChatCompletionResponse{}
-	totalTimeout, perAttemptTimeout := l.llmRetryDurations()
-	if deadline.IsZero() {
-		deadline = time.Now().Add(totalTimeout)
-	}
 
 	// Use provided idle tracker if available, otherwise create a new one for this call
 	var sharedTracker *timeout.IdleTracker
@@ -923,19 +884,9 @@ func (l *ChatCompletionLogic) callModelWithRetry(modelName string, params types.
 	var lastErr error
 
 	for attempt := 0; attempt < 2; attempt++ {
-		remaining := time.Until(deadline)
-		if remaining <= 0 {
-			if lastErr == nil {
-				lastErr = types.NewModelServiceUnavailableError()
-			}
-			return nilResp, lastErr
-		}
-
 		logger.InfoC(l.ctx, "single-model retry: calling model",
 			zap.String("model", modelName),
 			zap.Int("attempt", attempt+1),
-			zap.Int64("remaining_ms", remaining.Milliseconds()),
-			zap.Int64("per_attempt_timeout_ms", perAttemptTimeout.Milliseconds()),
 		)
 
 		llmClient, err := client.NewLLMClient(l.svcCtx.Config.LLM, l.svcCtx.Config.LLMTimeout, modelName, l.headers)
@@ -945,13 +896,11 @@ func (l *ChatCompletionLogic) callModelWithRetry(modelName string, params types.
 			return nilResp, err
 		}
 
-		actx, cancel := context.WithTimeout(l.ctx, perAttemptTimeout)
 		// Use the shared idle tracker instead of creating a new one
-		timerCtx, timerCancel, idleTimer := timeout.NewIdleTimer(actx, time.Duration(l.svcCtx.Config.LLMTimeout.IdleTimeoutMs)*time.Millisecond, sharedTracker)
+		timerCtx, timerCancel, idleTimer := timeout.NewIdleTimer(l.ctx, time.Duration(l.svcCtx.Config.LLMTimeout.IdleTimeoutMs)*time.Millisecond, sharedTracker)
 		resp, err := llmClient.ChatLLMWithMessagesRaw(timerCtx, params, idleTimer)
 		idleTimer.Stop()
 		timerCancel()
-		cancel()
 		if err == nil {
 			l.request.Model = modelName
 			if l.writer != nil {
@@ -970,8 +919,12 @@ func (l *ChatCompletionLogic) callModelWithRetry(modelName string, params types.
 		)
 
 		if retryable && attempt == 0 {
-			if time.Until(deadline) <= 5*time.Second {
-				return nilResp, err
+			// Check if we have enough idle budget remaining for retry
+			remainingIdleBudget := sharedTracker.Remaining()
+			if remainingIdleBudget < 5*time.Second {
+				logger.WarnC(l.ctx, "single-model retry: insufficient idle budget for retry",
+					zap.Duration("remainingIdleBudget", remainingIdleBudget))
+				break
 			}
 			time.Sleep(5 * time.Second)
 			continue
@@ -983,8 +936,8 @@ func (l *ChatCompletionLogic) callModelWithRetry(modelName string, params types.
 	return nilResp, lastErr
 }
 
-// callWithDegradation attempts models in l.orderedModels under the configured total timeout budget.
-// Retry the same model once (after 5s sleep when time allows) on timeout or 5xx errors; otherwise move to next.
+// callWithDegradation attempts models in l.orderedModels with idle timeout control.
+// Retry the same model once (after 5s sleep) on timeout or 5xx errors; otherwise move to next.
 func (l *ChatCompletionLogic) callWithDegradation(params types.LLMRequestParams, idleTracker *timeout.IdleTracker) (types.ChatCompletionResponse, error) {
 	nilResp := types.ChatCompletionResponse{}
 	if len(l.orderedModels) == 0 {
@@ -1007,25 +960,13 @@ func (l *ChatCompletionLogic) callWithDegradation(params types.LLMRequestParams,
 		return nilResp, fmt.Errorf("degradation: no valid model in order list")
 	}
 
-	totalTimeout, _ := l.llmRetryDurations()
-	deadline := time.Now().Add(totalTimeout)
-
 	var lastErr error
 	for _, modelName := range ordered {
-		remaining := time.Until(deadline)
-		if remaining <= 0 {
-			if lastErr == nil {
-				lastErr = types.NewModelServiceUnavailableError()
-			}
-			return nilResp, lastErr
-		}
-
 		logger.InfoC(l.ctx, "degradation: attempting model",
 			zap.String("model", modelName),
-			zap.Int64("remaining_ms", remaining.Milliseconds()),
 		)
 
-		resp, err := l.callModelWithRetry(modelName, params, deadline, idleTracker)
+		resp, err := l.callModelWithRetry(modelName, params, time.Time{}, idleTracker)
 		if err == nil {
 			logger.InfoC(l.ctx, "degradation: model succeeded", zap.String("model", modelName))
 			return resp, nil
