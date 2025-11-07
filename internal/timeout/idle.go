@@ -73,6 +73,7 @@ type IdleTimer struct {
 	lastResetTime time.Time
 	idleStartTime time.Time
 	resetCount    int64
+	generation    int64 // Generation counter to detect stale timeout events
 }
 
 // NewIdleTimer creates a new IdleTimer with the specified per-idle timeout and tracker
@@ -115,28 +116,51 @@ func NewIdleTimer(parentCtx context.Context, perIdle time.Duration, tracker *Idl
 
 // watch monitors the timer and contexts
 func (it *IdleTimer) watch() {
-	select {
-	case <-it.ctx.Done():
-		// Parent context cancelled
-		it.mu.Lock()
-		if it.timer != nil {
-			it.timer.Stop()
-		}
-		it.mu.Unlock()
-		return
+	for {
+		select {
+		case <-it.ctx.Done():
+			// Parent context cancelled
+			it.mu.Lock()
+			if it.timer != nil {
+				it.timer.Stop()
+			}
+			it.mu.Unlock()
+			return
 
-	case <-it.timer.C:
-		// Timer expired - handle timeout
-		it.handleTimeout()
+		case <-it.timer.C:
+			// Timer expired - capture generation immediately after reading from channel
+			it.mu.Lock()
+			capturedGen := it.generation
+			stopped := it.stopped
+			it.mu.Unlock()
+
+			if stopped {
+				return
+			}
+
+			// Handle timeout with the captured generation
+			// If it's a real timeout (not stale), handleTimeout will cancel the context
+			// and we'll exit via the ctx.Done() case in the next iteration
+			it.handleTimeout(capturedGen)
+		}
 	}
 }
 
 // handleTimeout is called when the timer expires
-func (it *IdleTimer) handleTimeout() {
+// expectedGen is the generation captured immediately after reading from timer.C
+func (it *IdleTimer) handleTimeout(expectedGen int64) {
 	it.mu.Lock()
 	defer it.mu.Unlock()
 
 	if it.stopped {
+		return
+	}
+
+	// Check if the generation has changed (meaning Reset() was called after timer fired)
+	if it.generation != expectedGen {
+		logger.Debug("IdleTimer: ignoring stale timeout event",
+			zap.Int64("expectedGen", expectedGen),
+			zap.Int64("currentGen", it.generation))
 		return
 	}
 
@@ -176,12 +200,24 @@ func (it *IdleTimer) Reset() {
 		return
 	}
 
+	// Increment generation to invalidate any pending timeout events
+	it.generation++
+
 	// Reset the tracker's total budget
 	it.tracker.Reset()
 
 	// Reset the timer to perIdle duration
+	// According to Go documentation, we must drain the channel if Stop() returns false
 	if it.timer != nil {
-		it.timer.Stop()
+		// Stop the timer and check if it was already expired
+		if !it.timer.Stop() {
+			// Timer already expired, drain the channel to avoid blocking
+			// Use select with default to avoid blocking if watch() goroutine already consumed it
+			select {
+			case <-it.timer.C:
+			default:
+			}
+		}
 		it.timer.Reset(it.perIdle)
 	}
 
@@ -192,7 +228,8 @@ func (it *IdleTimer) Reset() {
 	logger.Debug("IdleTimer reset",
 		zap.Duration("perIdle", it.perIdle),
 		zap.Duration("remainingBudget", it.tracker.Remaining()),
-		zap.Int64("resetCount", it.resetCount))
+		zap.Int64("resetCount", it.resetCount),
+		zap.Int64("generation", it.generation))
 }
 
 // Reason returns the reason for the timeout
