@@ -115,6 +115,9 @@ func (s *Strategy) Run(
 		return s.selectFallback(req), current, s.orderCandidatesByLabel("", req.Model, cands), nil
 	}
 
+	// Create shared idle tracker for all analyzer retry attempts
+	sharedTracker := timeout.NewIdleTracker(time.Duration(timeoutCfg.TotalIdleTimeoutMs) * time.Millisecond)
+
 	retries := 0
 	for {
 		remaining := time.Until(deadline)
@@ -125,9 +128,8 @@ func (s *Strategy) Run(
 			)
 			return s.selectFallback(req), current, s.orderCandidatesByLabel("", req.Model, cands), nil
 		}
-		// Create idle timer for analyzer request
-		tracker := timeout.NewIdleTracker(minDuration(perTimeout, remaining))
-		actx, cancel, idleTimer := timeout.NewIdleTimer(ctx, minDuration(perTimeout, remaining), tracker)
+		// Use the shared idle tracker instead of creating a new one
+		actx, cancel, idleTimer := timeout.NewIdleTimer(ctx, minDuration(perTimeout, remaining), sharedTracker)
 		logger.InfoC(ctx, "semantic router: analyzer request start",
 			zap.String("model", s.cfg.Analyzer.Model),
 			zap.Int("timeout_ms", int(minDuration(perTimeout, remaining).Milliseconds())),
