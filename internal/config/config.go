@@ -6,11 +6,6 @@ type LLMConfig struct {
 	FuncCallingModels []string
 }
 
-type LLMRetryConfig struct {
-	TotalTimeoutMs   int `mapstructure:"totalTimeoutMs" yaml:"totalTimeoutMs"`
-	RequestTimeoutMs int `mapstructure:"requestTimeoutMs" yaml:"requestTimeoutMs"`
-}
-
 // LLMTimeoutConfig holds idle timeout configuration for LLM requests
 type LLMTimeoutConfig struct {
 	IdleTimeoutMs      int `mapstructure:"idleTimeoutMs" yaml:"idleTimeoutMs"`
@@ -118,8 +113,6 @@ type Config struct {
 	Redis RedisConfig
 
 	LLM LLMConfig
-
-	LLMRetry LLMRetryConfig `mapstructure:"llmRetry" yaml:"llmRetry"`
 
 	// LLMTimeout holds idle timeout configuration
 	LLMTimeout LLMTimeoutConfig `mapstructure:"llmTimeout" yaml:"llmTimeout"`

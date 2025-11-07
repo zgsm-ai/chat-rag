@@ -57,12 +57,6 @@ LLM:
   Endpoint: "http://127.0.0.1:30616/v1/chat/completions"
   # Endpoint: "http://127.0.0.1:32325/model/glm-4.5-fp8/v1/chat/completions"
 
-LLMRetry:
-  # 总体重试流程允许的最大耗时（毫秒）
-  TotalTimeoutMs: 30000
-  # 单次调用 LLM 的超时时间上限（毫秒）
-  RequestTimeoutMs: 30000
-
 LLMTimeout:
   # 单次连续空闲阈值（毫秒），默认 30000ms
   IdleTimeoutMs: 30000
