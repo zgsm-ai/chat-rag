@@ -4,8 +4,10 @@ import (
 	"github.com/zgsm-ai/chat-rag/internal/client"
 	"github.com/zgsm-ai/chat-rag/internal/config"
 	"github.com/zgsm-ai/chat-rag/internal/functions"
+	"github.com/zgsm-ai/chat-rag/internal/logger"
 	"github.com/zgsm-ai/chat-rag/internal/service"
 	"github.com/zgsm-ai/chat-rag/internal/tokenizer"
+	"go.uber.org/zap"
 )
 
 // ServiceContext holds all service dependencies
@@ -13,9 +15,7 @@ type ServiceContext struct {
 	Config config.Config
 
 	// Clients
-	SemanticClient   client.SemanticInterface
-	FunctionsManager *functions.ToolManager
-	RedisClient      client.RedisInterface
+	RedisClient client.RedisInterface
 
 	// Services
 	LoggerService  service.LogRecordInterface
@@ -32,19 +32,8 @@ type ServiceContext struct {
 
 // NewServiceContext creates a new service context with all dependencies
 func NewServiceContext(c config.Config) *ServiceContext {
-	// Initialize semantic client
-	semanticClient := client.NewSemanticClient(c.Tools.SemanticSearch)
-	referenceClient := client.NewReferenceClient(c.Tools.ReferenceSearch)
-	definitionClient := client.NewDefinitionClient(c.Tools.DefinitionSearch)
-	knowledgeClient := client.NewKnowledgeClient(c.Tools.KnowledgeSearch)
-	// functionManager := functions.NewToolManager("etc/functions.yaml")
-	xmlToolExecutor := functions.NewXmlToolExecutor(
-		c.Tools,
-		semanticClient,
-		referenceClient,
-		definitionClient,
-		knowledgeClient,
-	)
+	// Initialize tool executor with universal tools
+	toolExecutor := functions.NewGenericToolExecutor(c.Tools)
 
 	// Initialize token counter
 	tokenCounter, err := tokenizer.NewTokenCounter()
@@ -78,12 +67,10 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 	return &ServiceContext{
 		Config:         c,
-		SemanticClient: semanticClient,
-		// FunctionsManager: functionManager,
 		LoggerService:  loggerService,
 		MetricsService: metricsService,
 		TokenCounter:   tokenCounter,
-		ToolExecutor:   xmlToolExecutor,
+		ToolExecutor:   toolExecutor,
 		RedisClient:    redisClient,
 		RulesConfig:    rulesConfig,
 	}
@@ -91,7 +78,30 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 // Stop gracefully stops all services
 func (svc *ServiceContext) Stop() {
+	logger.Info("Starting graceful shutdown of all services...")
+
+	// Stop logger service first to ensure all logs are processed
 	if svc.LoggerService != nil {
+		logger.Info("Stopping logger service...")
 		svc.LoggerService.Stop()
+		logger.Info("Logger service stopped")
 	}
+
+	// Close Redis connections
+	if svc.RedisClient != nil {
+		logger.Info("Closing Redis connections...")
+		if err := svc.RedisClient.Close(); err != nil {
+			logger.Error("Failed to close Redis connection",
+				zap.Error(err))
+		} else {
+			logger.Info("Redis connections closed successfully")
+		}
+	}
+
+	// Note: MetricsService doesn't need explicit close as it uses Prometheus
+	// which handles cleanup automatically
+	// Note: TokenCounter doesn't need explicit close
+	// Note: ToolExecutor cleanup is handled by the individual components
+
+	logger.Info("All services have been gracefully stopped")
 }

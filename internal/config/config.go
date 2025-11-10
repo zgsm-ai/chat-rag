@@ -1,9 +1,34 @@
 package config
 
+// ParameterSource Parameter source enumeration
+type ParameterSource string
+
+const (
+	ParameterSourceLLM    ParameterSource = "llm"    // Extract from LLM response, LLM must provide XML format
+	ParameterSourceManual ParameterSource = "manual" // Manual setting, get from default field in config file
+)
+
+// ParameterType Parameter type enumeration
+type ParameterType string
+
+const (
+	ParameterTypeString  ParameterType = "string"
+	ParameterTypeInteger ParameterType = "integer"
+	ParameterTypeFloat   ParameterType = "float"
+	ParameterTypeBoolean ParameterType = "boolean"
+	ParameterTypeArray   ParameterType = "array"
+)
+
 // LLMConfig
 type LLMConfig struct {
 	Endpoint          string
 	FuncCallingModels []string
+}
+
+// LLMTimeoutConfig holds idle timeout configuration for LLM requests
+type LLMTimeoutConfig struct {
+	IdleTimeoutMs      int `mapstructure:"idleTimeoutMs" yaml:"idleTimeoutMs"`
+	TotalIdleTimeoutMs int `mapstructure:"totalIdleTimeoutMs" yaml:"totalIdleTimeoutMs"`
 }
 
 // RedisConfig holds Redis configuration
@@ -19,34 +44,36 @@ type ToolConfig struct {
 	// Control which agents in which modes cannot use tools
 	DisabledAgents map[string][]string
 
-	SemanticSearch   SemanticSearchConfig
-	DefinitionSearch DefinitionSearchConfig
-	ReferenceSearch  ReferenceSearchConfig
-	KnowledgeSearch  KnowledgeSearchConfig
+	// Generic tool configuration
+	GenericTools []GenericToolConfig
 }
 
-type SemanticSearchConfig struct {
-	SearchEndpoint   string
-	ApiReadyEndpoint string
-	TopK             int
-	ScoreThreshold   float64
+// GenericToolConfig Generic tool configuration structure
+type GenericToolConfig struct {
+	Name        string                 `yaml:"name"`        // Tool name
+	Description string                 `yaml:"description"` // Tool description
+	Capability  string                 `yaml:"capability"`  // Tool capability description
+	Endpoints   GenericToolEndpoints   `yaml:"endpoints"`   // API endpoint configuration
+	Method      string                 `yaml:"method"`      // HTTP request method
+	Parameters  []GenericToolParameter `yaml:"parameters"`  // Parameter definitions
+	Rule        string                 `yaml:"rule"`        // Tool usage rules
 }
 
-type ReferenceSearchConfig struct {
-	SearchEndpoint   string
-	ApiReadyEndpoint string
+// GenericToolEndpoints Tool endpoint configuration
+type GenericToolEndpoints struct {
+	Search string `yaml:"search"` // Search endpoint
+	Ready  string `yaml:"ready"`  // Readiness check endpoint
 }
 
-type DefinitionSearchConfig struct {
-	SearchEndpoint   string
-	ApiReadyEndpoint string
-}
-
-type KnowledgeSearchConfig struct {
-	SearchEndpoint   string
-	ApiReadyEndpoint string
-	TopK             int
-	ScoreThreshold   float64
+// GenericToolParameter Tool parameter definition
+type GenericToolParameter struct {
+	Name        string      `yaml:"name"`        // Parameter name
+	Type        string      `yaml:"type"`        // Parameter type
+	Description string      `yaml:"description"` // Parameter description
+	Required    bool        `yaml:"required"`    // Whether required
+	Default     interface{} `yaml:"default"`     // Default value
+	// Parameter source
+	Source ParameterSource `yaml:"source"`
 }
 
 // LogConfig holds logging configuration
@@ -80,8 +107,8 @@ type PreciseContextConfig struct {
 
 // AgentMatchConfig holds configuration for a specific agent matching
 type AgentMatchConfig struct {
-	AgentName string
-	MatchKey  string
+	Agent string `yaml:"agent"`
+	Key   string `yaml:"key"`
 }
 
 // Config holds all service configuration
@@ -107,6 +134,9 @@ type Config struct {
 	Redis RedisConfig
 
 	LLM LLMConfig
+
+	// LLMTimeout holds idle timeout configuration
+	LLMTimeout LLMTimeoutConfig `mapstructure:"llmTimeout" yaml:"llmTimeout"`
 
 	// Router configuration
 	Router RouterConfig `mapstructure:"router" yaml:"router"`

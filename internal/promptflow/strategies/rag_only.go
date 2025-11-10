@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/zgsm-ai/chat-rag/internal/bootstrap"
-	"github.com/zgsm-ai/chat-rag/internal/client"
 	"github.com/zgsm-ai/chat-rag/internal/config"
 	"github.com/zgsm-ai/chat-rag/internal/model"
 	"github.com/zgsm-ai/chat-rag/internal/promptflow/ds"
@@ -15,14 +14,12 @@ import (
 )
 
 type RagOnlyProcessor struct {
-	ctx            context.Context
-	semanticClient client.SemanticInterface
-	tokenCounter   *tokenizer.TokenCounter
-	config         config.Config
-	identity       *model.Identity
+	ctx          context.Context
+	tokenCounter *tokenizer.TokenCounter
+	config       config.Config
+	identity     *model.Identity
 
-	semanticSearch *processor.SemanticSearch
-	end            *processor.End
+	end *processor.End
 }
 
 // NewRagOnlyProcessor creates a new RAG compression processor
@@ -32,11 +29,10 @@ func NewRagOnlyProcessor(
 	identity *model.Identity,
 ) (*RagOnlyProcessor, error) {
 	return &RagOnlyProcessor{
-		ctx:            ctx,
-		semanticClient: client.NewSemanticClient(svcCtx.Config.Tools.SemanticSearch),
-		config:         svcCtx.Config,
-		tokenCounter:   svcCtx.TokenCounter,
-		identity:       identity,
+		ctx:          ctx,
+		config:       svcCtx.Config,
+		tokenCounter: svcCtx.TokenCounter,
+		identity:     identity,
 	}, nil
 }
 
@@ -55,24 +51,17 @@ func (p *RagOnlyProcessor) Arrange(messages []types.Message) (*ds.ProcessedPromp
 		}, fmt.Errorf("build processor chain: %w", err)
 	}
 
-	p.semanticSearch.Execute(promptMsg)
+	// Since semantic search is no longer used, we directly pass to end processor
+	p.end.Execute(promptMsg)
 
 	return p.createProcessedPrompt(promptMsg), nil
 }
 
 // buildProcessorChain constructs and connects the processor chain
 func (p *RagOnlyProcessor) buildProcessorChain() error {
-	p.semanticSearch = processor.NewSemanticSearch(
-		p.ctx,
-		p.config.Tools.SemanticSearch,
-		p.semanticClient,
-		p.identity,
-	)
 	p.end = processor.NewEndpoint()
 
-	// chain order: semantic -> end
-	p.semanticSearch.SetNext(p.end)
-
+	// Since semantic search is no longer used, we only have end processor
 	return nil
 }
 

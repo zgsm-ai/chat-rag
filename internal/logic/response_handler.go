@@ -159,9 +159,18 @@ func (h *ResponseHandler) sendSSEError(w http.ResponseWriter, err error) {
 	errorCode := types.ErrCodeInernalError
 	message := types.ErrMsgInernalError
 	errType := "server_error"
+	statusCode := http.StatusInternalServerError
 
-	// Check if the error is an APIError with a specific status code
-	if apiErr, ok := err.(*types.APIError); ok {
+	// Check if the error is an IdleTimeoutError
+	if idleErr, ok := err.(*types.IdleTimeoutError); ok {
+		errorCode = idleErr.Code
+		message = idleErr.Message
+		errType = "timeout"
+		statusCode = idleErr.StatusCode
+		// Set HTTP status header
+		w.WriteHeader(statusCode)
+	} else if apiErr, ok := err.(*types.APIError); ok {
+		// Check if the error is an APIError with a specific status code
 		errorCode = apiErr.Code
 		if apiErr.Type != "" {
 			errType = apiErr.Type
@@ -170,6 +179,9 @@ func (h *ResponseHandler) sendSSEError(w http.ResponseWriter, err error) {
 			message = apiErr.Message
 		} else {
 			message = fmt.Sprintf("status code: %d", apiErr.StatusCode)
+		}
+		if apiErr.StatusCode > 0 {
+			statusCode = apiErr.StatusCode
 		}
 	}
 

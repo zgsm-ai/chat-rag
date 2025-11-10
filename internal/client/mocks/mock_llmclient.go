@@ -9,7 +9,9 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
+	timeout "github.com/zgsm-ai/chat-rag/internal/timeout"
 	types "github.com/zgsm-ai/chat-rag/internal/types"
+	client "github.com/zgsm-ai/chat-rag/internal/client"
 )
 
 // MockLLMClientInterface is a mock of LLMClientInterface interface.
@@ -36,32 +38,32 @@ func (m *MockLLMClientInterface) EXPECT() *MockLLMClientInterfaceMockRecorder {
 }
 
 // ChatLLMWithMessagesRaw mocks base method.
-func (m *MockLLMClientInterface) ChatLLMWithMessagesRaw(ctx context.Context, messages []types.Message) (types.ChatCompletionResponse, error) {
+func (m *MockLLMClientInterface) ChatLLMWithMessagesRaw(ctx context.Context, params types.LLMRequestParams, idleTimer *timeout.IdleTimer) (types.ChatCompletionResponse, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ChatLLMWithMessagesRaw", ctx, messages)
+	ret := m.ctrl.Call(m, "ChatLLMWithMessagesRaw", ctx, params, idleTimer)
 	ret0, _ := ret[0].(types.ChatCompletionResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ChatLLMWithMessagesRaw indicates an expected call of ChatLLMWithMessagesRaw.
-func (mr *MockLLMClientInterfaceMockRecorder) ChatLLMWithMessagesRaw(ctx, messages interface{}) *gomock.Call {
+func (mr *MockLLMClientInterfaceMockRecorder) ChatLLMWithMessagesRaw(ctx, params, idleTimer interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ChatLLMWithMessagesRaw", reflect.TypeOf((*MockLLMClientInterface)(nil).ChatLLMWithMessagesRaw), ctx, messages)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ChatLLMWithMessagesRaw", reflect.TypeOf((*MockLLMClientInterface)(nil).ChatLLMWithMessagesRaw), ctx, params, idleTimer)
 }
 
 // ChatLLMWithMessagesStreamRaw mocks base method.
-func (m *MockLLMClientInterface) ChatLLMWithMessagesStreamRaw(ctx context.Context, messages []types.Message, callback func(string) error) error {
+func (m *MockLLMClientInterface) ChatLLMWithMessagesStreamRaw(ctx context.Context, params types.LLMRequestParams, idleTimer *timeout.IdleTimer, callback func(client.LLMResponse) error) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ChatLLMWithMessagesStreamRaw", ctx, messages, callback)
+	ret := m.ctrl.Call(m, "ChatLLMWithMessagesStreamRaw", ctx, params, idleTimer, callback)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // ChatLLMWithMessagesStreamRaw indicates an expected call of ChatLLMWithMessagesStreamRaw.
-func (mr *MockLLMClientInterfaceMockRecorder) ChatLLMWithMessagesStreamRaw(ctx, messages, callback interface{}) *gomock.Call {
+func (mr *MockLLMClientInterfaceMockRecorder) ChatLLMWithMessagesStreamRaw(ctx, params, idleTimer, callback interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ChatLLMWithMessagesStreamRaw", reflect.TypeOf((*MockLLMClientInterface)(nil).ChatLLMWithMessagesStreamRaw), ctx, messages, callback)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ChatLLMWithMessagesStreamRaw", reflect.TypeOf((*MockLLMClientInterface)(nil).ChatLLMWithMessagesStreamRaw), ctx, params, idleTimer, callback)
 }
 
 // GenerateContent mocks base method.
@@ -91,4 +93,16 @@ func (m *MockLLMClientInterface) GetModelName() string {
 func (mr *MockLLMClientInterfaceMockRecorder) GetModelName() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetModelName", reflect.TypeOf((*MockLLMClientInterface)(nil).GetModelName))
+}
+
+// SetTools mocks base method.
+func (m *MockLLMClientInterface) SetTools(tools []types.Function) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetTools", tools)
+}
+
+// SetTools indicates an expected call of SetTools.
+func (mr *MockLLMClientInterfaceMockRecorder) SetTools(tools interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTools", reflect.TypeOf((*MockLLMClientInterface)(nil).SetTools), tools)
 }

@@ -80,6 +80,15 @@ func MustLoadConfig(configPath string) Config {
 		if !viper.IsSet("router.semantic.inputExtraction.maxHistoryMessages") || c.Router.Semantic.InputExtraction.MaxHistoryMessages == 0 {
 			c.Router.Semantic.InputExtraction.MaxHistoryMessages = 5
 		}
+		// Apply idle timeout defaults
+		if c.LLMTimeout.IdleTimeoutMs <= 0 {
+			c.LLMTimeout.IdleTimeoutMs = 30000
+			logger.Info("llm idle timeout not set, using default", zap.Int("idleTimeoutMs", c.LLMTimeout.IdleTimeoutMs))
+		}
+		if c.LLMTimeout.TotalIdleTimeoutMs <= 0 {
+			c.LLMTimeout.TotalIdleTimeoutMs = 30000
+			logger.Info("llm total idle timeout not set, using default", zap.Int("totalIdleTimeoutMs", c.LLMTimeout.TotalIdleTimeoutMs))
+		}
 	}
 
 	logger.Info("loaded config", zap.Any("config", c))
