@@ -25,6 +25,9 @@ type RedisInterface interface {
 
 	// GetString retrieves a string value by key
 	GetString(ctx context.Context, key string) (string, error)
+
+	// Close gracefully closes the Redis connection
+	Close() error
 }
 
 // RedisClient handles communication with Redis
@@ -104,6 +107,14 @@ func (c *RedisClient) GetHashField(ctx context.Context, key string, field string
 	}
 
 	return value, nil
+}
+
+// Close gracefully closes the Redis connection
+func (c *RedisClient) Close() error {
+	if c.client != nil {
+		return c.client.Close()
+	}
+	return nil
 }
 
 // GetHash retrieves all field-value pairs from a Redis hash

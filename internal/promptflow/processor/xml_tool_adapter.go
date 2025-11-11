@@ -94,7 +94,7 @@ func (x *XmlToolAdapter) insertToolsIntoSystemContent(content string) (string, e
 	// Combine all tools into a single string
 	var toolsContent strings.Builder
 	var capabilitiesContent strings.Builder
-	var hasTools bool
+	var ruleContent strings.Builder
 
 	toolNames := x.toolExecutor.GetAllTools()
 	if len(toolNames) == 0 {
@@ -110,6 +110,8 @@ func (x *XmlToolAdapter) insertToolsIntoSystemContent(content string) (string, e
 		descErr    error
 		capability string
 		capErr     error
+		rule       string
+		ruleErr    error
 	}
 
 	results := make([]toolResult, len(toolNames))
@@ -131,6 +133,9 @@ func (x *XmlToolAdapter) insertToolsIntoSystemContent(content string) (string, e
 
 				// Get tool capability
 				result.capability, result.capErr = x.toolExecutor.GetToolCapability(name)
+
+				// Get tool rules
+				result.rule, result.ruleErr = x.toolExecutor.GetToolRule(name)
 			}
 
 			results[index] = result
@@ -146,7 +151,6 @@ func (x *XmlToolAdapter) insertToolsIntoSystemContent(content string) (string, e
 				zap.String("method", method), zap.Error(result.readyErr))
 			continue
 		}
-		hasTools = true
 
 		if result.descErr != nil {
 			logger.Error("Failed to get tool description", zap.Error(result.descErr))
@@ -161,6 +165,16 @@ func (x *XmlToolAdapter) insertToolsIntoSystemContent(content string) (string, e
 			continue
 		}
 		capabilitiesContent.WriteString(result.capability)
+
+		// Collect rules from ready tools
+		if result.ruleErr != nil {
+			logger.Error("Failed to get tool rules", zap.Error(result.ruleErr))
+			continue
+		}
+		if result.rule != "" {
+			ruleContent.WriteString(result.rule)
+		}
+
 		logger.InfoC(x.ctx, "Tool adapted in system prompt", zap.String("name", result.name))
 	}
 
@@ -176,11 +190,10 @@ func (x *XmlToolAdapter) insertToolsIntoSystemContent(content string) (string, e
 		return result, fmt.Errorf("failed to insert capabilities content: %w", err)
 	}
 
-	// Insert tools rules at the end
-	if hasTools {
-		toolsRules := x.toolExecutor.GetToolsRules()
-		result = result + "\n" + toolsRules
-		logger.InfoC(x.ctx, "Tool Rules adapted in system prompt")
+	// Insert tools rules after RULES section
+	result, err = insertContentAfterMarker(result, "\n\n====\n\nRULES\n\n", ruleContent.String())
+	if err != nil {
+		return result, fmt.Errorf("failed to insert rules content: %w", err)
 	}
 
 	return result, nil

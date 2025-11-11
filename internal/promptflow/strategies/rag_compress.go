@@ -67,8 +67,14 @@ func NewRagCompressProcessor(
 	modelName string,
 	promptMode string,
 ) (*RagCompressProcessor, error) {
+	// Use default timeout config for summary
+	timeoutCfg := config.LLMTimeoutConfig{
+		IdleTimeoutMs:      30000,
+		TotalIdleTimeoutMs: 30000,
+	}
 	llmClient, err := client.NewLLMClient(
 		svcCtx.Config.LLM,
+		timeoutCfg,
 		svcCtx.Config.ContextCompressConfig.SummaryModel,
 		copyAndSetQuotaIdentity(headers),
 	)
@@ -188,11 +194,11 @@ func (p *RagCompressProcessor) detectAgent(systemMsg string) string {
 
 	// Iterate through all agents to find a match
 	for _, agentConfig := range p.config.PreciseContextConfig.AgentsMatch {
-		if strings.Contains(firstParagraph, agentConfig.MatchKey) {
+		if strings.Contains(firstParagraph, agentConfig.Key) {
 			logger.InfoC(p.ctx, "Detected agent",
 				zap.String("prompt_mode", p.promptMode),
-				zap.String("agent", agentConfig.AgentName))
-			return agentConfig.AgentName
+				zap.String("agent", agentConfig.Agent))
+			return agentConfig.Agent
 		}
 	}
 
