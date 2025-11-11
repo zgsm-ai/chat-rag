@@ -78,12 +78,13 @@ type GenericToolParameter struct {
 
 // LogConfig holds logging configuration
 type LogConfig struct {
-	LogFilePath          string
-	LogScanIntervalSec   int
-	ClassifyModel        string
-	EnableClassification bool
+	LogFilePath string
+	// LogScanIntervalSec   int
+	// ClassifyModel        string
+	// EnableClassification bool
 }
 
+// Deprecated
 type ContextCompressConfig struct {
 	// Context compression enable flag
 	EnableCompress bool

@@ -5,17 +5,6 @@ Port: 8888
 # Logging configuration
 Log:
   LogFilePath: "logs/"
-  LogScanIntervalSec: 10
-  EnableClassification: false
-  ClassifyModel: "gpt-oss-120b"
-
-# Context Compression
-ContextCompressConfig:
-  EnableCompress: false
-  TokenThreshold: 100_000
-  SummaryModel: "qwen2.5-coder-32b"
-  SummaryModelTokenThreshold: 64_000
-  RecentUserMsgUsedNums: 3
 
 PreciseContextConfig:
   EnableEnvDetailsFilter: true

@@ -56,6 +56,7 @@ Example summary structure:
 
 Output only the summary of the conversation so far, without any additional commentary or explanation.`
 
+// Deprecated
 type UserCompressor struct {
 	Recorder
 	ctx          context.Context
