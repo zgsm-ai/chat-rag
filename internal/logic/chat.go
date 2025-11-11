@@ -110,10 +110,10 @@ func (l *ChatCompletionLogic) newChatLog(startTime time.Time) *model.ChatLog {
 		Timestamp: startTime,
 		Params: model.RequestParams{
 			Model:               modelName,
-			PromptMode:          string(l.request.ExtraBody.PromptMode),
 			MaxTokens:           l.request.MaxTokens,
 			MaxCompletionTokens: l.request.MaxCompletionTokens,
 			Temperature:         l.request.Temperature,
+			ExtraBody:           l.request.ExtraBody,
 		},
 		Tokens: types.TokenMetrics{
 			Original: types.TokenStats{
