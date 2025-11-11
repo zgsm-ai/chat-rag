@@ -37,7 +37,8 @@ type RagCompressProcessor struct {
 	agentName     string // detected agent type
 	promptMode    string // current prompt mode
 
-	userMsgFilter *processor.UserMsgFilter
+	userMsgFilter        *processor.UserMsgFilter
+	taskContentProcessor *processor.TaskContentProcessor
 	// functionAdapter *processor.FunctionAdapter
 	// userCompressor *processor.UserCompressor
 	xmlToolAdapter *processor.XmlToolAdapter
@@ -142,6 +143,11 @@ func (p *RagCompressProcessor) buildProcessorChain() error {
 		p.agentName,
 		p.tokenCounter,
 	)
+	p.taskContentProcessor = processor.NewTaskContentProcessor(
+		&p.config.PreciseContextConfig,
+		p.agentName,
+		p.promptMode,
+	)
 	p.xmlToolAdapter = processor.NewXmlToolAdapter(
 		p.ctx,
 		p.toolsExecutor,
@@ -158,7 +164,8 @@ func (p *RagCompressProcessor) buildProcessorChain() error {
 
 	// execute chain
 	p.start.SetNext(p.userMsgFilter)
-	p.userMsgFilter.SetNext(p.xmlToolAdapter)
+	p.userMsgFilter.SetNext(p.taskContentProcessor)
+	p.taskContentProcessor.SetNext(p.xmlToolAdapter)
 	// p.xmlToolAdapter.SetNext(p.userCompressor)
 	p.xmlToolAdapter.SetNext(p.end)
 

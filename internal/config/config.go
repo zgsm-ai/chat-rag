@@ -103,6 +103,18 @@ type PreciseContextConfig struct {
 	EnableEnvDetailsFilter bool
 	// Control which agents in which modes cannot use ModesChange
 	DisabledModesChangeAgents map[string][]string
+	// Task content replacement rules
+	TaskContentReplaceRule map[string]TaskContentReplaceConfig
+}
+
+// TaskContentReplaceConfig holds configuration for task content replacement
+type TaskContentReplaceConfig struct {
+	// Specify which agents this rule applies to
+	ValidAgents map[string][]string `mapstructure:"valid_agents" yaml:"valid_agents"`
+	// Skip processing if content contains this key
+	SkipKey string `mapstructure:"skip_key" yaml:"skip_key"`
+	// Key-value pairs for replacement
+	MatchKeys map[string]string `mapstructure:"match_keys" yaml:"match_keys"`
 }
 
 // AgentMatchConfig holds configuration for a specific agent matching

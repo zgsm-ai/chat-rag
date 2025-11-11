@@ -1,6 +1,8 @@
 package processor
 
 import (
+	"reflect"
+
 	"github.com/zgsm-ai/chat-rag/internal/logger"
 	"github.com/zgsm-ai/chat-rag/internal/model"
 	"github.com/zgsm-ai/chat-rag/internal/types"
@@ -90,7 +92,9 @@ func NewStartPoint() *Start {
 }
 
 func (e *Start) Execute(promptMsg *PromptMsg) {
-	logger.Info("Strat of processor chain")
+	nextProcessor := reflect.TypeOf(e.next).Elem().Name()
+	logger.Info(">>>>>> Strat of processor chain >>>>>>",
+		zap.String("next processor", nextProcessor))
 	e.next.Execute(promptMsg)
 }
 
@@ -138,6 +142,12 @@ func (b *BaseProcessor) passToNext(promptMsg *PromptMsg) {
 		)
 		return
 	}
+
+	nextProcessor := reflect.TypeOf(b.next).Elem().Name()
+	logger.Info(">>>>>> Passing to next processor >>>>>>",
+		zap.String("next processor", nextProcessor),
+	)
+
 	b.next.Execute(promptMsg)
 }
 

@@ -30,6 +30,27 @@ PreciseContextConfig:
       - "code"
     vibe:
       - "review"
+  
+  # Dynamic configuration for task description content
+  TaskContentReplaceRule:
+    scene1: # Group name, used to distinguish different scenarios
+      # Specify which agents are effective, the structure here can reuse DisabledModesChangeAgents
+      # If not configured, all will be effective, be careful!
+      valid_agents:
+        strict: # Mode name
+          - "requirements" # agent name
+          - "architect"
+        vibe:
+          - "review"
+          - "code"
+
+      skip_key: "%skip_key%" # If content contains this flag, skip processing directly
+
+      match_keys:
+        key1: |
+          "The content you want to replace key1"
+        key2: |
+          "The content you want to replace key2"
 
   AgentsMatch:
     - agent: "strict"
