@@ -30,7 +30,8 @@ ARG IMAGE_NAME=chat-rag
 ARG IMAGE_VERSION=latest
 
 # Install timezone data and set China timezone
-RUN ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
+RUN apk add --no-cache tzdata && \
+    ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
     echo "Asia/Shanghai" > /etc/timezone
 
 # Set working directory

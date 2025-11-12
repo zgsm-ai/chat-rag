@@ -65,7 +65,7 @@ docker-release:
 	--build-arg GOPROXY=$(GOPROXY) \
 	.
 	docker tag chat-rag:$(VERSION) ${REGISTRY}/chat-rag:$(VERSION)
-	docker push ${REGISTRY}/chat-rag:$(VERSION)
+# 	docker push ${REGISTRY}/chat-rag:$(VERSION)
 
 # Build the container image with the wasm plugin
 build-release-aliyun:

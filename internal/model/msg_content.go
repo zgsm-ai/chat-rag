@@ -57,7 +57,7 @@ func (p *Content) ExtractMsgContent(msg *types.Message) ([]Content, error) {
 
 // extractFromContentList extracts content from []interface{} type
 func (p *Content) extractFromContentList(contentList []interface{}) ([]Content, error) {
-	logger.Info("msg content is not string type, converted to string",
+	logger.Info("converted content to []Content type from []interface{}",
 		zap.String("method", "extractFromContentList"),
 	)
 	var systemContents []Content
