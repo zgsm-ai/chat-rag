@@ -74,6 +74,10 @@ type IdleTimer struct {
 	idleStartTime time.Time
 	resetCount    int64
 	generation    int64 // Generation counter to detect stale timeout events
+
+	// 首token接收状态相关字段（新增）
+	firstTokenReceived bool       // 标记是否已接收首token
+	firstTokenMu       sync.Mutex // 保护 firstTokenReceived
 }
 
 // NewIdleTimer creates a new IdleTimer with the specified per-idle timeout and tracker
@@ -172,12 +176,6 @@ func (it *IdleTimer) handleTimeout(expectedGen int64) {
 
 	remaining := it.tracker.Remaining()
 
-	logger.Warn("IdleTimer: timeout triggered",
-		zap.Duration("perIdle", it.perIdle),
-		zap.Duration("actualIdleDuration", actualIdleDuration),
-		zap.Duration("remainingBudget", remaining),
-		zap.Int64("resetCount", it.resetCount))
-
 	// Check if total budget is exhausted
 	if remaining <= 0 {
 		it.reason = IdleTimeoutReasonTotal
@@ -187,7 +185,29 @@ func (it *IdleTimer) handleTimeout(expectedGen int64) {
 		it.reason = IdleTimeoutReasonPerIdle
 	}
 
-	// Cancel the context
+	// 读取首token状态
+	it.firstTokenMu.Lock()
+	firstTokenReceived := it.firstTokenReceived
+	it.firstTokenMu.Unlock()
+
+	// 核心逻辑：首token后（包括总预算耗尽），只记录日志，不取消上下文
+	if firstTokenReceived {
+		logger.Warn("IdleTimer: post-first-token timeout (logging only)",
+			zap.Duration("perIdle", it.perIdle),
+			zap.Duration("actualIdleDuration", actualIdleDuration),
+			zap.Duration("remainingBudget", remaining),
+			zap.Int64("resetCount", it.resetCount),
+			zap.String("reason", string(it.reason)))
+		return // 不取消上下文，让请求继续
+	}
+
+	// 首token前：取消上下文，返回错误
+	logger.Warn("IdleTimer: timeout triggered before first token",
+		zap.Duration("perIdle", it.perIdle),
+		zap.Duration("actualIdleDuration", actualIdleDuration),
+		zap.Duration("remainingBudget", remaining),
+		zap.Int64("resetCount", it.resetCount),
+		zap.String("reason", string(it.reason)))
 	it.cancel()
 }
 
@@ -256,6 +276,15 @@ func (it *IdleTimer) Stop() {
 	logger.Debug("IdleTimer stopped",
 		zap.Int64("resetCount", it.resetCount),
 		zap.Duration("remainingBudget", it.tracker.Remaining()))
+}
+
+// SetFirstTokenReceived marks that the first token has been received
+// This should only be called in streaming scenarios
+func (it *IdleTimer) SetFirstTokenReceived() {
+	it.firstTokenMu.Lock()
+	defer it.firstTokenMu.Unlock()
+	it.firstTokenReceived = true
+	logger.Info("IdleTimer: first token received, subsequent timeouts will only log warnings")
 }
 
 // GetResetCount returns the number of times Reset was called

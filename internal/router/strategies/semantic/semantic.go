@@ -17,7 +17,6 @@ import (
 	"github.com/zgsm-ai/chat-rag/internal/client"
 	"github.com/zgsm-ai/chat-rag/internal/config"
 	"github.com/zgsm-ai/chat-rag/internal/logger"
-	"github.com/zgsm-ai/chat-rag/internal/timeout"
 	"github.com/zgsm-ai/chat-rag/internal/types"
 	"github.com/zgsm-ai/chat-rag/internal/utils"
 	"go.uber.org/zap"
@@ -115,9 +114,6 @@ func (s *Strategy) Run(
 		return s.selectFallback(req), current, s.orderCandidatesByLabel("", req.Model, cands), nil
 	}
 
-	// Create shared idle tracker for all analyzer retry attempts
-	sharedTracker := timeout.NewIdleTracker(time.Duration(timeoutCfg.TotalIdleTimeoutMs) * time.Millisecond)
-
 	retries := 0
 	for {
 		remaining := time.Until(deadline)
@@ -128,21 +124,34 @@ func (s *Strategy) Run(
 			)
 			return s.selectFallback(req), current, s.orderCandidatesByLabel("", req.Model, cands), nil
 		}
-		// Use the shared idle tracker instead of creating a new one
-		actx, cancel, idleTimer := timeout.NewIdleTimer(ctx, minDuration(perTimeout, remaining), sharedTracker)
+
+		// Use context.WithTimeout for hard timeout limit instead of idle timeout
+		requestTimeout := minDuration(perTimeout, remaining)
+		actx, cancel := context.WithTimeout(ctx, requestTimeout)
+
 		logger.InfoC(ctx, "semantic router: analyzer request start",
 			zap.String("model", s.cfg.Analyzer.Model),
-			zap.Int("timeout_ms", int(minDuration(perTimeout, remaining).Milliseconds())),
+			zap.Duration("timeout", requestTimeout),
+			zap.Int("retry", retries),
 		)
+
 		attemptStart := time.Now()
-		r, err := llmClient.ChatLLMWithMessagesRaw(actx, types.LLMRequestParams{Messages: []types.Message{{Role: types.RoleUser, Content: prompt}}}, idleTimer)
-		idleTimer.Stop()
-		cancel()
+		// Call without idleTimer, use timeout context instead
+		r, err := llmClient.ChatLLMWithMessagesRaw(actx, types.LLMRequestParams{
+			Messages: []types.Message{{Role: types.RoleUser, Content: prompt}},
+		}, nil)
+
+		cancel() // Cancel context immediately after request completes
 		if err != nil {
 			// retry on timeout/network up to 3 times total
 			if isRetryableAnalyzerErr(err) && retries < 3 {
 				retries++
-				logger.WarnC(ctx, "semantic router: analyzer retry due to error", zap.Error(err), zap.Int("retry", retries))
+				actualDuration := time.Since(attemptStart)
+				logger.WarnC(ctx, "semantic router: analyzer retry due to error",
+					zap.Error(err),
+					zap.Int("retry", retries),
+					zap.Duration("attempt_duration", actualDuration),
+				)
 				continue
 			}
 			logger.WarnC(ctx, "semantic router: fallback used",
