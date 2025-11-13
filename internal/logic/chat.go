@@ -498,7 +498,7 @@ func (l *ChatCompletionLogic) processStream(
 			types.HeaderSelectLLm,
 		}, chatLog)
 
-		return l.handleStreamChunk(ctx, flusher, llmResp.ResonseLine, state, remainingDepth, chatLog)
+		return l.handleStreamChunk(ctx, flusher, llmResp.ResonseLine, state, remainingDepth, chatLog, idleTimer)
 	})
 
 	return state.toolDetected, err
@@ -531,6 +531,7 @@ func (l *ChatCompletionLogic) handleStreamChunk(
 	state *streamState,
 	remainingDepth int,
 	chatLog *model.ChatLog,
+	idleTimer *timeout.IdleTimer,
 ) error {
 	content, usage, resp := l.responseHandler.extractStreamingData(rawLine)
 	if resp != nil {
@@ -555,6 +556,9 @@ func (l *ChatCompletionLogic) handleStreamChunk(
 		logger.InfoC(ctx, "[first-token] first token received, and response",
 			zap.String("model", l.request.Model), zap.Duration("firstTokenLatency", firstTokenLatency))
 		state.firstToken = false
+
+		// 通知 idleTimer 已接收首token（新增）
+		idleTimer.SetFirstTokenReceived()
 
 		if err := l.sendStreamContent(flusher, state.response, "\n"); err != nil {
 			return err
@@ -1037,6 +1041,9 @@ func (l *ChatCompletionLogic) handleRawModeStream(
 				chatLog.Latency.FirstTokenLatency = firstTokenLatency.Milliseconds()
 				logger.InfoC(ctx, "[first-token][raw mode] first token received, and response",
 					zap.String("model", l.request.Model), zap.Duration("firstTokenLatency", firstTokenLatency))
+
+				// 通知 idleTimer 已接收首token（新增）
+				idleTimer.SetFirstTokenReceived()
 			}
 
 			if _, err := fmt.Fprintf(l.writer, "%s\n", llmResp.ResonseLine); err != nil {
