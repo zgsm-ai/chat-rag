@@ -91,6 +91,18 @@ func MustLoadConfig(configPath string) Config {
 		}
 	}
 
+	// Apply forward configuration defaults
+	if c != nil {
+		// forward.enabled default
+		if !viper.IsSet("forward.enabled") {
+			c.Forward.Enabled = false
+		}
+		// forward.defaultTarget default
+		if !viper.IsSet("forward.defaultTarget") {
+			c.Forward.DefaultTarget = ""
+		}
+	}
+
 	logger.Info("loaded config", zap.Any("config", c))
 	return *c
 }

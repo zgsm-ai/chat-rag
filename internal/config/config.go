@@ -153,6 +153,9 @@ type Config struct {
 
 	// Router configuration
 	Router RouterConfig `mapstructure:"router" yaml:"router"`
+
+	// Forward configuration
+	Forward ForwardConfig `mapstructure:"forward" yaml:"forward"`
 }
 
 // RouterConfig holds router related configuration
@@ -238,4 +241,10 @@ type AgentConfig struct {
 // RulesConfig holds the rules configuration for agents
 type RulesConfig struct {
 	Agents []AgentConfig `yaml:"agents"`
+}
+
+// ForwardConfig holds forwarding configuration
+type ForwardConfig struct {
+	DefaultTarget string `yaml:"defaultTarget"`
+	Enabled       bool   `yaml:"enabled"`
 }
