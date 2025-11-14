@@ -51,9 +51,17 @@ const (
 	HeaderOriginalModel = "x-original-model"
 
 	// Response Headers
-	HeaderUserInput = "x-user-input"
-	HeaderSelectLLm = "x-select-llm"
+	HeaderUserInput   = "x-user-input"
+	HeaderSelectLLm   = "x-select-llm"
+	HeaderOneAPIReqId = "x-oneapi-request-id"
 )
+
+// ResponseHeadersToForward defines the list of response headers that should be forwarded
+var ResponseHeadersToForward = []string{
+	HeaderUserInput,
+	HeaderSelectLLm,
+	HeaderOneAPIReqId,
+}
 
 // ToolStatus defines the status of the tool
 type ToolStatus string
@@ -76,11 +84,11 @@ type ChatCompletionRequest struct {
 	ChatLLMRequest               // Embedded ChatLLMRequest
 	Stream         bool          `json:"stream,omitempty"`
 	StreamOptions  StreamOptions `json:"stream_options,omitempty"`
-	ExtraBody      ExtraBody     `json:"extra_body,omitempty"`
 }
 
 type ExtraBody struct {
 	PromptMode PromptMode `json:"prompt_mode,omitempty"`
+	Mode       string     `json:"mode,omitempty"`
 }
 
 type ChatCompletionResponse struct {
@@ -98,6 +106,7 @@ type LLMRequestParams struct {
 	MaxTokens           *int      `json:"max_tokens,omitempty"`
 	MaxCompletionTokens *int      `json:"max_completion_tokens,omitempty"`
 	Temperature         *float64  `json:"temperature,omitempty"`
+	ExtraBody           ExtraBody `json:"extra_body,omitempty"`
 }
 
 type ChatLLMRequest struct {

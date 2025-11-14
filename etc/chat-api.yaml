@@ -5,17 +5,6 @@ Port: 8888
 # Logging configuration
 Log:
   LogFilePath: "logs/"
-  LogScanIntervalSec: 10
-  EnableClassification: false
-  ClassifyModel: "gpt-oss-120b"
-
-# Context Compression
-ContextCompressConfig:
-  EnableCompress: false
-  TokenThreshold: 100_000
-  SummaryModel: "qwen2.5-coder-32b"
-  SummaryModelTokenThreshold: 64_000
-  RecentUserMsgUsedNums: 3
 
 PreciseContextConfig:
   EnableEnvDetailsFilter: true
@@ -30,6 +19,27 @@ PreciseContextConfig:
       - "code"
     vibe:
       - "review"
+  
+  # Dynamic configuration for task description content
+  TaskContentReplaceRule:
+    scene1: # Group name, used to distinguish different scenarios
+      # Specify which agents are effective, the structure here can reuse DisabledModesChangeAgents
+      # If not configured, all will be effective, be careful!
+      valid_agents:
+        strict: # Mode name
+          - "requirements" # agent name
+          - "architect"
+        vibe:
+          - "review"
+          - "code"
+
+      skip_key: "%skip_key%" # If content contains this flag, skip processing directly
+
+      match_keys:
+        key1: |
+          "The content you want to replace key1"
+        key2: |
+          "The content you want to replace key2"
 
   AgentsMatch:
     - agent: "strict"
@@ -313,3 +323,12 @@ Tools:
           description: "Maximum call chain depth to search (default: 4, maximum: 10)"
           required: true
           source: "llm"
+
+# Forward configuration
+# 不做对请求不做任何处理，只做记录，可用来抓包
+forward:
+  # Enable forwarding interface
+  enabled: true
+  # Default target URL for forwarding (optional)
+  # If not provided, target URL must be specified in query parameter
+  # defaultTarget: "http://zgsm.sangfor.com/"

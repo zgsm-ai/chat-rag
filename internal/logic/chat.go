@@ -110,10 +110,10 @@ func (l *ChatCompletionLogic) newChatLog(startTime time.Time) *model.ChatLog {
 		Timestamp: startTime,
 		Params: model.RequestParams{
 			Model:               modelName,
-			PromptMode:          string(l.request.ExtraBody.PromptMode),
 			MaxTokens:           l.request.MaxTokens,
 			MaxCompletionTokens: l.request.MaxCompletionTokens,
 			Temperature:         l.request.Temperature,
+			ExtraBody:           l.request.ExtraBody,
 		},
 		Tokens: types.TokenMetrics{
 			Original: types.TokenStats{
@@ -493,12 +493,9 @@ func (l *ChatCompletionLogic) processStream(
 	}()
 
 	err := llmClient.ChatLLMWithMessagesStreamRaw(timerCtx, l.request.LLMRequestParams, idleTimer, func(llmResp client.LLMResponse) error {
-		l.handleResonseHeaders(llmResp.Header, []string{
-			types.HeaderUserInput,
-			types.HeaderSelectLLm,
-		}, chatLog)
+		l.handleResonseHeaders(llmResp.Header, types.ResponseHeadersToForward, chatLog)
 
-		return l.handleStreamChunk(ctx, flusher, llmResp.ResonseLine, state, remainingDepth, chatLog)
+		return l.handleStreamChunk(ctx, flusher, llmResp.ResonseLine, state, remainingDepth, chatLog, idleTimer)
 	})
 
 	return state.toolDetected, err
@@ -531,6 +528,7 @@ func (l *ChatCompletionLogic) handleStreamChunk(
 	state *streamState,
 	remainingDepth int,
 	chatLog *model.ChatLog,
+	idleTimer *timeout.IdleTimer,
 ) error {
 	content, usage, resp := l.responseHandler.extractStreamingData(rawLine)
 	if resp != nil {
@@ -555,6 +553,9 @@ func (l *ChatCompletionLogic) handleStreamChunk(
 		logger.InfoC(ctx, "[first-token] first token received, and response",
 			zap.String("model", l.request.Model), zap.Duration("firstTokenLatency", firstTokenLatency))
 		state.firstToken = false
+
+		// 通知 idleTimer 已接收首token（新增）
+		idleTimer.SetFirstTokenReceived()
 
 		if err := l.sendStreamContent(flusher, state.response, "\n"); err != nil {
 			return err
@@ -1022,10 +1023,7 @@ func (l *ChatCompletionLogic) handleRawModeStream(
 
 	err := llmClient.ChatLLMWithMessagesStreamRaw(timerCtx, l.request.LLMRequestParams, idleTimer, func(llmResp client.LLMResponse) error {
 		// Handle response headers
-		l.handleResonseHeaders(llmResp.Header, []string{
-			types.HeaderUserInput,
-			types.HeaderSelectLLm,
-		}, chatLog)
+		l.handleResonseHeaders(llmResp.Header, types.ResponseHeadersToForward, chatLog)
 
 		// Direct pass through response line to client
 		if llmResp.ResonseLine != "" {
@@ -1037,6 +1035,9 @@ func (l *ChatCompletionLogic) handleRawModeStream(
 				chatLog.Latency.FirstTokenLatency = firstTokenLatency.Milliseconds()
 				logger.InfoC(ctx, "[first-token][raw mode] first token received, and response",
 					zap.String("model", l.request.Model), zap.Duration("firstTokenLatency", firstTokenLatency))
+
+				// 通知 idleTimer 已接收首token（新增）
+				idleTimer.SetFirstTokenReceived()
 			}
 
 			if _, err := fmt.Fprintf(l.writer, "%s\n", llmResp.ResonseLine); err != nil {

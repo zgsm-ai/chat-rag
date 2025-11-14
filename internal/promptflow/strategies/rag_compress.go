@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/zgsm-ai/chat-rag/internal/bootstrap"
-	"github.com/zgsm-ai/chat-rag/internal/client"
 	"github.com/zgsm-ai/chat-rag/internal/config"
 	"github.com/zgsm-ai/chat-rag/internal/functions"
 	"github.com/zgsm-ai/chat-rag/internal/logger"
@@ -26,28 +25,32 @@ type ProcessorChainBuilder interface {
 }
 
 type RagCompressProcessor struct {
-	ctx          context.Context
-	llmClient    client.LLMInterface
-	tokenCounter *tokenizer.TokenCounter
-	config       config.Config
-	identity     *model.Identity
+	// llmClient    client.LLMInterface
 	// functionsManager *functions.ToolManager
+
+	ctx           context.Context
+	tokenCounter  *tokenizer.TokenCounter
+	config        config.Config
+	identity      *model.Identity
 	modelName     string
 	toolsExecutor functions.ToolExecutor
 	agentName     string // detected agent type
 	promptMode    string // current prompt mode
 
-	userMsgFilter *processor.UserMsgFilter
 	// functionAdapter *processor.FunctionAdapter
 	// userCompressor *processor.UserCompressor
-	xmlToolAdapter *processor.XmlToolAdapter
-	start          *processor.Start
-	end            *processor.End
+
+	userMsgFilter        *processor.UserMsgFilter
+	taskContentProcessor *processor.TaskContentProcessor
+	xmlToolAdapter       *processor.XmlToolAdapter
+	start                *processor.Start
+	end                  *processor.End
 
 	// chainBuilder used to build the processor chain
 	chainBuilder ProcessorChainBuilder
 }
 
+/*
 // copyAndSetQuotaIdentity
 func copyAndSetQuotaIdentity(headers *http.Header) *http.Header {
 	headersCopy := make(http.Header)
@@ -57,6 +60,7 @@ func copyAndSetQuotaIdentity(headers *http.Header) *http.Header {
 	headersCopy.Set(types.HeaderQuotaIdentity, "system")
 	return &headersCopy
 }
+*/
 
 // NewRagCompressProcessor creates a new RAG compression processor
 func NewRagCompressProcessor(
@@ -67,6 +71,7 @@ func NewRagCompressProcessor(
 	modelName string,
 	promptMode string,
 ) (*RagCompressProcessor, error) {
+	/* Deprecated
 	// Use default timeout config for summary
 	timeoutCfg := config.LLMTimeoutConfig{
 		IdleTimeoutMs:      30000,
@@ -81,19 +86,21 @@ func NewRagCompressProcessor(
 	if err != nil {
 		return nil, fmt.Errorf("create LLM client: %w", err)
 	}
+	*/
 
 	if promptMode == "" {
 		promptMode = "vibe"
 	}
 
 	processor := &RagCompressProcessor{
-		ctx:          ctx,
-		modelName:    modelName,
-		llmClient:    llmClient,
-		config:       svcCtx.Config,
-		tokenCounter: svcCtx.TokenCounter,
-		identity:     identity,
+		// llmClient:    llmClient,
 		// functionsManager: svcCtx.FunctionsManager,
+
+		ctx:           ctx,
+		modelName:     modelName,
+		config:        svcCtx.Config,
+		tokenCounter:  svcCtx.TokenCounter,
+		identity:      identity,
 		toolsExecutor: svcCtx.ToolExecutor,
 		promptMode:    promptMode,
 		start:         processor.NewStartPoint(),
@@ -142,6 +149,11 @@ func (p *RagCompressProcessor) buildProcessorChain() error {
 		p.agentName,
 		p.tokenCounter,
 	)
+	p.taskContentProcessor = processor.NewTaskContentProcessor(
+		&p.config.PreciseContextConfig,
+		p.agentName,
+		p.promptMode,
+	)
 	p.xmlToolAdapter = processor.NewXmlToolAdapter(
 		p.ctx,
 		p.toolsExecutor,
@@ -158,7 +170,8 @@ func (p *RagCompressProcessor) buildProcessorChain() error {
 
 	// execute chain
 	p.start.SetNext(p.userMsgFilter)
-	p.userMsgFilter.SetNext(p.xmlToolAdapter)
+	p.userMsgFilter.SetNext(p.taskContentProcessor)
+	p.taskContentProcessor.SetNext(p.xmlToolAdapter)
 	// p.xmlToolAdapter.SetNext(p.userCompressor)
 	p.xmlToolAdapter.SetNext(p.end)
 

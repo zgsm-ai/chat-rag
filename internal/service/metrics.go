@@ -267,7 +267,7 @@ func (ms *MetricsService) recordErrorMetrics(log *model.ChatLog, labels promethe
 
 // getBaseLabels creates base labels map
 func (ms *MetricsService) getBaseLabels(log *model.ChatLog) prometheus.Labels {
-	promptMode := log.Params.PromptMode
+	promptMode := string(log.Params.ExtraBody.PromptMode)
 	if promptMode == "" {
 		promptMode = defaultPromoptMode
 	}

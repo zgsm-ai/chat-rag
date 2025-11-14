@@ -1,7 +1,6 @@
 package service
 
 import (
-	"context"
 	"fmt"
 	"math/rand"
 	"net/http"
@@ -9,17 +8,15 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/zgsm-ai/chat-rag/internal/client"
 	"github.com/zgsm-ai/chat-rag/internal/config"
 	"github.com/zgsm-ai/chat-rag/internal/logger"
 	"github.com/zgsm-ai/chat-rag/internal/model"
-	"github.com/zgsm-ai/chat-rag/internal/types"
-	"github.com/zgsm-ai/chat-rag/internal/utils"
 	"go.uber.org/zap"
 )
 
+/*
 const systemClassificationPrompt = `Classify the LAST USER QUESTION in this conversation into ONE of the following EXACT categories based on the user's intention (respond ONLY with the exact category name, no extra text):
 
 - CodeWriting: Writing or generating code to implement functionality
@@ -48,6 +45,7 @@ Do not include any extra text, just the exact matching category name.`
 
 // validCategories is a documentation string listing all accepted log categories
 const validCategoriesStr = "CodeWriting,BugFixing,CodeUnderstanding,CodeRefactoring,DesignDiscussion,DocumentationHelp,EnvironmentHelp,ToolUsage,GeneralQuestion"
+*/
 
 // LogRecordInterface defines the interface for the logger service
 type LogRecordInterface interface {
@@ -63,29 +61,30 @@ type LogRecordInterface interface {
 
 // LoggerRecordService handles logging operations
 type LoggerRecordService struct {
-	logFilePath          string // Permanent storage log directory path
-	tempLogFilePath      string // Temporary log file path
-	scanInterval         time.Duration
-	metricsService       MetricsInterface
-	llmConfig            config.LLMConfig
-	classifyModel        string
-	llmClient            client.LLMInterface
-	deptClient           client.DepartmentInterface
-	instanceID           string
-	enableClassification bool
+	// tempLogFilePath      string // Temporary log file path - no longer needed
+	// scanInterval         time.Duration
+	// llmConfig      config.LLMConfig
+	// classifyModel  string
+	// llmClient            client.LLMInterface
+
+	logFilePath    string // Permanent storage log directory path
+	metricsService MetricsInterface
+	deptClient     client.DepartmentInterface
+	instanceID     string
+	// enableClassification bool
 
 	logChan  chan *model.ChatLog
 	stopChan chan struct{}
 	wg       sync.WaitGroup
 	mu       sync.Mutex
 
-	processorStarted bool
+	// processorStarted bool
 }
 
 // NewLogRecordService creates a new logger service
 func NewLogRecordService(config config.Config) LogRecordInterface {
 	// Create temp directory under logFilePath for temporary log files
-	tempLogDir := filepath.Join(config.Log.LogFilePath, "temp")
+	// tempLogDir := filepath.Join(config.Log.LogFilePath, "temp") // No longer needed
 
 	instanceID := os.Getenv("HOSTNAME")
 	if instanceID == "" {
@@ -98,16 +97,17 @@ func NewLogRecordService(config config.Config) LogRecordInterface {
 	}
 
 	return &LoggerRecordService{
-		logFilePath:          config.Log.LogFilePath, // Permanent storage directory
-		tempLogFilePath:      tempLogDir,             // Temporary logs directory
-		scanInterval:         time.Duration(config.Log.LogScanIntervalSec) * time.Second,
-		llmConfig:            config.LLM,
-		classifyModel:        config.Log.ClassifyModel,
-		enableClassification: config.Log.EnableClassification,
-		logChan:              make(chan *model.ChatLog, 1000),
-		stopChan:             make(chan struct{}),
-		instanceID:           instanceID,
-		deptClient:           deptClient,
+		// tempLogFilePath:      tempLogDir,             // Temporary logs directory - no longer needed
+		// scanInterval:         time.Duration(config.Log.LogScanIntervalSec) * time.Second,
+		// llmConfig:            config.LLM,
+		// classifyModel:        config.Log.ClassifyModel,
+		// enableClassification: config.Log.EnableClassification,
+
+		logFilePath: config.Log.LogFilePath, // Permanent storage directory
+		logChan:     make(chan *model.ChatLog, 1000),
+		stopChan:    make(chan struct{}),
+		instanceID:  instanceID,
+		deptClient:  deptClient,
 	}
 }
 
@@ -124,10 +124,13 @@ func (ls *LoggerRecordService) Start() error {
 		return fmt.Errorf("failed to create permanent log directory: %w", err)
 	}
 
-	// Ensure temp log directory exists
-	if err := os.MkdirAll(filepath.Dir(ls.tempLogFilePath), 0755); err != nil {
-		return fmt.Errorf("failed to create temp log directory: %w", err)
-	}
+	// Temp directory creation is no longer needed since we write directly to permanent storage
+	/*
+		// Ensure temp log directory exists
+		if err := os.MkdirAll(filepath.Dir(ls.tempLogFilePath), 0755); err != nil {
+			return fmt.Errorf("failed to create temp log directory: %w", err)
+		}
+	*/
 
 	// Start log writer goroutine
 	ls.wg.Add(1)
@@ -143,6 +146,7 @@ func (ls *LoggerRecordService) Stop() {
 	ls.wg.Wait()
 }
 
+/*
 // copyAndSetQuotaIdentity
 func copyAndSetQuotaIdentity(headers *http.Header) *http.Header {
 	headersCopy := make(http.Header)
@@ -152,40 +156,48 @@ func copyAndSetQuotaIdentity(headers *http.Header) *http.Header {
 	headersCopy.Set(types.HeaderQuotaIdentity, "system")
 	return &headersCopy
 }
+*/
 
 // LogAsync logs a chat completion asynchronously
 func (ls *LoggerRecordService) LogAsync(logs *model.ChatLog, headers *http.Header) {
-	// Use default timeout config for log classification
-	timeoutCfg := config.LLMTimeoutConfig{
-		IdleTimeoutMs:      30000,
-		TotalIdleTimeoutMs: 30000,
-	}
-	llmClient, err := client.NewLLMClient(ls.llmConfig, timeoutCfg, ls.classifyModel, copyAndSetQuotaIdentity(headers))
-	if err != nil {
-		logger.Error("Failed to create LLM client",
-			zap.String("operation", "LogAsync"),
-			zap.Error(err),
-		)
-		return
-	}
+	/*
+		// Use default timeout config for log classification
+		timeoutCfg := config.LLMTimeoutConfig{
+			IdleTimeoutMs:      30000,
+			TotalIdleTimeoutMs: 30000,
+		}
+		llmClient, err := client.NewLLMClient(ls.llmConfig, timeoutCfg, ls.classifyModel, copyAndSetQuotaIdentity(headers))
+		if err != nil {
+			logger.Error("Failed to create LLM client",
+				zap.String("operation", "LogAsync"),
+				zap.Error(err),
+			)
+			return
+		}
 
-	ls.llmClient = llmClient
+		ls.llmClient = llmClient
+	*/
+
 	select {
 	case ls.logChan <- logs:
 	default:
-		// Channel is full, log synchronously to avoid blocking
-		ls.logSync(logs)
+		// Channel is full, log directly to storage to avoid blocking
+		ls.logDirectToStorage(logs)
+		// Original code: ls.logSync(logs)
 	}
 
-	if !ls.processorStarted {
-		ls.mu.Lock()
-		defer ls.mu.Unlock()
+	// No longer need to start the logProcessor since we're writing directly to storage
+	/*
 		if !ls.processorStarted {
-			ls.processorStarted = true
-			ls.wg.Add(1)
-			go ls.logProcessor()
+			ls.mu.Lock()
+			defer ls.mu.Unlock()
+			if !ls.processorStarted {
+				ls.processorStarted = true
+				ls.wg.Add(1)
+				go ls.logProcessor()
+			}
 		}
-	}
+	*/
 }
 
 // logWriter writes logs to file
@@ -196,14 +208,16 @@ func (ls *LoggerRecordService) logWriter() {
 		select {
 		case log := <-ls.logChan:
 			if log != nil {
-				ls.logSync(log)
+				// ls.logSync(log)
+				ls.logDirectToStorage(log)
 			}
 		case <-ls.stopChan:
 			// Arrange remaining logs
 			for len(ls.logChan) > 0 {
 				log := <-ls.logChan
 				if log != nil {
-					ls.logSync(log)
+					// ls.logSync(log)
+					ls.logDirectToStorage(log)
 				}
 			}
 			return
@@ -242,10 +256,14 @@ func (ls *LoggerRecordService) generateRandomNumber() int {
 	return rand.Intn(900000) + 100000
 }
 
-// logSync writes a log entry to temp file synchronously
+/* Deprecated
+// logSync writes a log entry to temp file synchronously - kept for backward compatibility
 func (ls *LoggerRecordService) logSync(logs *model.ChatLog) {
 	ls.mu.Lock()
 	defer ls.mu.Unlock()
+
+	// Since tempLogFilePath is no longer available, we'll use a temp directory under logFilePath
+	tempDir := filepath.Join(ls.logFilePath, "temp")
 
 	// Create timestamped filename
 	datePart := logs.Timestamp.Format("20060102")
@@ -253,7 +271,7 @@ func (ls *LoggerRecordService) logSync(logs *model.ChatLog) {
 	username := ls.sanitizeFilename(logs.Identity.UserName, "unknown")
 	randNum := ls.generateRandomNumber()
 	filename := fmt.Sprintf("%s-%s-%s-%d-%s.log", datePart, timePart, username, randNum, ls.instanceID)
-	filePath := filepath.Join(ls.tempLogFilePath, filename)
+	filePath := filepath.Join(tempDir, filename)
 
 	logJSON, err := logs.ToCompressedJSON()
 	if err != nil {
@@ -269,8 +287,32 @@ func (ls *LoggerRecordService) logSync(logs *model.ChatLog) {
 		)
 	}
 }
+*/
 
-// logProcessor processes logs periodically
+// logDirectToStorage processes and writes a log entry directly to permanent storage
+func (ls *LoggerRecordService) logDirectToStorage(logs *model.ChatLog) {
+	ls.mu.Lock()
+	defer ls.mu.Unlock()
+
+	if logs == nil {
+		logger.Error("Invalid log entry")
+		return
+	}
+
+	// Get department info
+	ls.getDepartment(logs)
+
+	// Record metrics if available
+	if ls.metricsService != nil {
+		ls.metricsService.RecordChatLog(logs)
+	}
+
+	// Save directly to permanent storage
+	ls.saveLogToPermanentStorage(logs)
+}
+
+/*
+// logProcessor processes logs periodically - no longer needed since we write directly to permanent storage
 func (ls *LoggerRecordService) logProcessor() {
 	logger.Info("==> start logProcessor")
 	defer ls.wg.Done()
@@ -314,7 +356,7 @@ func (ls *LoggerRecordService) processLogs() {
 	wg.Wait()
 }
 
-// getLogFiles retrieves log files from the temporary log directory
+// getLogFiles retrieves log files from the temporary log directory - no longer needed
 func (ls *LoggerRecordService) getLogFiles() ([]os.DirEntry, error) {
 	files, err := os.ReadDir(ls.tempLogFilePath)
 	if err != nil {
@@ -338,7 +380,7 @@ func (ls *LoggerRecordService) getLogFiles() ([]os.DirEntry, error) {
 	return validFiles, nil
 }
 
-// processSingleFile processes a single log file
+// processSingleFile processes a single log file - no longer needed
 func (ls *LoggerRecordService) processSingleFile(file os.DirEntry) {
 	filePath := filepath.Join(ls.tempLogFilePath, file.Name())
 
@@ -391,6 +433,7 @@ func (ls *LoggerRecordService) processSingleFile(file os.DirEntry) {
 		)
 	}
 }
+*/
 
 func (ls *LoggerRecordService) getDepartment(chatLog *model.ChatLog) {
 	if chatLog.Identity.UserInfo.EmployeeNumber == "" {
@@ -414,7 +457,8 @@ func (ls *LoggerRecordService) getDepartment(chatLog *model.ChatLog) {
 	chatLog.Identity.UserInfo.Department = deptInfo
 }
 
-// processClassification processes the classification of a single log entry
+/*
+// processClassification processes the classification of a single log entry - no longer needed
 func (ls *LoggerRecordService) processClassification(chatLog *model.ChatLog, filePath string) error {
 	if chatLog.Identity.Caller == "review-checker" {
 		chatLog.Category = "CodeReview"
@@ -437,7 +481,7 @@ func (ls *LoggerRecordService) processClassification(chatLog *model.ChatLog, fil
 	return nil
 }
 
-// uploadAndProcessLog uploads a single log to Loki and saves it to permanent storage
+// uploadAndProcessLog uploads a single log to Loki and saves it to permanent storage - no longer needed
 func (ls *LoggerRecordService) uploadAndProcessLog(chatLog *model.ChatLog, file os.DirEntry) error {
 	if ls.metricsService != nil {
 		ls.metricsService.RecordChatLog(chatLog)
@@ -448,7 +492,9 @@ func (ls *LoggerRecordService) uploadAndProcessLog(chatLog *model.ChatLog, file 
 
 	return nil
 }
+*/
 
+/*
 // classifyLog classifies a single log entry
 func (ls *LoggerRecordService) classifyLog(logs *model.ChatLog) string {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -492,6 +538,7 @@ func (ls *LoggerRecordService) validateCategory(category string) string {
 	)
 	return "extra"
 }
+*/
 
 // saveLogToPermanentStorage saves a single log to permanent storage
 func (ls *LoggerRecordService) saveLogToPermanentStorage(chatLog *model.ChatLog) {
@@ -540,7 +587,8 @@ func (ls *LoggerRecordService) saveLogToPermanentStorage(chatLog *model.ChatLog)
 	logger.Info("Log saved in storage", zap.String("fileName", logFile))
 }
 
-// deleteTempLogFile deletes a single temp log file
+/*
+// deleteTempLogFile deletes a single temp log file - no longer needed
 func (ls *LoggerRecordService) deleteTempLogFile(filePath string) {
 	ls.mu.Lock()
 	defer ls.mu.Unlock()
@@ -552,6 +600,7 @@ func (ls *LoggerRecordService) deleteTempLogFile(filePath string) {
 		)
 	}
 }
+*/
 
 // sanitizeFilename cleans a string to make it safe for use in file/folder names
 func (ls *LoggerRecordService) sanitizeFilename(name string, defaultName string) string {

@@ -78,12 +78,13 @@ type GenericToolParameter struct {
 
 // LogConfig holds logging configuration
 type LogConfig struct {
-	LogFilePath          string
-	LogScanIntervalSec   int
-	ClassifyModel        string
-	EnableClassification bool
+	LogFilePath string
+	// LogScanIntervalSec   int
+	// ClassifyModel        string
+	// EnableClassification bool
 }
 
+// Deprecated
 type ContextCompressConfig struct {
 	// Context compression enable flag
 	EnableCompress bool
@@ -103,6 +104,18 @@ type PreciseContextConfig struct {
 	EnableEnvDetailsFilter bool
 	// Control which agents in which modes cannot use ModesChange
 	DisabledModesChangeAgents map[string][]string
+	// Task content replacement rules
+	TaskContentReplaceRule map[string]TaskContentReplaceConfig
+}
+
+// TaskContentReplaceConfig holds configuration for task content replacement
+type TaskContentReplaceConfig struct {
+	// Specify which agents this rule applies to
+	ValidAgents map[string][]string `mapstructure:"valid_agents" yaml:"valid_agents"`
+	// Skip processing if content contains this key
+	SkipKey string `mapstructure:"skip_key" yaml:"skip_key"`
+	// Key-value pairs for replacement
+	MatchKeys map[string]string `mapstructure:"match_keys" yaml:"match_keys"`
 }
 
 // AgentMatchConfig holds configuration for a specific agent matching
@@ -140,6 +153,9 @@ type Config struct {
 
 	// Router configuration
 	Router RouterConfig `mapstructure:"router" yaml:"router"`
+
+	// Forward configuration
+	Forward ForwardConfig `mapstructure:"forward" yaml:"forward"`
 }
 
 // RouterConfig holds router related configuration
@@ -225,4 +241,10 @@ type AgentConfig struct {
 // RulesConfig holds the rules configuration for agents
 type RulesConfig struct {
 	Agents []AgentConfig `yaml:"agents"`
+}
+
+// ForwardConfig holds forwarding configuration
+type ForwardConfig struct {
+	DefaultTarget string `yaml:"defaultTarget"`
+	Enabled       bool   `yaml:"enabled"`
 }
