@@ -14,6 +14,11 @@ func RegisterHandlers(router *gin.Engine, serverCtx *bootstrap.ServiceContext) {
 		// 为需要身份验证的路由应用中间件
 		apiGroup.POST("/v1/chat/completions", IdentityMiddleware(), ChatCompletionHandler(serverCtx))
 		apiGroup.GET("/v1/chat/requests/:requestId/status", ChatStatusHandler(serverCtx))
+
+		// 添加转发接口 - 支持所有HTTP方法（仅在启用时注册）
+		if serverCtx.Config.Forward.Enabled {
+			apiGroup.Any("/forward/*path", ForwardHandler(serverCtx))
+		}
 	}
 
 	// 添加健康检查端点 - 用于K8s liveness probe

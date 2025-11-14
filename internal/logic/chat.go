@@ -493,10 +493,7 @@ func (l *ChatCompletionLogic) processStream(
 	}()
 
 	err := llmClient.ChatLLMWithMessagesStreamRaw(timerCtx, l.request.LLMRequestParams, idleTimer, func(llmResp client.LLMResponse) error {
-		l.handleResonseHeaders(llmResp.Header, []string{
-			types.HeaderUserInput,
-			types.HeaderSelectLLm,
-		}, chatLog)
+		l.handleResonseHeaders(llmResp.Header, types.ResponseHeadersToForward, chatLog)
 
 		return l.handleStreamChunk(ctx, flusher, llmResp.ResonseLine, state, remainingDepth, chatLog, idleTimer)
 	})
@@ -1026,10 +1023,7 @@ func (l *ChatCompletionLogic) handleRawModeStream(
 
 	err := llmClient.ChatLLMWithMessagesStreamRaw(timerCtx, l.request.LLMRequestParams, idleTimer, func(llmResp client.LLMResponse) error {
 		// Handle response headers
-		l.handleResonseHeaders(llmResp.Header, []string{
-			types.HeaderUserInput,
-			types.HeaderSelectLLm,
-		}, chatLog)
+		l.handleResonseHeaders(llmResp.Header, types.ResponseHeadersToForward, chatLog)
 
 		// Direct pass through response line to client
 		if llmResp.ResonseLine != "" {

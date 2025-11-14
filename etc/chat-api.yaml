@@ -323,3 +323,12 @@ Tools:
           description: "Maximum call chain depth to search (default: 4, maximum: 10)"
           required: true
           source: "llm"
+
+# Forward configuration
+# 不做对请求不做任何处理，只做记录，可用来抓包
+forward:
+  # Enable forwarding interface
+  enabled: true
+  # Default target URL for forwarding (optional)
+  # If not provided, target URL must be specified in query parameter
+  # defaultTarget: "http://zgsm.sangfor.com/"

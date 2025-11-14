@@ -51,9 +51,17 @@ const (
 	HeaderOriginalModel = "x-original-model"
 
 	// Response Headers
-	HeaderUserInput = "x-user-input"
-	HeaderSelectLLm = "x-select-llm"
+	HeaderUserInput   = "x-user-input"
+	HeaderSelectLLm   = "x-select-llm"
+	HeaderOneAPIReqId = "x-oneapi-request-id"
 )
+
+// ResponseHeadersToForward defines the list of response headers that should be forwarded
+var ResponseHeadersToForward = []string{
+	HeaderUserInput,
+	HeaderSelectLLm,
+	HeaderOneAPIReqId,
+}
 
 // ToolStatus defines the status of the tool
 type ToolStatus string
