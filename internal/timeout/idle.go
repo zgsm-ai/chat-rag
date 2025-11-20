@@ -78,6 +78,8 @@ type IdleTimer struct {
 	// 首token接收状态相关字段（新增）
 	firstTokenReceived bool       // 标记是否已接收首token
 	firstTokenMu       sync.Mutex // 保护 firstTokenReceived
+
+	timedOut bool // 标记是否已触发超时
 }
 
 // NewIdleTimer creates a new IdleTimer with the specified per-idle timeout and tracker
@@ -208,6 +210,7 @@ func (it *IdleTimer) handleTimeout(expectedGen int64) {
 		zap.Duration("remainingBudget", remaining),
 		zap.Int64("resetCount", it.resetCount),
 		zap.String("reason", string(it.reason)))
+	it.timedOut = true
 	it.cancel()
 }
 
@@ -244,6 +247,7 @@ func (it *IdleTimer) Reset() {
 	it.lastResetTime = time.Now()
 	it.idleStartTime = time.Now()
 	it.resetCount++
+	it.timedOut = false
 
 	logger.Debug("IdleTimer reset",
 		zap.Duration("perIdle", it.perIdle),
@@ -292,4 +296,11 @@ func (it *IdleTimer) GetResetCount() int64 {
 	it.mu.Lock()
 	defer it.mu.Unlock()
 	return it.resetCount
+}
+
+// IsTimedOut returns true if the timer has triggered a timeout
+func (it *IdleTimer) IsTimedOut() bool {
+	it.mu.Lock()
+	defer it.mu.Unlock()
+	return it.timedOut
 }

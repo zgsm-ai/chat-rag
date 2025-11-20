@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -414,6 +415,11 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 			}
 			break
 		}
+
+		// If the error is context canceled, stop trying other models
+		if errors.Is(lastErr, context.Canceled) || errors.Is(l.ctx.Err(), context.Canceled) {
+			break
+		}
 	}
 	return l.handleStreamError(lastErr, chatLog)
 }
@@ -781,6 +787,12 @@ func (l *ChatCompletionLogic) completeStreamResponse(
 
 // handleStreamError handles streaming errors with appropriate error responses
 func (l *ChatCompletionLogic) handleStreamError(err error, chatLog *model.ChatLog) error {
+	// Check if it's a context cancellation (client disconnect)
+	if errors.Is(err, context.Canceled) || errors.Is(l.ctx.Err(), context.Canceled) {
+		logger.WarnC(l.ctx, "Client disconnected (context canceled)", zap.Error(err))
+		return nil
+	}
+
 	logger.ErrorC(l.ctx, "ChatLLMWithMessagesStreamRaw error", zap.Error(err))
 
 	if l.isContextLengthError(err) {
@@ -974,6 +986,16 @@ func (l *ChatCompletionLogic) callWithDegradation(params types.LLMRequestParams,
 		}
 
 		lastErr = err
+
+		// If the error is context canceled, stop trying other models
+		if errors.Is(err, context.Canceled) || errors.Is(l.ctx.Err(), context.Canceled) {
+			logger.WarnC(l.ctx, "degradation: context canceled, stopping degradation",
+				zap.String("model", modelName),
+				zap.Error(err),
+			)
+			return nilResp, err
+		}
+
 		logger.WarnC(l.ctx, "degradation: model failed, moving to next",
 			zap.String("model", modelName),
 			zap.Error(err),
@@ -985,6 +1007,9 @@ func (l *ChatCompletionLogic) callWithDegradation(params types.LLMRequestParams,
 // isRetryableAPIError returns true when we should retry the same model: timeout/network/5xx
 func isRetryableAPIError(err error) bool {
 	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.Canceled) {
 		return false
 	}
 	if apiErr, ok := err.(*types.APIError); ok {

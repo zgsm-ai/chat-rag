@@ -2,6 +2,7 @@ package processor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -153,7 +154,11 @@ func (x *XmlToolAdapter) insertToolsIntoSystemContent(content string) (string, e
 		}
 
 		if result.descErr != nil {
-			logger.Error("Failed to get tool description", zap.Error(result.descErr))
+			if errors.Is(result.descErr, context.Canceled) || errors.Is(x.ctx.Err(), context.Canceled) {
+				logger.WarnC(x.ctx, "Context canceled getting tool description", zap.String("tool", result.name), zap.Error(result.descErr))
+			} else {
+				logger.Error("Failed to get tool description", zap.Error(result.descErr))
+			}
 			continue
 		}
 
@@ -161,14 +166,22 @@ func (x *XmlToolAdapter) insertToolsIntoSystemContent(content string) (string, e
 		toolsContent.WriteString("\n\n")
 
 		if result.capErr != nil {
-			logger.Error("Failed to get tool capability", zap.Error(result.capErr))
+			if errors.Is(result.capErr, context.Canceled) || errors.Is(x.ctx.Err(), context.Canceled) {
+				logger.WarnC(x.ctx, "Context canceled getting tool capability", zap.String("tool", result.name), zap.Error(result.capErr))
+			} else {
+				logger.Error("Failed to get tool capability", zap.Error(result.capErr))
+			}
 			continue
 		}
 		capabilitiesContent.WriteString(result.capability)
 
 		// Collect rules from ready tools
 		if result.ruleErr != nil {
-			logger.Error("Failed to get tool rules", zap.Error(result.ruleErr))
+			if errors.Is(result.ruleErr, context.Canceled) || errors.Is(x.ctx.Err(), context.Canceled) {
+				logger.WarnC(x.ctx, "Context canceled getting tool rules", zap.String("tool", result.name), zap.Error(result.ruleErr))
+			} else {
+				logger.Error("Failed to get tool rules", zap.Error(result.ruleErr))
+			}
 			continue
 		}
 		if result.rule != "" {

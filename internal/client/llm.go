@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -213,14 +214,21 @@ func (c *LLMClient) ChatLLMWithMessagesStreamRaw(ctx context.Context, params typ
 	// Send request
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		logger.ErrorC(ctx, "Failed to connect to LLM service", zap.Error(err))
 		// Check if it's a timeout error
-		if ctx.Err() != nil && idleTimer != nil {
+		if ctx.Err() != nil && idleTimer != nil && idleTimer.IsTimedOut() {
 			if idleTimer.Reason() == timeout.IdleTimeoutReasonTotal {
 				return types.NewTotalIdleTimeoutError()
 			}
 			return types.NewStreamIdleTimeoutError()
 		}
+
+		// Check if it's a context cancellation (client disconnect)
+		if errors.Is(err, context.Canceled) || errors.Is(ctx.Err(), context.Canceled) {
+			logger.WarnC(ctx, "Context canceled connecting to LLM service", zap.Error(err))
+			return context.Canceled
+		}
+
+		logger.ErrorC(ctx, "Failed to connect to LLM service", zap.Error(err))
 		return types.NewModelServiceUnavailableError()
 	}
 	defer resp.Body.Close()
@@ -265,14 +273,21 @@ func (c *LLMClient) ChatLLMWithMessagesStreamRaw(ctx context.Context, params typ
 	}
 
 	if err := scanner.Err(); err != nil {
-		logger.ErrorC(ctx, "Error reading response", zap.Error(err))
 		// Check if it's a context timeout
-		if ctx.Err() != nil && idleTimer != nil {
+		if ctx.Err() != nil && idleTimer != nil && idleTimer.IsTimedOut() {
 			if idleTimer.Reason() == timeout.IdleTimeoutReasonTotal {
 				return types.NewTotalIdleTimeoutError()
 			}
 			return types.NewStreamIdleTimeoutError()
 		}
+
+		// Check if it's a context cancellation (client disconnect)
+		if errors.Is(err, context.Canceled) || errors.Is(ctx.Err(), context.Canceled) {
+			logger.WarnC(ctx, "Context canceled reading response", zap.Error(err))
+			return context.Canceled
+		}
+
+		logger.ErrorC(ctx, "Error reading response", zap.Error(err))
 		return types.NewNetWorkError()
 	}
 
@@ -316,14 +331,20 @@ func (c *LLMClient) ChatLLMWithMessagesRaw(ctx context.Context, params types.LLM
 	// Send request
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		logger.Error("Failed to connect to LLM service", zap.Error(err))
 		// Check if it's a timeout error
-		if ctx.Err() != nil && idleTimer != nil {
+		if ctx.Err() != nil && idleTimer != nil && idleTimer.IsTimedOut() {
 			if idleTimer.Reason() == timeout.IdleTimeoutReasonTotal {
 				return nil_resp, types.NewTotalIdleTimeoutError()
 			}
 			return nil_resp, types.NewStreamIdleTimeoutError()
 		}
+
+		if errors.Is(err, context.Canceled) || errors.Is(ctx.Err(), context.Canceled) {
+			logger.WarnC(ctx, "Context canceled connecting to LLM service", zap.Error(err))
+			return nil_resp, context.Canceled
+		}
+
+		logger.ErrorC(ctx, "Failed to connect to LLM service", zap.Error(err))
 		return nil_resp, types.NewModelServiceUnavailableError()
 	}
 	defer resp.Body.Close()
@@ -361,12 +382,17 @@ func (c *LLMClient) ChatLLMWithMessagesRaw(ctx context.Context, params types.LLM
 		}
 		if err != nil {
 			// Check if it's a timeout error
-			if ctx.Err() != nil && idleTimer != nil {
+			if ctx.Err() != nil && idleTimer != nil && idleTimer.IsTimedOut() {
 				if idleTimer.Reason() == timeout.IdleTimeoutReasonTotal {
 					return nil_resp, types.NewTotalIdleTimeoutError()
 				}
 				return nil_resp, types.NewStreamIdleTimeoutError()
 			}
+
+			if errors.Is(err, context.Canceled) || errors.Is(ctx.Err(), context.Canceled) {
+				return nil_resp, context.Canceled
+			}
+
 			return nil_resp, fmt.Errorf("failed to read response body: %w", err)
 		}
 	}

@@ -3,6 +3,7 @@ package semantic
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -843,6 +844,9 @@ func minDuration(a, b time.Duration) time.Duration {
 // isRetryableAnalyzerErr determines if analyzer error is retryable
 func isRetryableAnalyzerErr(err error) bool {
 	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.Canceled) {
 		return false
 	}
 	msg := strings.ToLower(err.Error())
