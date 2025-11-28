@@ -104,29 +104,19 @@ func (t *TaskContentProcessor) isRuleApplicable(ruleConfig config.TaskContentRep
 func (t *TaskContentProcessor) applyReplacements(content string, matchKeys map[string]string) (string, bool) {
 	changed := false
 
-	// Extract content within task tags
+	// Check if content contains task tags
 	taskRegex := regexp.MustCompile(TaskTagPattern)
-	match := taskRegex.FindStringSubmatch(content)
-
-	if len(match) == 0 {
+	if !taskRegex.MatchString(content) {
 		logger.Info("No task tags found in content for replacement")
 		return content, false
 	}
 
-	originalTaskContent := match[1]
-	newTaskContent := originalTaskContent
-
-	// Apply all replacements
+	// Apply all replacements to the entire content
 	for key, value := range matchKeys {
-		if strings.Contains(newTaskContent, key) {
-			newTaskContent = strings.ReplaceAll(newTaskContent, key, value)
+		if strings.Contains(content, key) {
+			content = strings.ReplaceAll(content, key, value)
 			changed = true
 		}
-	}
-
-	// Replace the original task content with the modified one
-	if newTaskContent != originalTaskContent {
-		content = strings.Replace(content, match[0], TaskTagOpen+newTaskContent+TaskTagClose, 1)
 	}
 
 	return content, changed
