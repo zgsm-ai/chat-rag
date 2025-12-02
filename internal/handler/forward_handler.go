@@ -3,7 +3,9 @@ package handler
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -98,6 +100,14 @@ func ForwardHandler(svcCtx *bootstrap.ServiceContext) gin.HandlerFunc {
 		// Forward the request
 		resp, err := httpClient.DoRequest(c.Request.Context(), req)
 		if err != nil {
+			if errors.Is(err, context.Canceled) || errors.Is(c.Request.Context().Err(), context.Canceled) {
+				logger.Warn("Forward request canceled by client",
+					zap.String("targetURL", targetURL),
+					zap.Error(err),
+				)
+				return
+			}
+
 			logger.Error("Failed to forward request",
 				zap.String("targetURL", targetURL),
 				zap.Error(err),
