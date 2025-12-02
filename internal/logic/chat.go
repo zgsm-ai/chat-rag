@@ -753,9 +753,13 @@ func (l *ChatCompletionLogic) completeStreamResponse(
 ) error {
 	logger.InfoC(l.ctx, "starting to send remaining content before ending.")
 
-	// Check if the entire response is invalid by verifying if we received any valid response data
-	if state.response == nil {
-		logger.WarnC(l.ctx, "detected invalid response content, state.response is nill")
+	// Check if the entire response is invalid by verifying if we received any response data
+	// Also check if the content is only empty (excluding newlines)
+	fullContentStr := state.fullContent.String()
+	trimmedContent := strings.ReplaceAll(fullContentStr, "\n", "")
+
+	if state.response == nil || trimmedContent == "" {
+		logger.WarnC(l.ctx, "detected invalid or empty response")
 
 		// Send error response
 		noContentErr := types.NewInvaildResponseContentError()
