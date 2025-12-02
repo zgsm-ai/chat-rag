@@ -64,6 +64,9 @@ const (
 	ErrMsgStreamIdleTimeout       = "Request idle timeout: no data received within the allowed idle period."
 	ErrCodeTotalStreamIdleTimeout = "chat-rag.total_stream_idle_timeout"
 	ErrMsgTotalStreamIdleTimeout  = "Total idle timeout: cumulative idle time across retries exceeded the allowed limit."
+
+	ErrCodeInvalidResponseContent = "chat-rag.invalid_response_content"
+	ErrMsgInvalidResponseContent  = "The model is unable to perform inference or makes errors during inference."
 )
 
 type APIError struct {
@@ -135,6 +138,16 @@ func NewHTTPStatusError(statusCode int, bodyStr string) *APIError {
 		Message:    msg,
 		Success:    false,
 		StatusCode: statusCode,
+		Type:       string(ErrServerModel),
+	}
+}
+
+func NewInvaildResponseContentError() *APIError {
+	return &APIError{
+		Code:       ErrCodeInvalidResponseContent,
+		Message:    ErrMsgInvalidResponseContent,
+		Success:    false,
+		StatusCode: http.StatusInternalServerError,
 		Type:       string(ErrServerModel),
 	}
 }
