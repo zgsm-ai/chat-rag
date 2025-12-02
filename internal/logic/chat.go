@@ -753,17 +753,23 @@ func (l *ChatCompletionLogic) completeStreamResponse(
 ) error {
 	logger.InfoC(l.ctx, "starting to send remaining content before ending.")
 
+	// Check if the entire response is invalid by verifying if we received any valid response data
+	if state.response == nil {
+		logger.WarnC(l.ctx, "detected invalid response content, state.response is nill")
+
+		// Send error response
+		noContentErr := types.NewInvaildResponseContentError()
+		l.responseHandler.sendSSEError(l.writer, noContentErr)
+		chatLog.AddError(types.ErrApiError, noContentErr)
+		return nil
+	}
+
 	if len(state.window) > 0 {
 		if state.window[len(state.window)-1] == "[DONE]" {
 			state.window = state.window[:len(state.window)-1]
 		}
 
 		endContent := strings.Join(state.window, "")
-
-		if state.response == nil {
-			logger.WarnC(l.ctx, "state.response is nil when sending remaining content")
-			state.response = &types.ChatCompletionResponse{}
-		}
 
 		if l.usage != nil {
 			state.response.Usage = *l.usage
