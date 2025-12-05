@@ -112,9 +112,18 @@ func (t *TaskContentProcessor) applyReplacements(content string, matchKeys map[s
 	}
 
 	// Apply all replacements to the entire content
+	// Use strings.NewReplacer to perform a single-pass replacement
+	// This avoids recursive replacements where a replacement value triggers another rule
+	var oldnew []string
 	for key, value := range matchKeys {
-		if strings.Contains(content, key) {
-			content = strings.ReplaceAll(content, key, value)
+		oldnew = append(oldnew, key, value)
+	}
+
+	if len(oldnew) > 0 {
+		replacer := strings.NewReplacer(oldnew...)
+		newContent := replacer.Replace(content)
+		if newContent != content {
+			content = newContent
 			changed = true
 		}
 	}
