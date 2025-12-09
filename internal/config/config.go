@@ -67,11 +67,11 @@ type GenericToolEndpoints struct {
 
 // GenericToolParameter Tool parameter definition
 type GenericToolParameter struct {
-	Name        string      `yaml:"name"`        // Parameter name
-	Type        string      `yaml:"type"`        // Parameter type
-	Description string      `yaml:"description"` // Parameter description
-	Required    bool        `yaml:"required"`    // Whether required
-	Default     interface{} `yaml:"default"`     // Default value
+	Name        string      `yaml:"name"`              // Parameter name
+	Type        string      `yaml:"type"`              // Parameter type
+	Description string      `yaml:"description"`       // Parameter description
+	Required    bool        `yaml:"required"`          // Whether required
+	Default     interface{} `yaml:"default,omitempty"` // Default value (optional)
 	// Parameter source
 	Source ParameterSource `yaml:"source"`
 }
@@ -156,6 +156,9 @@ type Config struct {
 
 	// Forward configuration
 	Forward ForwardConfig `mapstructure:"forward" yaml:"forward"`
+
+	// Nacos configuration
+	Nacos NacosConfig `mapstructure:"nacos" yaml:"nacos"`
 }
 
 // RouterConfig holds router related configuration
@@ -247,4 +250,36 @@ type RulesConfig struct {
 type ForwardConfig struct {
 	DefaultTarget string `yaml:"defaultTarget"`
 	Enabled       bool   `yaml:"enabled"`
+}
+
+// NacosConfig holds Nacos configuration center connection settings
+type NacosConfig struct {
+	// Nacos server address
+	ServerAddr string `mapstructure:"serverAddr" yaml:"serverAddr"`
+	// Nacos server port
+	ServerPort int `mapstructure:"serverPort" yaml:"serverPort"`
+	// Nacos gRPC port
+	GrpcPort int `mapstructure:"grpcPort" yaml:"grpcPort"`
+	// Nacos namespace
+	Namespace string `mapstructure:"namespace" yaml:"namespace"`
+	// Nacos group
+	Group string `mapstructure:"group" yaml:"group"`
+	// Nacos username for authentication
+	Username string `mapstructure:"username" yaml:"username"`
+	// Nacos password for authentication
+	Password string `mapstructure:"password" yaml:"password"`
+	// Data ID for rules configuration
+	RulesDataId string `mapstructure:"rulesDataId" yaml:"rulesDataId"`
+	// Data ID for tools configuration
+	ToolsDataId string `mapstructure:"toolsDataId" yaml:"toolsDataId"`
+	// Data ID for precise context configuration
+	PreciseContextDataId string `mapstructure:"preciseContextDataId" yaml:"preciseContextDataId"`
+	// Data ID for router configuration
+	RouterDataId string `mapstructure:"routerDataId" yaml:"routerDataId"`
+	// Timeout in seconds for Nacos operations
+	TimeoutSec int `mapstructure:"timeoutSec" yaml:"timeoutSec"`
+	// Log directory for Nacos client
+	LogDir string `mapstructure:"logDir" yaml:"logDir"`
+	// Cache directory for Nacos client
+	CacheDir string `mapstructure:"cacheDir" yaml:"cacheDir"`
 }
