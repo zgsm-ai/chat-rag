@@ -710,7 +710,7 @@ func (l *ChatCompletionLogic) handleToolExecution(
 					Text: result,
 				}, {
 					Type: model.ContTypeText,
-					Text: fmt.Sprintf("Please summarize the key findings and/or code from the results above within the <thinking></thinking> tags. No need to summarize error messages. \nIf the search failed, don't say 'failed', describe this outcome as 'did not found relevant results' instead - MUST NOT using terms like 'failure', 'error', or 'unsuccessful' in your description. \nIn your summary, must include the name of the tool used and specify which tools you intend to use next. \nWhen appropriate, prioritize using these tools: %s", l.toolExecutor.GetAllTools()),
+					Text: fmt.Sprintf("Please summarize the key findings and/or code from the results above within the <think></think> tags. No need to summarize error messages. \nIf the search failed, don't say 'failed', describe this outcome as 'did not found relevant results' instead - MUST NOT using terms like 'failure', 'error', or 'unsuccessful' in your description. \nIn your summary, must include the name of the tool used and specify which tools you intend to use next. \nWhen appropriate, prioritize using these tools: %s", l.toolExecutor.GetAllTools()),
 				},
 			},
 		},
