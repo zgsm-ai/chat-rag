@@ -266,10 +266,6 @@ type NacosConfig struct {
 	Namespace string `mapstructure:"namespace" yaml:"namespace"`
 	// Nacos group
 	Group string `mapstructure:"group" yaml:"group"`
-	// Nacos username for authentication
-	Username string `mapstructure:"username" yaml:"username"`
-	// Nacos password for authentication
-	Password string `mapstructure:"password" yaml:"password"`
 	// Timeout in seconds for Nacos operations
 	TimeoutSec int `mapstructure:"timeoutSec" yaml:"timeoutSec"`
 	// Log directory for Nacos client

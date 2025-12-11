@@ -61,12 +61,6 @@ func (nl *NacosLoader) initClient() error {
 		LogLevel:            "debug",
 	}
 
-	// Add authentication if provided
-	if nl.config.Username != "" && nl.config.Password != "" {
-		clientConfig.Username = nl.config.Username
-		clientConfig.Password = nl.config.Password
-	}
-
 	// Create Nacos config client
 	client, err := clients.NewConfigClient(
 		vo.NacosClientParam{

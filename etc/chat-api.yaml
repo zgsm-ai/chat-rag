@@ -45,10 +45,6 @@ nacos:
   namespace: "2b57fb1d-34f8-4267-b0e6-f77c647d805f"
   # Nacos group for configuration
   group: "CHAT_RAG"
-  # Nacos username for authentication (optional)
-  username: "nacos"
-  # Nacos password for authentication (optional)
-  password: "nacos"
   # Timeout in seconds for Nacos operations
   timeoutSec: 10
   # Log directory for Nacos client
