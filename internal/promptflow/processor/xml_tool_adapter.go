@@ -88,6 +88,13 @@ func (x *XmlToolAdapter) Execute(promptMsg *PromptMsg) {
 // insertToolsIntoSystemContent inserts tool descriptions under the "# Tools" section
 func (x *XmlToolAdapter) insertToolsIntoSystemContent(content string) (string, error) {
 	const method = "XmlToolAdapter.insertToolsIntoSystemContent"
+
+	// Add nil check to prevent panic
+	if x.toolExecutor == nil {
+		logger.ErrorC(x.ctx, "ToolExecutor is nil, skipping tool adaptation", zap.String("method", method))
+		return content, nil
+	}
+
 	if len(x.toolExecutor.GetAllTools()) == 0 {
 		logger.InfoC(x.ctx, "No tools available", zap.String("method", method))
 	}

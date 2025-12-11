@@ -156,11 +156,11 @@ func (l *ChatCompletionLogic) logCompletion(chatLog *model.ChatLog) {
 func (l *ChatCompletionLogic) ChatCompletion() (resp *types.ChatCompletionResponse, err error) {
 	// Router: select model before prompt processing & LLM client creation
 	origModel := l.request.Model
-	if l.svcCtx.Config.Router.Enabled && strings.EqualFold(l.request.Model, "auto") {
+	if l.svcCtx.Config.Router != nil && l.svcCtx.Config.Router.Enabled && strings.EqualFold(l.request.Model, "auto") {
 		logger.InfoC(l.ctx, "semantic router: auto mode routing start",
 			zap.String("strategy", l.svcCtx.Config.Router.Strategy),
 		)
-		if runner := router.NewRunner(l.svcCtx.Config.Router); runner != nil {
+		if runner := router.NewRunner(*l.svcCtx.Config.Router); runner != nil {
 			selected, current, ordered, rerr := runner.Run(l.ctx, l.svcCtx, l.headers, l.request)
 			if rerr == nil && selected != "" {
 				l.request.Model = selected
@@ -247,11 +247,11 @@ func (l *ChatCompletionLogic) ChatCompletion() (resp *types.ChatCompletionRespon
 func (l *ChatCompletionLogic) ChatCompletionStream() error {
 	// Router: select model before streaming LLM client creation
 	origModel := l.request.Model
-	if l.svcCtx.Config.Router.Enabled && strings.EqualFold(l.request.Model, "auto") {
+	if l.svcCtx.Config.Router != nil && l.svcCtx.Config.Router.Enabled && strings.EqualFold(l.request.Model, "auto") {
 		logger.InfoC(l.ctx, "semantic router: auto mode routing start",
 			zap.String("strategy", l.svcCtx.Config.Router.Strategy),
 		)
-		if runner := router.NewRunner(l.svcCtx.Config.Router); runner != nil {
+		if runner := router.NewRunner(*l.svcCtx.Config.Router); runner != nil {
 			selected, current, ordered, rerr := runner.Run(l.ctx, l.svcCtx, l.headers, l.request)
 			if rerr == nil && selected != "" {
 				l.request.Model = selected
@@ -576,7 +576,7 @@ func (l *ChatCompletionLogic) handleStreamChunk(
 
 	// Check for tool detection
 	if !state.toolDetected && l.toolExecutor != nil && remainingDepth > 0 &&
-		!l.svcCtx.Config.Tools.DisableTools {
+		l.svcCtx.Config.Tools != nil && !l.svcCtx.Config.Tools.DisableTools {
 		if err := l.detectAndHandleTool(ctx, flusher, state); err != nil {
 			return err
 		}

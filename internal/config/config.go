@@ -124,21 +124,26 @@ type AgentMatchConfig struct {
 	Key   string `yaml:"key"`
 }
 
+type FromNacos struct {
+	Rules                *RulesConfig
+	Tools                *ToolConfig
+	Router               *RouterConfig
+	PreciseContextConfig *PreciseContextConfig
+}
+
 // Config holds all service configuration
 type Config struct {
+	FromNacos
+
 	// Server configuration
 	Host string
 	Port int
-
-	// Tools configuration
-	Tools ToolConfig
 
 	// Logging configuration
 	Log LogConfig
 
 	// Context handling configuration
 	ContextCompressConfig ContextCompressConfig
-	PreciseContextConfig  PreciseContextConfig
 
 	//Department configuration
 	DepartmentApiEndpoint string
@@ -150,9 +155,6 @@ type Config struct {
 
 	// LLMTimeout holds idle timeout configuration
 	LLMTimeout LLMTimeoutConfig `mapstructure:"llmTimeout" yaml:"llmTimeout"`
-
-	// Router configuration
-	Router RouterConfig `mapstructure:"router" yaml:"router"`
 
 	// Forward configuration
 	Forward ForwardConfig `mapstructure:"forward" yaml:"forward"`
@@ -268,14 +270,6 @@ type NacosConfig struct {
 	Username string `mapstructure:"username" yaml:"username"`
 	// Nacos password for authentication
 	Password string `mapstructure:"password" yaml:"password"`
-	// Data ID for rules configuration
-	RulesDataId string `mapstructure:"rulesDataId" yaml:"rulesDataId"`
-	// Data ID for tools configuration
-	ToolsDataId string `mapstructure:"toolsDataId" yaml:"toolsDataId"`
-	// Data ID for precise context configuration
-	PreciseContextDataId string `mapstructure:"preciseContextDataId" yaml:"preciseContextDataId"`
-	// Data ID for router configuration
-	RouterDataId string `mapstructure:"routerDataId" yaml:"routerDataId"`
 	// Timeout in seconds for Nacos operations
 	TimeoutSec int `mapstructure:"timeoutSec" yaml:"timeoutSec"`
 	// Log directory for Nacos client

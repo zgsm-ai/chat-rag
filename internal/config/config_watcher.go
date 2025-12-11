@@ -206,8 +206,8 @@ func (w *ConfigWatcher) startWatchingConfig(dataId string, handler ConfigChangeH
 	}
 
 	logger.Info("Successfully started watching for configuration changes",
-		zap.String("dataId", dataId),
-		zap.String("group", w.config.Group))
+		zap.String("group", w.config.Group),
+		zap.String("dataId", dataId))
 
 	return nil
 }

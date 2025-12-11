@@ -162,8 +162,7 @@ func (nl *NacosLoader) LoadConfig(dataId string, target interface{}) error {
 
 	logger.Info("Configuration loaded from Nacos successfully",
 		zap.String("group", nl.config.Group),
-		zap.String("dataId", dataId),
-		zap.Any("config", target))
+		zap.String("dataId", dataId))
 
 	return nil
 }
