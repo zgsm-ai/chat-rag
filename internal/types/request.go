@@ -102,11 +102,11 @@ type ChatCompletionResponse struct {
 
 // LLMRequestParams contains parameters for LLM requests
 type LLMRequestParams struct {
-	Messages            []Message `json:"messages"`
 	MaxTokens           *int      `json:"max_tokens,omitempty"`
 	MaxCompletionTokens *int      `json:"max_completion_tokens,omitempty"`
 	Temperature         *float64  `json:"temperature,omitempty"`
 	ExtraBody           ExtraBody `json:"extra_body,omitempty"`
+	Messages            []Message `json:"messages"`
 
 	// function-call
 	Tools             []any  `json:"tools,omitempty"`

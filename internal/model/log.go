@@ -28,18 +28,14 @@ type ToolCall struct {
 
 // RequestParams represents the request parameters for a chat completion
 type RequestParams struct {
-	Model               string          `json:"model"`
-	MaxTokens           *int            `json:"max_tokens,omitempty"`
-	MaxCompletionTokens *int            `json:"max_completion_tokens,omitempty"`
-	Temperature         *float64        `json:"temperature,omitempty"`
-	ExtraBody           types.ExtraBody `json:"extra_body,omitempty"`
+	Model     string                 `json:"model"`
+	LlmParams types.LLMRequestParams `json:"llm_params"`
 }
 
 // ChatLog represents a single chat completion log entry
 type ChatLog struct {
-	Identity  Identity      `json:"identity"`
-	Timestamp time.Time     `json:"timestamp"`
-	Params    RequestParams `json:"params"`
+	Identity  Identity  `json:"identity"`
+	Timestamp time.Time `json:"timestamp"`
 	// Agent information
 	Agent string `json:"agent,omitempty"`
 	// Token statistics
@@ -54,8 +50,9 @@ type ChatLog struct {
 	// Tools
 	ToolCalls []ToolCall `json:"tool_calls"`
 
-	// Content samples (truncated for logging)
-	OriginalPrompt  []types.Message `json:"original_prompt"`
+	Params RequestParams `json:"params"`
+
+	// OriginalPrompt  []types.Message `json:"original_prompt"`
 	ProcessedPrompt []types.Message `json:"processed_prompt"`
 
 	// Response information
