@@ -1078,7 +1078,7 @@ func (l *ChatCompletionLogic) handleRawModeStream(
 				idleTimer.SetFirstTokenReceived()
 			}
 
-			if _, err := fmt.Fprintf(l.writer, "%s\n", llmResp.ResonseLine); err != nil {
+			if _, err := fmt.Fprintf(l.writer, "%s\n\n", llmResp.ResonseLine); err != nil {
 				return err
 			}
 			flusher.Flush()
