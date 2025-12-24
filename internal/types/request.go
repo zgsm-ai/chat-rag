@@ -128,8 +128,6 @@ type ChatLLMRequest struct {
 
 type ChatLLMRequestStream struct {
 	ChatLLMRequest               // Embedded ChatLLMRequest
-	Tools          []Function    `json:"tools,omitempty"`
-	ToolChoice     string        `json:"tool_choice,omitempty"`
 	Stream         bool          `json:"stream,omitempty"`
 	StreamOptions  StreamOptions `json:"stream_options,omitempty"`
 }
