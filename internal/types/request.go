@@ -107,6 +107,18 @@ type LLMRequestParams struct {
 	MaxCompletionTokens *int      `json:"max_completion_tokens,omitempty"`
 	Temperature         *float64  `json:"temperature,omitempty"`
 	ExtraBody           ExtraBody `json:"extra_body,omitempty"`
+
+	// function-call
+	Tools             []any  `json:"tools,omitempty"`
+	ToolChoice        string `json:"tool_choice,omitempty"`
+	ParallelToolCalls bool   `json:"parallel_tool_calls,omitempty"`
+	FunctionCall      any    `json:"function_call,omitempty"`
+	Functions         []any  `json:"functions,omitempty"`
+
+	// others
+	ChatTemplateKwargs any `json:"chat_template_kwargs,omitempty"`
+	Thinking           any `json:"thinking,omitempty"`
+	ResponseFormat     any `json:"response_format,omitempty"`
 }
 
 type ChatLLMRequest struct {

@@ -47,7 +47,13 @@ func ForwardHandler(svcCtx *bootstrap.ServiceContext) gin.HandlerFunc {
 			// 提取 /chat-rag/api/forward/ 之后的 path
 			path := strings.TrimPrefix(c.Request.URL.Path, "/chat-rag/api/forward")
 			path = strings.TrimPrefix(path, "/")
-			targetURL = baseURL + "/" + path
+			
+			// 根据path是否为空决定如何拼接URL
+			if path != "" {
+				targetURL = baseURL + "/" + path
+			} else {
+				targetURL = baseURL
+			}
 		} else {
 			sendErrorResponse(c, http.StatusBadRequest, fmt.Errorf("target URL is required"))
 			return

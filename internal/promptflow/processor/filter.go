@@ -47,7 +47,7 @@ func (u *UserMsgFilter) Execute(promptMsg *PromptMsg) {
 	// Calculate original token counts before filtering
 	u.calculateTokenStats(promptMsg, true)
 
-	u.filterDuplicateMessages(promptMsg)
+	// u.filterDuplicateMessages(promptMsg)
 
 	u.filterAssistantToolPatterns(promptMsg)
 
