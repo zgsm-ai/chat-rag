@@ -461,6 +461,12 @@ func (l *ChatCompletionLogic) handleStreamingWithTools(
 		return l.handleRawModeStream(ctx, llmClient, flusher, chatLog, idleTracker)
 	}
 
+	// If Tools or Functions are provided, also use raw mode for direct tool handling
+	if len(l.request.Tools) > 0 || len(l.request.Functions) > 0 {
+		logger.InfoC(ctx, "received function call in streaming request")
+		return l.handleRawModeStream(ctx, llmClient, flusher, chatLog, idleTracker)
+	}
+
 	state := newStreamState()
 
 	// Phase 1: Process streaming response
