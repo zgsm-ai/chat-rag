@@ -98,8 +98,8 @@ func (l *ChatCompletionLogic) newChatLog(startTime time.Time) *model.ChatLog {
 	allTokens := l.countTokensInMessages(l.request.Messages)
 
 	// Create a deep copy of the original messages to avoid reference issues
-	originalPrompt := make([]types.Message, len(l.request.Messages))
-	copy(originalPrompt, l.request.Messages)
+	// originalPrompt := make([]types.Message, len(l.request.Messages))
+	// copy(originalPrompt, l.request.Messages)
 
 	modelName := l.originalModel
 	if modelName == "" {
@@ -110,11 +110,8 @@ func (l *ChatCompletionLogic) newChatLog(startTime time.Time) *model.ChatLog {
 		Identity:  *l.identity,
 		Timestamp: startTime,
 		Params: model.RequestParams{
-			Model:               modelName,
-			MaxTokens:           l.request.MaxTokens,
-			MaxCompletionTokens: l.request.MaxCompletionTokens,
-			Temperature:         l.request.Temperature,
-			ExtraBody:           l.request.ExtraBody,
+			Model:     modelName,
+			LlmParams: l.request.LLMRequestParams,
 		},
 		Tokens: types.TokenMetrics{
 			Original: types.TokenStats{
@@ -123,7 +120,7 @@ func (l *ChatCompletionLogic) newChatLog(startTime time.Time) *model.ChatLog {
 				All:          allTokens,
 			},
 		},
-		OriginalPrompt: originalPrompt,
+		// OriginalPrompt: originalPrompt,
 	}
 }
 
