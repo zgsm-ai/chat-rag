@@ -33,7 +33,7 @@ func NewRagWithRuleProcessor(
 
 	processor := &RagWithRuleProcessor{
 		RagCompressProcessor: *ragCompressProcessor,
-		rulesConfig:          svcCtx.RulesConfig,
+		rulesConfig:          svcCtx.Config.Rules,
 	}
 
 	processor.chainBuilder = processor

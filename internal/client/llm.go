@@ -180,11 +180,6 @@ func (c *LLMClient) ChatLLMWithMessagesStreamRaw(ctx context.Context, params typ
 		},
 	}
 
-	if len(c.tools) > 0 {
-		requestPayload.Tools = c.tools
-		requestPayload.ToolChoice = "required"
-	}
-
 	// Create request
 	jsonData, err := json.Marshal(requestPayload)
 	if err != nil {

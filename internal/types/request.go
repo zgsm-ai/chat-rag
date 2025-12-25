@@ -102,11 +102,25 @@ type ChatCompletionResponse struct {
 
 // LLMRequestParams contains parameters for LLM requests
 type LLMRequestParams struct {
-	Messages            []Message `json:"messages"`
 	MaxTokens           *int      `json:"max_tokens,omitempty"`
 	MaxCompletionTokens *int      `json:"max_completion_tokens,omitempty"`
 	Temperature         *float64  `json:"temperature,omitempty"`
 	ExtraBody           ExtraBody `json:"extra_body,omitempty"`
+	Messages            []Message `json:"messages"`
+
+	// function-call
+	Tools             []any  `json:"tools,omitempty"`
+	ToolChoice        string `json:"tool_choice,omitempty"`
+	ParallelToolCalls bool   `json:"parallel_tool_calls,omitempty"`
+	FunctionCall      any    `json:"function_call,omitempty"`
+	Functions         []any  `json:"functions,omitempty"`
+
+	// others
+	ChatTemplateKwargs any `json:"chat_template_kwargs,omitempty"`
+	Thinking           any `json:"thinking,omitempty"`
+	ResponseFormat     any `json:"response_format,omitempty"`
+	System             any `json:"system,omitempty"`
+	Metadata           any `json:"metadata,omitempty"`
 }
 
 type ChatLLMRequest struct {
@@ -116,8 +130,6 @@ type ChatLLMRequest struct {
 
 type ChatLLMRequestStream struct {
 	ChatLLMRequest               // Embedded ChatLLMRequest
-	Tools          []Function    `json:"tools,omitempty"`
-	ToolChoice     string        `json:"tool_choice,omitempty"`
 	Stream         bool          `json:"stream,omitempty"`
 	StreamOptions  StreamOptions `json:"stream_options,omitempty"`
 }
