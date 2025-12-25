@@ -119,6 +119,8 @@ type LLMRequestParams struct {
 	ChatTemplateKwargs any `json:"chat_template_kwargs,omitempty"`
 	Thinking           any `json:"thinking,omitempty"`
 	ResponseFormat     any `json:"response_format,omitempty"`
+	System             any `json:"system,omitempty"`
+	Metadata           any `json:"metadata,omitempty"`
 }
 
 type ChatLLMRequest struct {
