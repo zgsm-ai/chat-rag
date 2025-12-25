@@ -67,11 +67,11 @@ type GenericToolEndpoints struct {
 
 // GenericToolParameter Tool parameter definition
 type GenericToolParameter struct {
-	Name        string      `yaml:"name"`        // Parameter name
-	Type        string      `yaml:"type"`        // Parameter type
-	Description string      `yaml:"description"` // Parameter description
-	Required    bool        `yaml:"required"`    // Whether required
-	Default     interface{} `yaml:"default"`     // Default value
+	Name        string      `yaml:"name"`              // Parameter name
+	Type        string      `yaml:"type"`              // Parameter type
+	Description string      `yaml:"description"`       // Parameter description
+	Required    bool        `yaml:"required"`          // Whether required
+	Default     interface{} `yaml:"default,omitempty"` // Default value (optional)
 	// Parameter source
 	Source ParameterSource `yaml:"source"`
 }
@@ -124,21 +124,26 @@ type AgentMatchConfig struct {
 	Key   string `yaml:"key"`
 }
 
+type FromNacos struct {
+	Rules                *RulesConfig
+	Tools                *ToolConfig
+	Router               *RouterConfig
+	PreciseContextConfig *PreciseContextConfig
+}
+
 // Config holds all service configuration
 type Config struct {
+	FromNacos
+
 	// Server configuration
 	Host string
 	Port int
-
-	// Tools configuration
-	Tools ToolConfig
 
 	// Logging configuration
 	Log LogConfig
 
 	// Context handling configuration
 	ContextCompressConfig ContextCompressConfig
-	PreciseContextConfig  PreciseContextConfig
 
 	//Department configuration
 	DepartmentApiEndpoint string
@@ -151,11 +156,11 @@ type Config struct {
 	// LLMTimeout holds idle timeout configuration
 	LLMTimeout LLMTimeoutConfig `mapstructure:"llmTimeout" yaml:"llmTimeout"`
 
-	// Router configuration
-	Router RouterConfig `mapstructure:"router" yaml:"router"`
-
 	// Forward configuration
 	Forward ForwardConfig `mapstructure:"forward" yaml:"forward"`
+
+	// Nacos configuration
+	Nacos NacosConfig `mapstructure:"nacos" yaml:"nacos"`
 }
 
 // RouterConfig holds router related configuration
@@ -247,4 +252,24 @@ type RulesConfig struct {
 type ForwardConfig struct {
 	DefaultTarget string `yaml:"defaultTarget"`
 	Enabled       bool   `yaml:"enabled"`
+}
+
+// NacosConfig holds Nacos configuration center connection settings
+type NacosConfig struct {
+	// Nacos server address
+	ServerAddr string `mapstructure:"serverAddr" yaml:"serverAddr"`
+	// Nacos server port
+	ServerPort int `mapstructure:"serverPort" yaml:"serverPort"`
+	// Nacos gRPC port
+	GrpcPort int `mapstructure:"grpcPort" yaml:"grpcPort"`
+	// Nacos namespace
+	Namespace string `mapstructure:"namespace" yaml:"namespace"`
+	// Nacos group
+	Group string `mapstructure:"group" yaml:"group"`
+	// Timeout in seconds for Nacos operations
+	TimeoutSec int `mapstructure:"timeoutSec" yaml:"timeoutSec"`
+	// Log directory for Nacos client
+	LogDir string `mapstructure:"logDir" yaml:"logDir"`
+	// Cache directory for Nacos client
+	CacheDir string `mapstructure:"cacheDir" yaml:"cacheDir"`
 }

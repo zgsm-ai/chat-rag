@@ -152,8 +152,8 @@ func (h *ResponseHandler) CreateSSEData(finalResponse *types.ChatCompletionRespo
 }
 
 // sendSSEError sends an error message in SSE format
-func (h *ResponseHandler) sendSSEError(w http.ResponseWriter, err error) {
-	logger.Warn("sending SSE error response", zap.Error(err))
+func (h *ResponseHandler) sendSSEError(ctx context.Context, w http.ResponseWriter, err error) {
+	logger.WarnC(ctx, "sending SSE error response", zap.Error(err))
 
 	// Default error code
 	errorCode := types.ErrCodeInernalError

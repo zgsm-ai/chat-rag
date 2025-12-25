@@ -30,13 +30,13 @@ type ToolExecutor interface {
 
 // GenericToolExecutor Generic tool executor
 type GenericToolExecutor struct {
-	toolConfig      config.ToolConfig
+	toolConfig      *config.ToolConfig
 	clientFactory   *client.GenericClientFactory
 	parameterParser *GenericParameterParser
 }
 
 // NewGenericToolExecutor Create new generic tool executor
-func NewGenericToolExecutor(toolConfig config.ToolConfig) *GenericToolExecutor {
+func NewGenericToolExecutor(toolConfig *config.ToolConfig) *GenericToolExecutor {
 	return &GenericToolExecutor{
 		toolConfig:      toolConfig,
 		clientFactory:   client.NewGenericClientFactory(),
@@ -69,7 +69,7 @@ func (e *GenericToolExecutor) ExecuteTools(ctx context.Context, toolName string,
 	}
 
 	// Extract tool parameters, pass context parameters for path parameter processing
-	toolParams, err := e.parameterParser.ExtractParametersWithContext(e.toolConfig, toolName, content, genericParams)
+	toolParams, err := e.parameterParser.ExtractParametersWithContext(*e.toolConfig, toolName, content, genericParams)
 	if err != nil {
 		return "", fmt.Errorf("failed to extract parameters: %w", err)
 	}
