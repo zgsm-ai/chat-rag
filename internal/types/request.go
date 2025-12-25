@@ -7,6 +7,9 @@ const (
 	// RoleUser User role message
 	RoleUser = "user"
 
+	// RoleTool Tool role message
+	RoleTool = "tool"
+
 	// RoleAssistant AI assistant role message
 	RoleAssistant = "assistant"
 )
@@ -144,6 +147,9 @@ type Choice struct {
 type Message struct {
 	Role    string `json:"role"`
 	Content any    `json:"content"`
+
+	// for function call
+	Tool_call_id string `json:"tool_call_id,omitempty"`
 }
 
 type Delta struct {

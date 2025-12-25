@@ -38,11 +38,11 @@ nacos:
   # Nacos server address
   serverAddr: "localhost"
   # Nacos server port
-  serverPort: 58080
+  serverPort: 8848
   # Nacos gRPC port
-  grpcPort: 9848
+  # grpcPort: 9848
   # Nacos namespace (leave empty for default namespace)
-  namespace: "2b57fb1d-34f8-4267-b0e6-f77c647d805f"
+  namespace: "ca7a2781-bfa5-4b58-8929-702cdc1f7e06"
   # Nacos group for configuration
   group: "CHAT_RAG"
   # Timeout in seconds for Nacos operations

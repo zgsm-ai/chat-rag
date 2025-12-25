@@ -126,11 +126,11 @@ func GetOldUserMsgsWithNum(messages []types.Message, num int) []types.Message {
 		}
 	}
 
-	// Find position of num-th last user message
+	// Find position of num-th last user or tool message
 	userCount := 0
 	userPos := -1
 	for i := len(messages) - 1; i >= 0; i-- {
-		if messages[i].Role == types.RoleUser {
+		if messages[i].Role == types.RoleUser || messages[i].Role == types.RoleTool {
 			userCount++
 			if userCount == num {
 				userPos = i
@@ -168,7 +168,7 @@ func GetRecentUserMsgsWithNum(messages []types.Message, num int) []types.Message
 	position := -1
 
 	for i := len(messages) - 1; i >= 0; i-- {
-		if messages[i].Role == types.RoleUser {
+		if messages[i].Role == types.RoleUser || messages[i].Role == types.RoleTool {
 			userCount++
 			if userCount == num {
 				position = i
