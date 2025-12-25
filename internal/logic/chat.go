@@ -224,7 +224,7 @@ func (l *ChatCompletionLogic) ChatCompletion() (resp *types.ChatCompletionRespon
 			if l.isContextLengthError(err2) {
 				logger.ErrorC(l.ctx, "Input context too long, exceeded limit.", zap.Error(err2))
 				lengthErr := types.NewContextTooLongError()
-				l.responseHandler.sendSSEError(l.writer, lengthErr)
+				l.responseHandler.sendSSEError(l.ctx, l.writer, lengthErr)
 				chatLog.AddError(types.ErrContextExceeded, lengthErr)
 				return nil, lengthErr
 			}
@@ -312,7 +312,7 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 			llmClient, err := client.NewLLMClient(l.svcCtx.Config.LLM, l.svcCtx.Config.LLMTimeout, l.request.Model, l.headers)
 			if err != nil {
 				lastErr = err
-				l.responseHandler.sendSSEError(l.writer, err)
+				l.responseHandler.sendSSEError(l.ctx, l.writer, err)
 				chatLog.AddError(types.ErrServerError, err)
 				return fmt.Errorf("LLM client creation failed: %w", err)
 			}
@@ -766,7 +766,7 @@ func (l *ChatCompletionLogic) completeStreamResponse(
 
 		// Send error response
 		noContentErr := types.NewInvaildResponseContentError()
-		l.responseHandler.sendSSEError(l.writer, noContentErr)
+		l.responseHandler.sendSSEError(l.ctx, l.writer, noContentErr)
 		chatLog.AddError(types.ErrApiError, noContentErr)
 		return nil
 	}
@@ -811,12 +811,12 @@ func (l *ChatCompletionLogic) handleStreamError(err error, chatLog *model.ChatLo
 	if l.isContextLengthError(err) {
 		logger.ErrorC(l.ctx, "Input context too long", zap.Error(err))
 		lengthErr := types.NewContextTooLongError()
-		l.responseHandler.sendSSEError(l.writer, lengthErr)
+		l.responseHandler.sendSSEError(l.ctx, l.writer, lengthErr)
 		chatLog.AddError(types.ErrContextExceeded, lengthErr)
 		return nil
 	}
 
-	l.responseHandler.sendSSEError(l.writer, err)
+	l.responseHandler.sendSSEError(l.ctx, l.writer, err)
 	chatLog.AddError(types.ErrApiError, err)
 	return nil
 }
@@ -1091,12 +1091,12 @@ func (l *ChatCompletionLogic) handleRawModeStream(
 		if l.isContextLengthError(err) {
 			logger.ErrorC(ctx, "Input context too long in raw mode", zap.Error(err))
 			lengthErr := types.NewContextTooLongError()
-			l.responseHandler.sendSSEError(l.writer, lengthErr)
+			l.responseHandler.sendSSEError(ctx, l.writer, lengthErr)
 			chatLog.AddError(types.ErrContextExceeded, lengthErr)
 			return nil
 		}
 
-		l.responseHandler.sendSSEError(l.writer, err)
+		l.responseHandler.sendSSEError(ctx, l.writer, err)
 		chatLog.AddError(types.ErrApiError, err)
 		return nil
 	}
