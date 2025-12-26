@@ -156,6 +156,9 @@ type Config struct {
 
 	// Forward configuration
 	Forward ForwardConfig `mapstructure:"forward" yaml:"forward"`
+
+	// VIP priority configuration
+	VIPPriority VIPPriorityConfig `mapstructure:"vipPriority" yaml:"vipPriority"`
 }
 
 // RouterConfig holds router related configuration
@@ -247,4 +250,9 @@ type RulesConfig struct {
 type ForwardConfig struct {
 	DefaultTarget string `yaml:"defaultTarget"`
 	Enabled       bool   `yaml:"enabled"`
+}
+
+// VIPPriorityConfig holds VIP priority configuration
+type VIPPriorityConfig struct {
+	Enabled bool `yaml:"enabled"` // Enable setting priority for VIP users
 }
