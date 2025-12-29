@@ -23,7 +23,7 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -o chat-rag .
 
 # Runtime stage
-FROM alpine:latest
+FROM alpine:latest AS runtime
 
 # Redeclare build arguments for runtime stage
 ARG IMAGE_NAME=chat-rag
