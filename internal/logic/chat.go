@@ -112,8 +112,8 @@ func (l *ChatCompletionLogic) newChatLog(startTime time.Time) *model.ChatLog {
 	allTokens := l.countTokensInMessages(l.request.Messages)
 
 	// Create a deep copy of the original messages to avoid reference issues
-	originalPrompt := make([]types.Message, len(l.request.Messages))
-	copy(originalPrompt, l.request.Messages)
+	// originalPrompt := make([]types.Message, len(l.request.Messages))
+	// copy(originalPrompt, l.request.Messages)
 
 	modelName := l.originalModel
 	if modelName == "" {
@@ -124,11 +124,8 @@ func (l *ChatCompletionLogic) newChatLog(startTime time.Time) *model.ChatLog {
 		Identity:  *l.identity,
 		Timestamp: startTime,
 		Params: model.RequestParams{
-			Model:               modelName,
-			MaxTokens:           l.request.MaxTokens,
-			MaxCompletionTokens: l.request.MaxCompletionTokens,
-			Temperature:         l.request.Temperature,
-			ExtraBody:           l.request.ExtraBody,
+			Model:     modelName,
+			LlmParams: l.request.LLMRequestParams,
 		},
 		Tokens: types.TokenMetrics{
 			Original: types.TokenStats{
@@ -137,7 +134,7 @@ func (l *ChatCompletionLogic) newChatLog(startTime time.Time) *model.ChatLog {
 				All:          allTokens,
 			},
 		},
-		OriginalPrompt: originalPrompt,
+		// OriginalPrompt: originalPrompt,
 	}
 }
 
@@ -170,11 +167,11 @@ func (l *ChatCompletionLogic) logCompletion(chatLog *model.ChatLog) {
 func (l *ChatCompletionLogic) ChatCompletion() (resp *types.ChatCompletionResponse, err error) {
 	// Router: select model before prompt processing & LLM client creation
 	origModel := l.request.Model
-	if l.svcCtx.Config.Router.Enabled && strings.EqualFold(l.request.Model, "auto") {
+	if l.svcCtx.Config.Router != nil && l.svcCtx.Config.Router.Enabled && strings.EqualFold(l.request.Model, "auto") {
 		logger.InfoC(l.ctx, "semantic router: auto mode routing start",
 			zap.String("strategy", l.svcCtx.Config.Router.Strategy),
 		)
-		if runner := router.NewRunner(l.svcCtx.Config.Router); runner != nil {
+		if runner := router.NewRunner(*l.svcCtx.Config.Router); runner != nil {
 			selected, current, ordered, rerr := runner.Run(l.ctx, l.svcCtx, l.headers, l.request)
 			if rerr == nil && selected != "" {
 				l.request.Model = selected
@@ -241,7 +238,7 @@ func (l *ChatCompletionLogic) ChatCompletion() (resp *types.ChatCompletionRespon
 			if l.isContextLengthError(err2) {
 				logger.ErrorC(l.ctx, "Input context too long, exceeded limit.", zap.Error(err2))
 				lengthErr := types.NewContextTooLongError()
-				l.responseHandler.sendSSEError(l.writer, lengthErr)
+				l.responseHandler.sendSSEError(l.ctx, l.writer, lengthErr)
 				chatLog.AddError(types.ErrContextExceeded, lengthErr)
 				return nil, lengthErr
 			}
@@ -261,11 +258,11 @@ func (l *ChatCompletionLogic) ChatCompletion() (resp *types.ChatCompletionRespon
 func (l *ChatCompletionLogic) ChatCompletionStream() error {
 	// Router: select model before streaming LLM client creation
 	origModel := l.request.Model
-	if l.svcCtx.Config.Router.Enabled && strings.EqualFold(l.request.Model, "auto") {
+	if l.svcCtx.Config.Router != nil && l.svcCtx.Config.Router.Enabled && strings.EqualFold(l.request.Model, "auto") {
 		logger.InfoC(l.ctx, "semantic router: auto mode routing start",
 			zap.String("strategy", l.svcCtx.Config.Router.Strategy),
 		)
-		if runner := router.NewRunner(l.svcCtx.Config.Router); runner != nil {
+		if runner := router.NewRunner(*l.svcCtx.Config.Router); runner != nil {
 			selected, current, ordered, rerr := runner.Run(l.ctx, l.svcCtx, l.headers, l.request)
 			if rerr == nil && selected != "" {
 				l.request.Model = selected
@@ -329,7 +326,7 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 			llmClient, err := client.NewLLMClient(l.svcCtx.Config.LLM, l.svcCtx.Config.LLMTimeout, l.request.Model, l.headers)
 			if err != nil {
 				lastErr = err
-				l.responseHandler.sendSSEError(l.writer, err)
+				l.responseHandler.sendSSEError(l.ctx, l.writer, err)
 				chatLog.AddError(types.ErrServerError, err)
 				return fmt.Errorf("LLM client creation failed: %w", err)
 			}
@@ -478,6 +475,12 @@ func (l *ChatCompletionLogic) handleStreamingWithTools(
 		return l.handleRawModeStream(ctx, llmClient, flusher, chatLog, idleTracker)
 	}
 
+	// If Tools or Functions are provided, also use raw mode for direct tool handling
+	if len(l.request.Tools) > 0 || len(l.request.Functions) > 0 {
+		logger.InfoC(ctx, "received function call in streaming request")
+		return l.handleRawModeStream(ctx, llmClient, flusher, chatLog, idleTracker)
+	}
+
 	state := newStreamState()
 
 	// Phase 1: Process streaming response
@@ -590,7 +593,7 @@ func (l *ChatCompletionLogic) handleStreamChunk(
 
 	// Check for tool detection
 	if !state.toolDetected && l.toolExecutor != nil && remainingDepth > 0 &&
-		!l.svcCtx.Config.Tools.DisableTools {
+		l.svcCtx.Config.Tools != nil && !l.svcCtx.Config.Tools.DisableTools {
 		if err := l.detectAndHandleTool(ctx, flusher, state); err != nil {
 			return err
 		}
@@ -777,7 +780,7 @@ func (l *ChatCompletionLogic) completeStreamResponse(
 
 		// Send error response
 		noContentErr := types.NewInvaildResponseContentError()
-		l.responseHandler.sendSSEError(l.writer, noContentErr)
+		l.responseHandler.sendSSEError(l.ctx, l.writer, noContentErr)
 		chatLog.AddError(types.ErrApiError, noContentErr)
 		return nil
 	}
@@ -822,12 +825,12 @@ func (l *ChatCompletionLogic) handleStreamError(err error, chatLog *model.ChatLo
 	if l.isContextLengthError(err) {
 		logger.ErrorC(l.ctx, "Input context too long", zap.Error(err))
 		lengthErr := types.NewContextTooLongError()
-		l.responseHandler.sendSSEError(l.writer, lengthErr)
+		l.responseHandler.sendSSEError(l.ctx, l.writer, lengthErr)
 		chatLog.AddError(types.ErrContextExceeded, lengthErr)
 		return nil
 	}
 
-	l.responseHandler.sendSSEError(l.writer, err)
+	l.responseHandler.sendSSEError(l.ctx, l.writer, err)
 	chatLog.AddError(types.ErrApiError, err)
 	return nil
 }
@@ -1089,7 +1092,7 @@ func (l *ChatCompletionLogic) handleRawModeStream(
 				idleTimer.SetFirstTokenReceived()
 			}
 
-			if _, err := fmt.Fprintf(l.writer, "%s\n", llmResp.ResonseLine); err != nil {
+			if _, err := fmt.Fprintf(l.writer, "%s\n\n", llmResp.ResonseLine); err != nil {
 				return err
 			}
 			flusher.Flush()
@@ -1102,12 +1105,12 @@ func (l *ChatCompletionLogic) handleRawModeStream(
 		if l.isContextLengthError(err) {
 			logger.ErrorC(ctx, "Input context too long in raw mode", zap.Error(err))
 			lengthErr := types.NewContextTooLongError()
-			l.responseHandler.sendSSEError(l.writer, lengthErr)
+			l.responseHandler.sendSSEError(ctx, l.writer, lengthErr)
 			chatLog.AddError(types.ErrContextExceeded, lengthErr)
 			return nil
 		}
 
-		l.responseHandler.sendSSEError(l.writer, err)
+		l.responseHandler.sendSSEError(ctx, l.writer, err)
 		chatLog.AddError(types.ErrApiError, err)
 		return nil
 	}
