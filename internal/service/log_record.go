@@ -73,10 +73,11 @@ type LoggerRecordService struct {
 	instanceID     string
 	// enableClassification bool
 
-	logChan  chan *model.ChatLog
-	stopChan chan struct{}
-	wg       sync.WaitGroup
-	mu       sync.Mutex
+	logChan         chan *model.ChatLog
+	stopChan        chan struct{}
+	wg              sync.WaitGroup
+	mu              sync.Mutex
+	metricsReporter *ChatMetricsReporter
 
 	// processorStarted bool
 }
@@ -95,6 +96,10 @@ func NewLogRecordService(config config.Config) LogRecordInterface {
 	if config.DepartmentApiEndpoint != "" {
 		deptClient = client.NewDepartmentClient(config.DepartmentApiEndpoint)
 	}
+	var metricsReporter *ChatMetricsReporter = nil
+	if config.ChatMetrics.Enabled {
+		metricsReporter = NewChatMetricsReporter(config.ChatMetrics.Url, config.ChatMetrics.Method)
+	}
 
 	return &LoggerRecordService{
 		// tempLogFilePath:      tempLogDir,             // Temporary logs directory - no longer needed
@@ -103,11 +108,12 @@ func NewLogRecordService(config config.Config) LogRecordInterface {
 		// classifyModel:        config.Log.ClassifyModel,
 		// enableClassification: config.Log.EnableClassification,
 
-		logFilePath: config.Log.LogFilePath, // Permanent storage directory
-		logChan:     make(chan *model.ChatLog, 1000),
-		stopChan:    make(chan struct{}),
-		instanceID:  instanceID,
-		deptClient:  deptClient,
+		logFilePath:     config.Log.LogFilePath, // Permanent storage directory
+		logChan:         make(chan *model.ChatLog, 1000),
+		stopChan:        make(chan struct{}),
+		instanceID:      instanceID,
+		deptClient:      deptClient,
+		metricsReporter: metricsReporter,
 	}
 }
 
@@ -574,6 +580,17 @@ func (ls *LoggerRecordService) saveLogToPermanentStorage(chatLog *model.ChatLog)
 			zap.Error(err),
 		)
 		return
+	}
+	if ls.metricsReporter != nil {
+		var e string = ""
+		if len(chatLog.Error) > 0 {
+			// first item's first key
+			for key, _ := range chatLog.Error[0] {
+				e = string(key)
+				break
+			}
+		}
+		go ls.metricsReporter.ReportMetrics(chatLog, e) // async report metrics
 	}
 
 	// Create new file instead of appending
