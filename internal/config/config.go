@@ -281,6 +281,7 @@ type NacosConfig struct {
 type ChatMetrics struct {
 	Enabled bool   `mapstructure:"enabled" yaml:"enabled"`
 	Url     string `mapstructure:"url" yaml:"url"`
+	Method  string `mapstructure:"method" yaml:"method"`
 	Method  string `mapstructure:"method" yaml:"method"` 
 }
 

@@ -24,16 +24,29 @@ func NewChatMetricsReporter(reportUrl string, method string) *ChatMetricsReporte
 	}
 }
 
-// Metric 表示单个指标
-type Metric struct {
-	Name     string  `json:"name"`
-	Value    float64 `json:"value,omitempty"`
-	StrValue string  `json:"str_value,omitempty"`
+// RequestMetrics 表示请求指标
+type RequestMetrics struct {
+	SystemTokens          int `json:"system_tokens"`
+	UserTokens            int `json:"user_tokens"`
+	RetryNum              int `json:"retry_num"`
+	ProcessedSystemTokens int `json:"processed_system_tokens"`
+	ProcessedUserTokens   int `json:"processed_user_tokens"`
+}
+
+// ResponseMetrics 表示响应指标
+type ResponseMetrics struct {
+	Duration           float64 `json:"duration"`
+	PromptTokens       int     `json:"prompt_tokens"`
+	CompletionTokens   int     `json:"completion_tokens"`
+	CacheTokens        int     `json:"cache_tokens"`
+	FirstTokenDuration float64 `json:"first_token_duration,omitempty"`
+	SlowChunk          int64   `json:"slow_chunk,omitempty"`
+	ChunkPerSecond     float64 `json:"chunk_per_second,omitempty"`
+	ErrorCode          string  `json:"error_code,omitempty"`
 }
 
 // Label 表示标签信息
 type Label struct {
-	TaskID             string `json:"task_id,omitempty"`
 	ClientVersion      string `json:"client_version,omitempty"`
 	RequestTime        string `json:"request_time,omitempty"`
 	ForwardRequestTime string `json:"forward_request_time,omitempty"`
@@ -44,10 +57,10 @@ type Label struct {
 
 // MetricsReport 表示完整的指标上报数据
 type MetricsReport struct {
-	RequestID       string   `json:"request_id"`
-	RequestMetrics  []Metric `json:"request_metrics"`
-	ResponseMetrics []Metric `json:"response_metrics"`
-	Label           Label    `json:"label"`
+	RequestID       string          `json:"request_id"`
+	RequestMetrics  RequestMetrics  `json:"request_metrics"`
+	ResponseMetrics ResponseMetrics `json:"response_metrics"`
+	Label           Label           `json:"label"`
 }
 
 // ReportMetrics 上报聊天指标,errors 为了防止并发问题,单独处理
@@ -77,101 +90,58 @@ func (mr *ChatMetricsReporter) convertChatLogToReport(chatLog *model.ChatLog, er
 }
 
 // buildRequestMetrics 构建请求指标
-func (mr *ChatMetricsReporter) buildRequestMetrics(chatLog *model.ChatLog) []Metric {
-	metrics := make([]Metric, 0)
-
-	// 系统提示词长度
-	metrics = append(metrics, Metric{
-		Name:  "system_tokens",
-		Value: float64(chatLog.Tokens.Original.SystemTokens),
-	})
-
-	// 用户提示词长度
-	metrics = append(metrics, Metric{
-		Name:  "user_tokens",
-		Value: float64(chatLog.Tokens.Original.UserTokens),
-	})
-
+func (mr *ChatMetricsReporter) buildRequestMetrics(chatLog *model.ChatLog) RequestMetrics {
 	// 处理后系统提示词长度
 	processedSystemTokens := 0
 	if chatLog.IsPromptProceed {
 		processedSystemTokens = chatLog.Tokens.Processed.SystemTokens
 	}
-	metrics = append(metrics, Metric{
-		Name:  "processed_system_tokens",
-		Value: float64(processedSystemTokens),
-	})
 
 	// 处理后用户提示词长度
 	processedUserTokens := 0
 	if chatLog.IsPromptProceed {
 		processedUserTokens = chatLog.Tokens.Processed.UserTokens
 	}
-	metrics = append(metrics, Metric{
-		Name:  "processed_user_tokens",
-		Value: float64(processedUserTokens),
-	})
 
 	// 重试次数
 	retryNum := 0 // 当前版本忽略
-	// retryNum := 0
-	// for _, tool := range chatLog.ToolCalls {
-	// 	if tool.ResultStatus == "failed" || tool.Error != "" {
-	// 		retryNum++
-	// 	}
-	// }
-	metrics = append(metrics, Metric{
-		Name:  "retry_num",
-		Value: float64(retryNum),
-	})
 
-	return metrics
+	return RequestMetrics{
+		SystemTokens:          chatLog.Tokens.Original.SystemTokens,
+		UserTokens:            chatLog.Tokens.Original.UserTokens,
+		RetryNum:              retryNum,
+		ProcessedSystemTokens: processedSystemTokens,
+		ProcessedUserTokens:   processedUserTokens,
+	}
 }
 
 // buildResponseMetrics 构建响应指标
-func (mr *ChatMetricsReporter) buildResponseMetrics(chatLog *model.ChatLog, errors []string) []Metric {
-	metrics := make([]Metric, 0)
+func (mr *ChatMetricsReporter) buildResponseMetrics(chatLog *model.ChatLog, errors []string) ResponseMetrics {
+	metrics := ResponseMetrics{
+		Duration:         float64(chatLog.Latency.TotalLatency),
+		PromptTokens:     chatLog.Usage.PromptTokens,
+		CompletionTokens: chatLog.Usage.CompletionTokens,
+		CacheTokens:      0, // 默认为0，如果后续有缓存tokens数据可以添加
+	}
 
 	// 首token时长 (ms)
 	if chatLog.Latency.FirstTokenLatency > 0 {
-		metrics = append(metrics, Metric{
-			Name:  "first_token_duration",
-			Value: float64(chatLog.Latency.FirstTokenLatency),
-		})
-	}
-
-	// 总时长 (ms)
-	metrics = append(metrics, Metric{
-		Name:  "duration",
-		Value: float64(chatLog.Latency.TotalLatency),
-	})
-
-	// 总提示词长度
-	if chatLog.Usage.PromptTokens > 0 {
-		metrics = append(metrics, Metric{
-			Name:  "prompt_tokens",
-			Value: float64(chatLog.Usage.PromptTokens),
-		})
-	}
-
-	// 输出长度
-	if chatLog.Usage.CompletionTokens > 0 {
-		metrics = append(metrics, Metric{
-			Name:  "completion_tokens",
-			Value: float64(chatLog.Usage.CompletionTokens),
-		})
+		metrics.FirstTokenDuration = float64(chatLog.Latency.FirstTokenLatency)
 	}
 
 	// 错误类型
 	if len(errors) > 0 {
-		metrics = append(metrics, Metric{
-			Name:     "error_code",
-			StrValue: errors[0], // 只取第一个错误类型
-		})
+		metrics.ErrorCode = errors[0] // 只取第一个错误类型
 	}
 
-	// 最耗时的chunk
-	// 忽略
+	// // 计算 chunk_per_second (每秒处理的chunk数)
+	// if chatLog.Latency.TotalLatency > 0 && chatLog.Usage.CompletionTokens > 0 {
+	// 	// 转换为秒
+	// 	durationInSeconds := float64(chatLog.Latency.TotalLatency) / 1000.0
+	// 	metrics.ChunkPerSecond = float64(chatLog.Usage.CompletionTokens) / durationInSeconds
+	// }
+
+	// 最耗时的chunk (可以根据实际需求启用)
 	// slowestChunk := int64(0)
 	// for _, tool := range chatLog.ToolCalls {
 	// 	if tool.Latency > slowestChunk {
@@ -179,10 +149,7 @@ func (mr *ChatMetricsReporter) buildResponseMetrics(chatLog *model.ChatLog, erro
 	// 	}
 	// }
 	// if slowestChunk > 0 {
-	// 	metrics = append(metrics, Metric{
-	// 		Name:  "slow_chunk",
-	// 		Value: float64(slowestChunk),
-	// 	})
+	// 	metrics.SlowChunk = slowestChunk
 	// }
 
 	return metrics
@@ -191,7 +158,6 @@ func (mr *ChatMetricsReporter) buildResponseMetrics(chatLog *model.ChatLog, erro
 // buildLabel 构建标签
 func (mr *ChatMetricsReporter) buildLabel(chatLog *model.ChatLog) Label {
 	label := Label{
-		TaskID:        mr.truncateString(chatLog.Identity.TaskID, 32),
 		ClientVersion: mr.truncateString(chatLog.Identity.ClientVersion, 16),
 		Model:         mr.truncateString(chatLog.Params.Model, 16),
 	}
