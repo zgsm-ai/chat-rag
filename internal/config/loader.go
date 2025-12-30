@@ -99,6 +99,11 @@ func MustLoadConfig(configPath string) Config {
 		if !viper.IsSet("forward.defaultTarget") {
 			c.Forward.DefaultTarget = ""
 		}
+		// vipPriority.enabled default (only when key not set)
+		if !viper.IsSet("vipPriority.enabled") {
+			c.VIPPriority.Enabled = false
+			logger.Info("vipPriority.enabled not set, using default", zap.Bool("enabled", c.VIPPriority.Enabled))
+		}
 	}
 
 	logger.Info("loaded config", zap.Any("config", c))

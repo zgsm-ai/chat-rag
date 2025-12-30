@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/golang-jwt/jwt"
 	"github.com/google/uuid"
@@ -45,6 +46,8 @@ type UserInfo struct {
 	GithubName     string          `json:"github_name"`
 	EmployeeNumber string          `json:"employee_number"`
 	Department     *DepartmentInfo `json:"department"`
+	Vip            int             `json:"vip"`
+	VipExpire      *time.Time      `json:"vip_expire"`
 }
 
 // DepartmentInfo department information structure
@@ -61,6 +64,8 @@ type JWTClaims struct {
 	UniversalID string                 `json:"universal_id"`
 	Email       string                 `json:"email,omitempty"`
 	Properties  map[string]interface{} `json:"properties,omitempty"`
+	Vip         int                    `json:"vip,omitempty"`
+	VipExpire   *time.Time             `json:"vip_expire,omitempty"`
 }
 
 // CustomProperties defines the custom properties structure
@@ -70,6 +75,8 @@ type CustomProperties struct {
 	CustomName     string `json:"oauth_Custom_username,omitempty"`
 	EmployeeNumber string `json:"oauth_Custom_id,omitempty"`
 	CustomPhone    string `json:"oauth_Custom_email,omitempty"`
+	Vip            int       `json:"vip,omitempty"`
+	VipExpire      *time.Time `json:"vip_expire,omitempty"`
 }
 
 // NewUserInfo creates user info from JWT token
@@ -121,6 +128,20 @@ func mapClaimsToJWTClaims(claims jwt.MapClaims) (*JWTClaims, error) {
 	}
 	if properties, ok := claims["properties"].(map[string]interface{}); ok {
 		jwtClaims.Properties = properties
+	}
+
+	if vipFloat, ok := claims["vip"].(float64); ok {
+		jwtClaims.Vip = int(vipFloat)
+	}
+
+	if vipExpire, ok := claims["vip_expire"].(string); ok {
+		if vipExpireTime, err := time.Parse(time.RFC3339, vipExpire); err == nil {
+			jwtClaims.VipExpire = &vipExpireTime
+		} else {
+			logger.Warn("Failed to parse vip_expire time from jwt claims",
+				zap.String("vip_expire", vipExpire),
+				zap.Error(err))
+		}
 	}
 
 	return &jwtClaims, nil
@@ -175,6 +196,8 @@ func buildUserInfo(claims *JWTClaims, props CustomProperties, id string) *UserIn
 		Email:          claims.Email,
 		GithubName:     props.GithubName,
 		EmployeeNumber: props.EmployeeNumber,
+		Vip:            claims.Vip,
+		VipExpire:      claims.VipExpire,
 	}
 
 	applyCustomProperties(user, props)
