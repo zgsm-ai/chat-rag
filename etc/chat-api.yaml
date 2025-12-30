@@ -24,6 +24,11 @@ LLMTimeout:
 Redis:
   Addr: "127.0.0.1:6379"
 
+# VIP priority configuration
+VIPPriority:
+  # Enable setting priority parameter for VIP users
+  enabled: false
+
 # Forward configuration
 # 不做对请求不做任何处理，只做记录，可用来抓包
 forward:

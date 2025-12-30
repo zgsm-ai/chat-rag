@@ -72,6 +72,20 @@ func (l *ChatCompletionLogic) processRequest() (*model.ChatLog, *ds.ProcessedPro
 	logger.InfoC(l.ctx, "starting to process request", zap.String("user", l.identity.UserName))
 	startTime := time.Now()
 
+	// Set request priority for valid VIP users when feature is enabled (VIP > 0 and not expired)
+	if l.svcCtx.Config.VIPPriority.Enabled && l.identity.UserInfo != nil && l.identity.UserInfo.Vip > 0 {
+		isVipValid := l.identity.UserInfo.VipExpire == nil || time.Now().Before(*l.identity.UserInfo.VipExpire)
+
+		if isVipValid {
+			priority := 10
+			l.request.Priority = &priority
+			logger.InfoC(l.ctx, "vip user detected, set priority",
+				zap.String("user", l.identity.UserName),
+				zap.Int("priority", priority),
+				zap.Int("vip_level", l.identity.UserInfo.Vip))
+		}
+	}
+
 	// Initialize chat log
 	chatLog := l.newChatLog(startTime)
 

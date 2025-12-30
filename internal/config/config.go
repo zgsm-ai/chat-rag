@@ -163,6 +163,8 @@ type Config struct {
 	Nacos NacosConfig `mapstructure:"nacos" yaml:"nacos"`
 	// Chat metrics reporting configuration
 	ChatMetrics ChatMetrics `mapstructure:"chatMetrics" yaml:"chatMetrics"`
+	// VIP priority configuration
+	VIPPriority VIPPriorityConfig `mapstructure:"vipPriority" yaml:"vipPriority"`
 }
 
 // RouterConfig holds router related configuration
@@ -279,5 +281,10 @@ type NacosConfig struct {
 type ChatMetrics struct {
 	Enabled bool   `mapstructure:"enabled" yaml:"enabled"`
 	Url     string `mapstructure:"url" yaml:"url"`
-	Method  string `mapstructure:"method" yaml:"method"`
+	Method  string `mapstructure:"method" yaml:"method"` 
+}
+
+// VIPPriorityConfig holds VIP priority configuration
+type VIPPriorityConfig struct {
+	Enabled bool `yaml:"enabled"` // Enable setting priority for VIP users
 }
