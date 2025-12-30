@@ -282,7 +282,6 @@ type ChatMetrics struct {
 	Enabled bool   `mapstructure:"enabled" yaml:"enabled"`
 	Url     string `mapstructure:"url" yaml:"url"`
 	Method  string `mapstructure:"method" yaml:"method"`
-	Method  string `mapstructure:"method" yaml:"method"` 
 }
 
 // VIPPriorityConfig holds VIP priority configuration
