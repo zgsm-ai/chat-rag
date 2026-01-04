@@ -43,8 +43,16 @@ func ChatCompletionHandler(svcCtx *bootstrap.ServiceContext) gin.HandlerFunc {
 
 		c.Header(types.HeaderRequestId, identity.RequestID)
 
-		// 4. Handle stream and non-stream cases separately
-		if req.Stream {
+		// 4. Extract stream parameter from Extra map
+		stream := false
+		if req.Extra != nil {
+			if streamVal, ok := req.Extra["stream"].(bool); ok {
+				stream = streamVal
+			}
+		}
+
+		// 5. Handle stream and non-stream cases separately
+		if stream {
 			handleStreamResponse(c, l)
 		} else {
 			handleNonStreamResponse(c, l)

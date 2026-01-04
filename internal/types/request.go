@@ -1,5 +1,7 @@
 package types
 
+import "encoding/json"
+
 const (
 	// RoleSystem System role message
 	RoleSystem = "system"
@@ -83,12 +85,6 @@ const StrFilterToolAnalyzing = "\n#### 💡 检索已完成，分析中"
 const StrFilterToolSearchStart = "\n#### 🔍 "
 const StrFilterToolSearchEnd = "工具检索中"
 
-type ChatCompletionRequest struct {
-	ChatLLMRequest               // Embedded ChatLLMRequest
-	Stream         bool          `json:"stream,omitempty"`
-	StreamOptions  StreamOptions `json:"stream_options,omitempty"`
-}
-
 type ExtraBody struct {
 	PromptMode PromptMode `json:"prompt_mode,omitempty"`
 	Mode       string     `json:"mode,omitempty"`
@@ -105,37 +101,102 @@ type ChatCompletionResponse struct {
 
 // LLMRequestParams contains parameters for LLM requests
 type LLMRequestParams struct {
-	MaxTokens           *int      `json:"max_tokens,omitempty"`
-	MaxCompletionTokens *int      `json:"max_completion_tokens,omitempty"`
-	Temperature         *float64  `json:"temperature,omitempty"`
-	Priority            *int      `json:"priority,omitempty"`
-	ExtraBody           ExtraBody `json:"extra_body,omitempty"`
-	Messages            []Message `json:"messages"`
+	Priority  *int      `json:"priority,omitempty"`
+	ExtraBody ExtraBody `json:"extra_body,omitempty"`
+	Messages  []Message `json:"messages"`
 
-	// function-call
-	Tools             []any  `json:"tools,omitempty"`
-	ToolChoice        string `json:"tool_choice,omitempty"`
-	ParallelToolCalls bool   `json:"parallel_tool_calls,omitempty"`
-	FunctionCall      any    `json:"function_call,omitempty"`
-	Functions         []any  `json:"functions,omitempty"`
-
-	// others
-	ChatTemplateKwargs any `json:"chat_template_kwargs,omitempty"`
-	Thinking           any `json:"thinking,omitempty"`
-	ResponseFormat     any `json:"response_format,omitempty"`
-	System             any `json:"system,omitempty"`
-	Metadata           any `json:"metadata,omitempty"`
+	// Extra fields for transparent passthrough of unknown fields like tools, functions, max_tokens, temperature, etc.
+	Extra map[string]any `json:"-"`
 }
 
-type ChatLLMRequest struct {
+// UnmarshalJSON implements custom JSON unmarshaling to capture unknown fields
+func (p *LLMRequestParams) UnmarshalJSON(data []byte) error {
+	// First unmarshal into a map to capture all fields
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	// Extract known fields
+	if priority, ok := raw["priority"]; ok {
+		if priorityFloat, ok := priority.(float64); ok {
+			priorityInt := int(priorityFloat)
+			p.Priority = &priorityInt
+		}
+		delete(raw, "priority")
+	}
+	if extraBody, ok := raw["extra_body"]; ok {
+		extraBodyBytes, _ := json.Marshal(extraBody)
+		json.Unmarshal(extraBodyBytes, &p.ExtraBody)
+		delete(raw, "extra_body")
+	}
+	if messages, ok := raw["messages"]; ok {
+		messagesBytes, _ := json.Marshal(messages)
+		json.Unmarshal(messagesBytes, &p.Messages)
+		delete(raw, "messages")
+	}
+
+	// Store remaining fields in Extra for passthrough
+	if len(raw) > 0 {
+		p.Extra = raw
+	}
+
+	return nil
+}
+
+// MarshalJSON implements custom JSON marshaling to include Extra fields
+func (p LLMRequestParams) MarshalJSON() ([]byte, error) {
+	// Start with a map containing known fields
+	result := make(map[string]any)
+
+	if p.Priority != nil {
+		result["priority"] = p.Priority
+	}
+	// Only add extra_body if it has content
+	if p.ExtraBody.PromptMode != "" || p.ExtraBody.Mode != "" {
+		result["extra_body"] = p.ExtraBody
+	}
+	if p.Messages != nil {
+		result["messages"] = p.Messages
+	}
+
+	// Merge Extra fields
+	for k, v := range p.Extra {
+		result[k] = v
+	}
+
+	return json.Marshal(result)
+}
+
+type ChatCompletionRequest struct {
 	Model            string `json:"model"`
 	LLMRequestParams        // Embedded params
 }
 
+// UnmarshalJSON implements custom JSON unmarshaling for ChatCompletionRequest
+// This is needed because the embedded LLMRequestParams has custom unmarshaling that captures unknown fields
+func (r *ChatCompletionRequest) UnmarshalJSON(data []byte) error {
+	// First unmarshal into a map to capture all fields
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	// Extract model field before passing to embedded type
+	if model, ok := raw["model"].(string); ok {
+		r.Model = model
+		delete(raw, "model")
+	}
+
+	// Marshal remaining fields and unmarshal into LLMRequestParams
+	remainingData, _ := json.Marshal(raw)
+	return json.Unmarshal(remainingData, &r.LLMRequestParams)
+}
+
 type ChatLLMRequestStream struct {
-	ChatLLMRequest               // Embedded ChatLLMRequest
-	Stream         bool          `json:"stream,omitempty"`
-	StreamOptions  StreamOptions `json:"stream_options,omitempty"`
+	ChatCompletionRequest               // Embedded ChatLLMRequest
+	Stream                bool          `json:"stream,omitempty"`
+	StreamOptions         StreamOptions `json:"stream_options,omitempty"`
 }
 
 type Choice struct {
@@ -149,8 +210,50 @@ type Message struct {
 	Role    string `json:"role"`
 	Content any    `json:"content"`
 
-	// for function call
-	Tool_call_id string `json:"tool_call_id,omitempty"`
+	// Extra fields for transparent passthrough of unknown fields like tool_calls, tool_call_id, name, etc.
+	Extra map[string]any `json:"-"`
+}
+
+// UnmarshalJSON implements custom JSON unmarshaling to capture unknown fields
+func (m *Message) UnmarshalJSON(data []byte) error {
+	// First unmarshal into a map to capture all fields
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	// Extract known fields
+	if role, ok := raw["role"].(string); ok {
+		m.Role = role
+		delete(raw, "role")
+	}
+	if content, ok := raw["content"]; ok {
+		m.Content = content
+		delete(raw, "content")
+	}
+
+	// Store remaining fields in Extra for passthrough
+	if len(raw) > 0 {
+		m.Extra = raw
+	}
+
+	return nil
+}
+
+// MarshalJSON implements custom JSON marshaling to include Extra fields
+func (m Message) MarshalJSON() ([]byte, error) {
+	// Start with a map containing known fields
+	result := make(map[string]any)
+
+	result["role"] = m.Role
+	result["content"] = m.Content
+
+	// Merge Extra fields
+	for k, v := range m.Extra {
+		result[k] = v
+	}
+
+	return json.Marshal(result)
 }
 
 type Delta struct {

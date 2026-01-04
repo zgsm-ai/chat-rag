@@ -17,9 +17,9 @@ LLM:
 
 LLMTimeout:
   # 单次连续空闲阈值（毫秒），默认 30000ms
-  IdleTimeoutMs: 30000
+  IdleTimeoutMs: 180000
   # 总空闲预算（毫秒），跨重试/降级累计空闲时长上限，默认 30000ms
-  TotalIdleTimeoutMs: 30000
+  TotalIdleTimeoutMs: 180000
 
 Redis:
   Addr: "127.0.0.1:6379"

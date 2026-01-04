@@ -60,15 +60,18 @@ func createTestServiceContext(t *testing.T, cfg *config.Config, tokenCounter int
 
 // createTestRequest creates a test ChatCompletionRequest
 func createTestRequest(model string, messages []types.Message, stream bool) *types.ChatCompletionRequest {
-	return &types.ChatCompletionRequest{
-		ChatLLMRequest: types.ChatLLMRequest{
-			Model: model,
-			LLMRequestParams: types.LLMRequestParams{
-				Messages: messages,
-			},
+	req := &types.ChatCompletionRequest{
+		Model: model,
+		LLMRequestParams: types.LLMRequestParams{
+			Messages: messages,
 		},
-		Stream: stream,
 	}
+	// Add stream to Extra map
+	if req.Extra == nil {
+		req.Extra = make(map[string]any)
+	}
+	req.Extra["stream"] = stream
+	return req
 }
 
 // createTestIdentity creates a test Identity
