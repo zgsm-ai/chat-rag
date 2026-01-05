@@ -69,7 +69,8 @@ const (
 
 // processRequest handles common request processing logic
 func (l *ChatCompletionLogic) processRequest() (*model.ChatLog, *ds.ProcessedPrompt, error) {
-	logger.InfoC(l.ctx, "starting to process request", zap.String("user", l.identity.UserName))
+	logger.InfoC(l.ctx, "starting to process request",
+		zap.String("user", l.identity.UserName), zap.String("model", l.request.Model))
 	startTime := time.Now()
 
 	// Set request priority for valid VIP users when feature is enabled (VIP > 0 and not expired)
@@ -476,7 +477,20 @@ func (l *ChatCompletionLogic) handleStreamingWithTools(
 	}
 
 	// If Tools or Functions are provided, also use raw mode for direct tool handling
-	if len(l.request.Tools) > 0 || len(l.request.Functions) > 0 {
+	hasTools := false
+	if tools, ok := l.request.Extra["tools"]; ok {
+		if toolsSlice, ok := tools.([]any); ok && len(toolsSlice) > 0 {
+			hasTools = true
+		}
+	}
+	hasFunctions := false
+	if functions, ok := l.request.Extra["functions"]; ok {
+		if functionsSlice, ok := functions.([]any); ok && len(functionsSlice) > 0 {
+			hasFunctions = true
+		}
+	}
+
+	if hasTools || hasFunctions {
 		logger.InfoC(ctx, "received function call in streaming request")
 		return l.handleRawModeStream(ctx, llmClient, flusher, chatLog, idleTracker)
 	}

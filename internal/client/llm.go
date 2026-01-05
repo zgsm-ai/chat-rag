@@ -168,9 +168,14 @@ func (c *LLMClient) ChatLLMWithMessagesStreamRaw(ctx context.Context, params typ
 		return fmt.Errorf("callback function cannot be nil")
 	}
 
+	if params.Extra == nil {
+		params.Extra = make(map[string]any)
+	}
+	params.Extra["model"] = c.modelName
+
 	// Prepare request data structure
 	requestPayload := types.ChatLLMRequestStream{
-		ChatLLMRequest: types.ChatLLMRequest{
+		ChatCompletionRequest: types.ChatCompletionRequest{
 			Model:            c.modelName,
 			LLMRequestParams: params,
 		},
@@ -292,7 +297,12 @@ func (c *LLMClient) ChatLLMWithMessagesStreamRaw(ctx context.Context, params typ
 // ChatLLMWithMessagesRaw directly calls the API using HTTP client to get raw non-streaming response
 func (c *LLMClient) ChatLLMWithMessagesRaw(ctx context.Context, params types.LLMRequestParams, idleTimer *timeout.IdleTimer) (types.ChatCompletionResponse, error) {
 	// Prepare request data structure
-	requestPayload := types.ChatLLMRequest{
+	if params.Extra == nil {
+		params.Extra = make(map[string]any)
+	}
+	params.Extra["model"] = c.modelName
+
+	requestPayload := types.ChatCompletionRequest{
 		Model:            c.modelName,
 		LLMRequestParams: params,
 	}
