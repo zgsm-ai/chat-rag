@@ -165,6 +165,9 @@ type Config struct {
 	ChatMetrics ChatMetrics `mapstructure:"chatMetrics" yaml:"chatMetrics"`
 	// VIP priority configuration
 	VIPPriority VIPPriorityConfig `mapstructure:"vipPriority" yaml:"vipPriority"`
+
+	// Request verification configuration
+	RequestVerify RequestVerifyConfig `mapstructure:"requestVerify" yaml:"requestVerify"`
 }
 
 // RouterConfig holds router related configuration
@@ -287,4 +290,9 @@ type ChatMetrics struct {
 // VIPPriorityConfig holds VIP priority configuration
 type VIPPriorityConfig struct {
 	Enabled bool `yaml:"enabled"` // Enable setting priority for VIP users
+}
+
+type RequestVerifyConfig struct {
+	Enabled          bool `yaml:"enabled"`          // Enable request verification
+	EnabledTimeVerify bool `yaml:"enabledTimeVerify"` // Enable timestamp verification
 }

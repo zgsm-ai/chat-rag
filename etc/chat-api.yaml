@@ -61,3 +61,7 @@ chatMetrics:
   enabled: false
   url: "http://127.0.0.1:8080/internal/indicator/api/v1/chat-indicator"
   method: "PUT"
+
+requestVerify:
+  enabled: false
+  enabledTimeVerify: false
