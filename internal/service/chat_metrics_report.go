@@ -80,7 +80,7 @@ func (mr *ChatMetricsReporter) ReportMetrics(chatLog *model.ChatLog, errors ...s
 // convertChatLogToReport 将 ChatLog 转换为 MetricsReport
 func (mr *ChatMetricsReporter) convertChatLogToReport(chatLog *model.ChatLog, errors ...string) *MetricsReport {
 	report := &MetricsReport{
-		RequestID:       mr.truncateString(chatLog.Identity.RequestID, 32),
+		RequestID:       chatLog.Identity.RequestID,
 		RequestMetrics:  mr.buildRequestMetrics(chatLog),
 		ResponseMetrics: mr.buildResponseMetrics(chatLog, errors),
 		Label:           mr.buildLabel(chatLog),
@@ -158,30 +158,30 @@ func (mr *ChatMetricsReporter) buildResponseMetrics(chatLog *model.ChatLog, erro
 // buildLabel 构建标签
 func (mr *ChatMetricsReporter) buildLabel(chatLog *model.ChatLog) Label {
 	label := Label{
-		ClientVersion: mr.truncateString(chatLog.Identity.ClientVersion, 16),
-		Model:         mr.truncateString(chatLog.Params.Model, 16),
+		ClientVersion: chatLog.Identity.ClientVersion,
+		Model:         chatLog.Params.Model,
 	}
 
 	// 请求时间 - 使用chatLog的时间戳
 	if !chatLog.Timestamp.IsZero() {
-		label.RequestTime = mr.truncateString(chatLog.Timestamp.Format(time.RFC3339), 32)
+		label.RequestTime = chatLog.Timestamp.Format(time.RFC3339)
 	}
 
 	// 转发时间 - 如果有首token延迟，可以计算转发时间
 	if chatLog.Latency.FirstTokenLatency > 0 {
 		forwardTime := chatLog.Timestamp.Add(time.Duration(chatLog.Latency.FirstTokenLatency) * time.Millisecond)
-		label.ForwardRequestTime = mr.truncateString(forwardTime.Format(time.RFC3339), 32)
+		label.ForwardRequestTime = forwardTime.Format(time.RFC3339)
 	}
 
 	// 结束时间 - 使用总延迟计算
 	if chatLog.Latency.TotalLatency > 0 {
 		endTime := chatLog.Timestamp.Add(time.Duration(chatLog.Latency.TotalLatency) * time.Millisecond)
-		label.EndTime = mr.truncateString(endTime.Format(time.RFC3339), 32)
+		label.EndTime = endTime.Format(time.RFC3339)
 	}
 
 	// 模式 - 从请求参数中提取
 	if chatLog.Params.LlmParams.ExtraBody.Mode != "" {
-		label.Mode = mr.truncateString(chatLog.Params.LlmParams.ExtraBody.Mode, 16)
+		label.Mode = chatLog.Params.LlmParams.ExtraBody.Mode
 	}
 
 	return label
@@ -226,10 +226,3 @@ func (mr *ChatMetricsReporter) sendReport(report *MetricsReport, authToken strin
 	return nil
 }
 
-// truncateString 截断字符串到指定长度
-func (mr *ChatMetricsReporter) truncateString(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen]
-}
