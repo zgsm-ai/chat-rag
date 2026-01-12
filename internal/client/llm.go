@@ -256,9 +256,8 @@ func (c *LLMClient) ChatLLMWithMessagesStreamRaw(ctx context.Context, params typ
 	var chunkTimeChan chan float32 = nil
 	var chunkTimeCaculated chan bool = nil
 	var streamEnd chan bool = nil
-	// TODO: add if need chunk time tracking
 	if c.StreamChunkInfoEnabled {
-		chunkTimeChan = make(chan float32, 300) // time in ms
+		chunkTimeChan = make(chan float32, 500) // time in ms
 		chunkTimeCaculated = make(chan bool, 1) // signal caculate finished
 		streamEnd = make(chan bool, 1)          // stream completion
 		// steamEnd and chunkTimeChan must close in now go routine
@@ -276,6 +275,9 @@ func (c *LLMClient) ChatLLMWithMessagesStreamRaw(ctx context.Context, params typ
 					steamIsEnd = true
 				case chunkTime := <-chunkTimeChan:
 					stats.OnChunkArrivedWithInterval(chunkTime)
+				case <-ctx.Done(): // reqeust cancel no need to wait
+					chunkTimeCaculated <- false
+					return
 				}
 				if steamIsEnd {
 					break
@@ -348,6 +350,8 @@ func (c *LLMClient) ChatLLMWithMessagesStreamRaw(ctx context.Context, params typ
 			// Calculation completed
 		case <-time.After(3 * time.Second): // mas 3 seconds
 			// Timeout, proceed without waiting
+		case <-ctx.Done():
+			// Context cancellation
 		}
 	}
 
