@@ -11,10 +11,24 @@ import (
 
 // LatencyMetrics represents latency metrics in milliseconds
 type LatencyMetrics struct {
-	MainModelLatency  int64 `json:"main_model_latency_ms"`
-	TotalLatency      int64 `json:"total_latency_ms"`
-	FirstTokenLatency int64 `json:"first_token_latency_ms"`
-	WindowLatency     int64 `json:"window_latency_ms"`
+	MainModelLatency  int64            `json:"main_model_latency_ms"`
+	TotalLatency      int64            `json:"total_latency_ms"`
+	FirstTokenLatency int64            `json:"first_token_latency_ms"`
+	WindowLatency     int64            `json:"window_latency_ms_ms"`
+	ChunkInfo         *StreamChunkInfo `json:"chunk_info"`
+}
+
+// ChunkInfo represents chunk interval statistics
+type StreamChunkInfo struct {
+	ChunkTotal   int     `json:"chunk_total"`
+	IntervalAvg  float32 `json:"interval_avg"`
+	IntervalMin  float32 `json:"interval_min"`
+	IntervalMax  float32 `json:"interval_max"`
+	Variance     float32 `json:"variance"`
+	StdDeviation float32 `json:"std_deviation"`
+	P50          float32 `json:"p50"`
+	P95          float32 `json:"p95"`
+	P99          float32 `json:"p99"`
 }
 
 type ToolCall struct {
