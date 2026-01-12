@@ -88,6 +88,55 @@ const StrFilterToolSearchEnd = "工具检索中"
 type ExtraBody struct {
 	PromptMode PromptMode `json:"prompt_mode,omitempty"`
 	Mode       string     `json:"mode,omitempty"`
+
+	// Extra fields for transparent passthrough of unknown fields
+	Extra map[string]any `json:"-"`
+}
+
+// UnmarshalJSON implements custom JSON unmarshaling to capture unknown fields
+func (e *ExtraBody) UnmarshalJSON(data []byte) error {
+	// First unmarshal into a map to capture all fields
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	// Extract known fields
+	if promptMode, ok := raw["prompt_mode"].(string); ok {
+		e.PromptMode = PromptMode(promptMode)
+		delete(raw, "prompt_mode")
+	}
+	if mode, ok := raw["mode"].(string); ok {
+		e.Mode = mode
+		delete(raw, "mode")
+	}
+
+	// Store remaining fields in Extra for passthrough
+	if len(raw) > 0 {
+		e.Extra = raw
+	}
+
+	return nil
+}
+
+// MarshalJSON implements custom JSON marshaling to include Extra fields
+func (e ExtraBody) MarshalJSON() ([]byte, error) {
+	// Start with a map containing known fields
+	result := make(map[string]any)
+
+	if e.PromptMode != "" {
+		result["prompt_mode"] = e.PromptMode
+	}
+	if e.Mode != "" {
+		result["mode"] = e.Mode
+	}
+
+	// Merge Extra fields
+	for k, v := range e.Extra {
+		result[k] = v
+	}
+
+	return json.Marshal(result)
 }
 
 type ChatCompletionResponse struct {
@@ -153,7 +202,7 @@ func (p LLMRequestParams) MarshalJSON() ([]byte, error) {
 		result["priority"] = p.Priority
 	}
 	// Only add extra_body if it has content
-	if p.ExtraBody.PromptMode != "" || p.ExtraBody.Mode != "" {
+	if p.ExtraBody.PromptMode != "" || p.ExtraBody.Mode != "" || len(p.ExtraBody.Extra) > 0 {
 		result["extra_body"] = p.ExtraBody
 	}
 	if p.Messages != nil {
