@@ -21,8 +21,9 @@ const (
 
 // LLMConfig
 type LLMConfig struct {
-	Endpoint          string
-	FuncCallingModels []string
+	Endpoint            string
+	FuncCallingModels   []string
+	ChunkMetricsEnabled bool
 }
 
 // LLMTimeoutConfig holds idle timeout configuration for LLM requests
@@ -293,6 +294,6 @@ type VIPPriorityConfig struct {
 }
 
 type RequestVerifyConfig struct {
-	Enabled          bool `yaml:"enabled"`          // Enable request verification
+	Enabled           bool `yaml:"enabled"`           // Enable request verification
 	EnabledTimeVerify bool `yaml:"enabledTimeVerify"` // Enable timestamp verification
 }

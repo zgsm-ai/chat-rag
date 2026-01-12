@@ -40,13 +40,15 @@ type LLMResponse struct {
 
 // LLMClient handles communication with language models
 type LLMClient struct {
-	modelName     string
-	endpoint      string
-	tools         []types.Function
-	headers       *http.Header
-	httpClient    *http.Client
-	idleTimeout   time.Duration
-	timeoutConfig config.LLMTimeoutConfig
+	modelName              string
+	endpoint               string
+	tools                  []types.Function
+	headers                *http.Header
+	httpClient             *http.Client
+	idleTimeout            time.Duration
+	timeoutConfig          config.LLMTimeoutConfig
+	StreamChunkInfo        *utils.ChunkStatInfo
+	StreamChunkInfoEnabled bool
 }
 
 // NewLLMClient creates a new LLM client instance
@@ -69,12 +71,13 @@ func NewLLMClient(llmConfig config.LLMConfig, timeoutConfig config.LLMTimeoutCon
 	}
 
 	return &LLMClient{
-		modelName:     modelName,
-		endpoint:      llmConfig.Endpoint,
-		httpClient:    httpClient,
-		headers:       headers,
-		idleTimeout:   idleTimeout,
-		timeoutConfig: timeoutConfig,
+		modelName:              modelName,
+		endpoint:               llmConfig.Endpoint,
+		httpClient:             httpClient,
+		headers:                headers,
+		idleTimeout:            idleTimeout,
+		timeoutConfig:          timeoutConfig,
+		StreamChunkInfoEnabled: llmConfig.ChunkMetricsEnabled,
 	}, nil
 }
 
@@ -250,13 +253,55 @@ func (c *LLMClient) ChatLLMWithMessagesStreamRaw(ctx context.Context, params typ
 		Header: &headers,
 	}
 
+	var chunkTimeChan chan float32 = nil
+	var chunkTimeCaculated chan bool = nil
+	var streamEnd chan bool = nil
+	// TODO: add if need chunk time tracking
+	if c.StreamChunkInfoEnabled {
+		chunkTimeChan = make(chan float32, 300) // time in ms
+		chunkTimeCaculated = make(chan bool, 1) // signal caculate finished
+		streamEnd = make(chan bool, 1)          // stream completion
+		// steamEnd and chunkTimeChan must close in now go routine
+		defer close(streamEnd)
+		defer close(chunkTimeChan)
+		go func() {
+			// calculate chunkTimeCalculated new go routine
+			defer close(chunkTimeCaculated) // signal completion
+			var stats *utils.ChunkStats = utils.NewChunkStats(0)
+			defer stats.Stop()
+			for {
+				steamIsEnd := false
+				select {
+				case <-streamEnd:
+					steamIsEnd = true
+				case chunkTime := <-chunkTimeChan:
+					stats.OnChunkArrivedWithInterval(chunkTime)
+				}
+				if steamIsEnd {
+					break
+				}
+			}
+			c.StreamChunkInfo = stats.End() // calculate chunk stats
+			chunkTimeCaculated <- true      // signal completion
+		}()
+	}
 	// Read streaming response line by line
 	scanner := bufio.NewScanner(resp.Body)
 	// Increase buffer size to handle long response lines
 	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
-
+	chunkStartTime := time.Now()
 	for scanner.Scan() {
 		line := scanner.Text()
+		if chunkTimeChan != nil {
+			// calculate chunk time
+			chunkTime := time.Since(chunkStartTime).Microseconds()
+			// Non-blocking send to avoid blocking the service if channel is full or closed
+			select {
+			case chunkTimeChan <- float32(chunkTime) / 1000: // in ms
+			default:
+				// Skip if channel is full or no receiver
+			}
+		}
 
 		// Reset idle timer on each line received
 		if idleTimer != nil {
@@ -270,8 +315,14 @@ func (c *LLMClient) ChatLLMWithMessagesStreamRaw(ctx context.Context, params typ
 				return fmt.Errorf("callback error: %w", err)
 			}
 		}
+		if chunkTimeChan != nil {
+			chunkStartTime = time.Now()
+		}
 	}
-
+	// steam is End
+	if streamEnd != nil {
+		streamEnd <- true
+	}
 	if err := scanner.Err(); err != nil {
 		// Check if it's a context timeout
 		if ctx.Err() != nil && idleTimer != nil && idleTimer.IsTimedOut() {
@@ -289,6 +340,15 @@ func (c *LLMClient) ChatLLMWithMessagesStreamRaw(ctx context.Context, params typ
 
 		logger.ErrorC(ctx, "Error reading response", zap.Error(err))
 		return types.NewNetWorkError()
+	}
+	// Wait for chunk time calculation (max 3 seconds)
+	if chunkTimeCaculated != nil {
+		select {
+		case <-chunkTimeCaculated:
+			// Calculation completed
+		case <-time.After(3 * time.Second): // mas 3 seconds
+			// Timeout, proceed without waiting
+		}
 	}
 
 	return nil

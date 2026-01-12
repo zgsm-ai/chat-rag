@@ -534,7 +534,22 @@ func (l *ChatCompletionLogic) processStream(
 
 		return l.handleStreamChunk(ctx, flusher, llmResp.ResonseLine, state, remainingDepth, chatLog, idleTimer)
 	})
-
+	if c, ok := llmClient.(*client.LLMClient); ok {
+		streamState := c.StreamChunkInfo
+		if streamState != nil {
+			chatLog.Latency.ChunkInfo = &model.StreamChunkInfo{
+				ChunkTotal:   streamState.Count,
+				IntervalAvg:  float32(streamState.Mean),
+				IntervalMax:  float32(streamState.Max),
+				IntervalMin:  float32(streamState.Min),
+				P50:          float32(streamState.P50),
+				P95:          float32(streamState.P95),
+				P99:          float32(streamState.P99),
+				StdDeviation: float32(streamState.StdDev),
+				Variance:     float32(streamState.Variance),
+			}
+		}
+	}
 	return state.toolDetected, err
 }
 
