@@ -91,6 +91,13 @@ LLM:
   # Optional: models that support function-calling
   FuncCallingModels: ["gpt-4o-mini", "o4-mini"]
 
+# LLM Timeout and Retry Configuration (for regular mode)
+LLMTimeout:
+  idleTimeoutMs: 180000          # Single idle timeout (ms), default 180000ms (180s)
+  totalIdleTimeoutMs: 180000     # Total idle timeout budget (ms), default 180000ms (180s)
+  maxRetryCount: 1               # Maximum retry count, default 1 (total 2 attempts)
+  retryIntervalMs: 5000          # Retry interval (ms), default 5000ms (5s)
+
 # Context compression
 ContextCompressConfig:
   EnableCompress: true
@@ -176,37 +183,96 @@ router:
       minScore: 0
       tieBreakOrder: ["o4-mini", "gpt-4o-mini"]
       fallbackModelName: "gpt-4o-mini"
+
+      # Timeout configuration for model degradation scenarios
+      idleTimeoutMs: 180000        # Single idle timeout, default 180000ms (180s)
+      totalIdleTimeoutMs: 180000   # Total idle timeout budget, default 180000ms (180s)
+
+      # Retry configuration for model degradation scenarios
+      maxRetryCount: 1             # Maximum retry count, default 1
+      retryIntervalMs: 5000        # Retry interval (ms), default 5000ms
     ruleEngine:
       enabled: false
       inlineRules: []
       bodyPrefix: "body."
       headerPrefix: "header."
+
+  # Alternative: Priority-based Round-Robin Strategy
+  # Uncomment to use priority strategy instead of semantic
+  # priority:
+  #   candidates:
+  #     - modelName: "gpt-4"
+  #       enabled: true
+  #       priority: 1           # Lower number = higher priority (0-999)
+  #       weight: 5             # Weight for load balancing within same priority (1-100)
+  #
+  #     - modelName: "claude-3-opus"
+  #       enabled: true
+  #       priority: 1           # Same priority as gpt-4
+  #       weight: 3             # Lower weight than gpt-4
+  #
+  #     - modelName: "gpt-3.5-turbo"
+  #       enabled: true
+  #       priority: 2           # Lower priority, used when priority 1 fails
+  #       weight: 10
+  #
+  #   fallbackModelName: "gpt-3.5-turbo"
+  #
+  #   # Timeout configuration (same as semantic routing)
+  #   idleTimeoutMs: 180000
+  #   totalIdleTimeoutMs: 180000
+  #
+  #   # Retry configuration (same as semantic routing)
+  #   maxRetryCount: 1
+  #   retryIntervalMs: 5000
 ```
 
 #### Configuration details (highlights)
 
-- LLM
-  - Endpoint: Single Chat Completions endpoint. Final model is carried by request body `model`.
-  - FuncCallingModels: Models supporting function-calling to enable tools.
-- ContextCompressConfig
-  - EnableCompress: Whether to compress long prompts.
-  - TokenThreshold: Trigger threshold for compression (input tokens).
-  - SummaryModel / SummaryModelTokenThreshold: Model and threshold used for summarization.
-  - RecentUserMsgUsedNums: Number of recent user messages considered for compression.
-- Tools (RAG)
-  - Each search block provides HTTP endpoints. TopK/ScoreThreshold control recall count and quality.
-- Log
-  - LogFilePath: Local log file persisted before background upload to Loki.
-  - LokiEndpoint: Loki push endpoint.
-  - LogScanIntervalSec: Scan/upload interval in seconds.
-  - ClassifyModel / EnableClassification: Optional LLM-based log categorization.
-- Redis: Optional; used by tools, router dynamic metrics, and transient statuses.
-- router (Semantic Router)
-  - enabled/strategy: Enable semantic router; current strategy is `semantic`.
-  - semantic.analyzer: Classification model/timeouts; can override endpoint/apiToken for analyzer-only calls; uses a separate non-streaming client in auto mode; optional custom prompt/labels; optional dynamic metrics via Redis.
-  - semantic.inputExtraction: Controls extraction of current user input and bounded history; supports stripping code fences.
-  - semantic.routing: Candidate model score table; tie-break via `tieBreakOrder`; fallback via `fallbackModelName`.
-  - semantic.ruleEngine: Optional rule engine to pre-filter candidates (disabled by default).
+- **LLM**
+  - `Endpoint`: Single Chat Completions endpoint. Final model is carried by request body `model`.
+  - `FuncCallingModels`: Models supporting function-calling to enable tools.
+- **LLMTimeout** (for regular mode - when NOT using router or model != "auto")
+  - `idleTimeoutMs`: Timeout for single idle period (ms). Default 180000ms (180s).
+  - `totalIdleTimeoutMs`: Total idle timeout budget across all retries (ms). Default 180000ms (180s).
+  - `maxRetryCount`: Maximum number of retries on retryable errors (timeout, network). Default 1 (total 2 attempts).
+  - `retryIntervalMs`: Interval between retries (ms). Default 5000ms (5s).
+- **ContextCompressConfig**
+  - `EnableCompress`: Whether to compress long prompts.
+  - `TokenThreshold`: Trigger threshold for compression (input tokens).
+  - `SummaryModel` / `SummaryModelTokenThreshold`: Model and threshold used for summarization.
+  - `RecentUserMsgUsedNums`: Number of recent user messages considered for compression.
+- **Tools** (RAG)
+  - Each search block provides HTTP endpoints. `TopK`/`ScoreThreshold` control recall count and quality.
+- **Log**
+  - `LogFilePath`: Local log file persisted before background upload to Loki.
+  - `LokiEndpoint`: Loki push endpoint.
+  - `LogScanIntervalSec`: Scan/upload interval in seconds.
+  - `ClassifyModel` / `EnableClassification`: Optional LLM-based log categorization.
+- **Redis**: Optional; used by tools, router dynamic metrics, and transient statuses.
+- **router** (Model Selection Router)
+  - `enabled` / `strategy`: Enable router; available strategies: `semantic` (semantic-based), `priority` (priority-based round-robin).
+  - **semantic** strategy configuration:
+    - `analyzer`: Classification model/timeouts; can override endpoint/apiToken for analyzer-only calls; uses a separate non-streaming client in auto mode; optional custom prompt/labels; optional dynamic metrics via Redis.
+    - `inputExtraction`: Controls extraction of current user input and bounded history; supports stripping code fences.
+    - `routing`: Candidate model score table; tie-break via `tieBreakOrder`; fallback via `fallbackModelName`; supports independent timeout and retry configuration for model degradation scenarios:
+      - `idleTimeoutMs`: Single idle timeout for degradation retry (ms). Default 180000ms (180s).
+      - `totalIdleTimeoutMs`: Total idle timeout budget for degradation retry (ms). Default 180000ms (180s).
+      - `maxRetryCount`: Maximum retry count for degradation retry. Default 1.
+      - `retryIntervalMs`: Retry interval for degradation retry (ms). Default 5000ms (5s).
+    - `ruleEngine`: Optional rule engine to pre-filter candidates (disabled by default).
+  - **priority** strategy configuration (alternative to semantic):
+    - Simple, cost-effective strategy without semantic analysis; selects models by priority (lower number = higher priority, range 0-999).
+    - Uses smooth weighted round-robin algorithm for load balancing within same priority group.
+    - Configuration fields:
+      - `candidates`: List of candidate models with `modelName`, `enabled`, `priority` (0-999), and `weight` (1-100).
+      - `fallbackModelName`: Fallback model when all candidates fail.
+      - Timeout and retry settings (same as semantic routing):
+        - `idleTimeoutMs`: Single idle timeout (ms). Default 180000ms (180s).
+        - `totalIdleTimeoutMs`: Total idle timeout budget (ms). Default 180000ms (180s).
+        - `maxRetryCount`: Maximum retry count. Default 1.
+        - `retryIntervalMs`: Retry interval (ms). Default 5000ms (5s).
+    - **Performance optimization**: Single-model priority groups use fast path with zero lock overhead.
 
 ## 📡 API Endpoints
 
