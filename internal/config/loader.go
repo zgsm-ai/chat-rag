@@ -81,12 +81,22 @@ func MustLoadConfig(configPath string) Config {
 	}
 	// Apply idle timeout defaults
 	if c != nil && c.LLMTimeout.IdleTimeoutMs <= 0 {
-		c.LLMTimeout.IdleTimeoutMs = 30000
+		c.LLMTimeout.IdleTimeoutMs = 180000
 		logger.Info("llm idle timeout not set, using default", zap.Int("idleTimeoutMs", c.LLMTimeout.IdleTimeoutMs))
 	}
 	if c != nil && c.LLMTimeout.TotalIdleTimeoutMs <= 0 {
-		c.LLMTimeout.TotalIdleTimeoutMs = 30000
+		c.LLMTimeout.TotalIdleTimeoutMs = 180000
 		logger.Info("llm total idle timeout not set, using default", zap.Int("totalIdleTimeoutMs", c.LLMTimeout.TotalIdleTimeoutMs))
+	}
+
+	// Apply retry configuration defaults for regular mode
+	if c != nil && c.LLMTimeout.MaxRetryCount < 0 {
+		c.LLMTimeout.MaxRetryCount = 1
+		logger.Info("llm maxRetryCount not set or negative, using default", zap.Int("maxRetryCount", c.LLMTimeout.MaxRetryCount))
+	}
+	if c != nil && c.LLMTimeout.RetryIntervalMs <= 0 {
+		c.LLMTimeout.RetryIntervalMs = 5000
+		logger.Info("llm retryIntervalMs not set, using default", zap.Int("retryIntervalMs", c.LLMTimeout.RetryIntervalMs))
 	}
 
 	// Apply forward configuration defaults
@@ -103,6 +113,29 @@ func MustLoadConfig(configPath string) Config {
 		if !viper.IsSet("vipPriority.enabled") {
 			c.VIPPriority.Enabled = false
 			logger.Info("vipPriority.enabled not set, using default", zap.Bool("enabled", c.VIPPriority.Enabled))
+		}
+	}
+
+	// Apply timeout and retry defaults for routing (model degradation scenarios)
+	if c != nil && c.Router.Enabled && c.Router.Strategy == "semantic" {
+		// Timeout defaults
+		if c.Router.Semantic.Routing.IdleTimeoutMs <= 0 {
+			c.Router.Semantic.Routing.IdleTimeoutMs = 180000 // Same as regular mode: 180s
+			logger.Info("router idle timeout not set, using default", zap.Int("idleTimeoutMs", c.Router.Semantic.Routing.IdleTimeoutMs))
+		}
+		if c.Router.Semantic.Routing.TotalIdleTimeoutMs <= 0 {
+			c.Router.Semantic.Routing.TotalIdleTimeoutMs = 180000
+			logger.Info("router total idle timeout not set, using default", zap.Int("totalIdleTimeoutMs", c.Router.Semantic.Routing.TotalIdleTimeoutMs))
+		}
+
+		// Retry defaults
+		if c.Router.Semantic.Routing.MaxRetryCount < 0 {
+			c.Router.Semantic.Routing.MaxRetryCount = 1
+			logger.Info("router maxRetryCount not set or negative, using default", zap.Int("maxRetryCount", c.Router.Semantic.Routing.MaxRetryCount))
+		}
+		if c.Router.Semantic.Routing.RetryIntervalMs <= 0 {
+			c.Router.Semantic.Routing.RetryIntervalMs = 5000
+			logger.Info("router retryIntervalMs not set, using default", zap.Int("retryIntervalMs", c.Router.Semantic.Routing.RetryIntervalMs))
 		}
 	}
 

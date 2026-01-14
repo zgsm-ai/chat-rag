@@ -16,10 +16,56 @@ LLM:
   Endpoint: "http://127.0.0.1:30616/chat-rag/api/v1/chat/completions"
 
 LLMTimeout:
-  # 单次连续空闲阈值（毫秒），默认 30000ms
+  # Regular mode timeout configuration (普通模式超时配置)
+  # 单次连续空闲阈值（毫秒），默认 180000ms (180s)
   IdleTimeoutMs: 180000
-  # 总空闲预算（毫秒），跨重试/降级累计空闲时长上限，默认 30000ms
+  # 总空闲预算（毫秒），跨重试/降级累计空闲时长上限，默认 180000ms (180s)
   TotalIdleTimeoutMs: 180000
+
+  # Regular mode retry configuration (普通模式重试配置)
+  # 最大重试次数，默认 1（即总共尝试 2 次）
+  MaxRetryCount: 1
+  # 重试间隔（毫秒），默认 5000ms（5秒）
+  RetryIntervalMs: 5000
+
+# Router configuration (路由配置)
+# Note: This configuration can also be loaded from Nacos
+router:
+  enabled: false
+  strategy: semantic
+  semantic:
+    analyzer:
+      model: "gpt-4"
+      timeoutMs: 30000
+      totalTimeoutMs: 60000
+      maxInputBytes: 10000
+    inputExtraction:
+      protocol: "openai"
+      userJoinSep: "\n\n"
+      stripCodeFences: true
+      maxUserMessages: 100
+      maxHistoryBytes: 2048
+      maxHistoryMessages: 5
+    routing:
+      candidates:
+        - modelName: "gpt-4"
+          enabled: true
+          scores:
+            general: 10
+      minScore: 5
+      fallbackModelName: "gpt-4"
+
+      # Timeout configuration for model degradation scenarios (模型降级场景的超时配置)
+      idleTimeoutMs: 180000      # 单次空闲超时，默认 180000ms (180s)
+      totalIdleTimeoutMs: 180000 # 总空闲超时预算，默认 180000ms (180s)
+
+      # Retry configuration for model degradation scenarios (模型降级场景的重试配置)
+      maxRetryCount: 1           # 最大重试次数，默认 1
+      retryIntervalMs: 5000      # 重试间隔（毫秒），默认 5000ms
+    ruleEngine:
+      enabled: false
+      bodyPrefix: "body."
+      headerPrefix: "header."
 
 Redis:
   Addr: "127.0.0.1:6379"

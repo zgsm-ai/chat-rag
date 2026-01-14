@@ -28,8 +28,13 @@ type LLMConfig struct {
 
 // LLMTimeoutConfig holds idle timeout configuration for LLM requests
 type LLMTimeoutConfig struct {
+	// Regular mode timeout configuration
 	IdleTimeoutMs      int `mapstructure:"idleTimeoutMs" yaml:"idleTimeoutMs"`
 	TotalIdleTimeoutMs int `mapstructure:"totalIdleTimeoutMs" yaml:"totalIdleTimeoutMs"`
+
+	// Retry configuration for regular mode
+	MaxRetryCount   int `mapstructure:"maxRetryCount" yaml:"maxRetryCount"`
+	RetryIntervalMs int `mapstructure:"retryIntervalMs" yaml:"retryIntervalMs"`
 }
 
 // RedisConfig holds Redis configuration
@@ -220,6 +225,14 @@ type RoutingConfig struct {
 	MinScore          int                `mapstructure:"minScore" yaml:"minScore"`
 	TieBreakOrder     []string           `mapstructure:"tieBreakOrder" yaml:"tieBreakOrder"`
 	FallbackModelName string             `mapstructure:"fallbackModelName" yaml:"fallbackModelName"`
+
+	// Timeout configuration for model degradation scenarios
+	IdleTimeoutMs      int `mapstructure:"idleTimeoutMs" yaml:"idleTimeoutMs"`
+	TotalIdleTimeoutMs int `mapstructure:"totalIdleTimeoutMs" yaml:"totalIdleTimeoutMs"`
+
+	// Retry configuration for model degradation scenarios
+	MaxRetryCount   int `mapstructure:"maxRetryCount" yaml:"maxRetryCount"`
+	RetryIntervalMs int `mapstructure:"retryIntervalMs" yaml:"retryIntervalMs"`
 }
 
 // RoutingCandidate defines a candidate model and its scores
