@@ -260,11 +260,20 @@ func (l *ChatCompletionLogic) ChatCompletion() (resp *types.ChatCompletionRespon
 func (l *ChatCompletionLogic) getRetryConfig() (maxRetryCount int, retryInterval time.Duration, idleTimeout time.Duration, totalIdleTimeout time.Duration) {
 	isAutoMode := len(l.orderedModels) > 0
 	if isAutoMode {
-		// Model degradation mode: use routing configuration
-		maxRetryCount = l.svcCtx.Config.Router.Semantic.Routing.MaxRetryCount
-		retryInterval = time.Duration(l.svcCtx.Config.Router.Semantic.Routing.RetryIntervalMs) * time.Millisecond
-		idleTimeout = time.Duration(l.svcCtx.Config.Router.Semantic.Routing.IdleTimeoutMs) * time.Millisecond
-		totalIdleTimeout = time.Duration(l.svcCtx.Config.Router.Semantic.Routing.TotalIdleTimeoutMs) * time.Millisecond
+		// Model degradation mode: use routing configuration based on strategy
+		if l.svcCtx.Config.Router != nil && l.svcCtx.Config.Router.Strategy == "priority" {
+			// Priority strategy: use priority configuration
+			maxRetryCount = l.svcCtx.Config.Router.Priority.MaxRetryCount
+			retryInterval = time.Duration(l.svcCtx.Config.Router.Priority.RetryIntervalMs) * time.Millisecond
+			idleTimeout = time.Duration(l.svcCtx.Config.Router.Priority.IdleTimeoutMs) * time.Millisecond
+			totalIdleTimeout = time.Duration(l.svcCtx.Config.Router.Priority.TotalIdleTimeoutMs) * time.Millisecond
+		} else {
+			// Semantic strategy: use semantic routing configuration
+			maxRetryCount = l.svcCtx.Config.Router.Semantic.Routing.MaxRetryCount
+			retryInterval = time.Duration(l.svcCtx.Config.Router.Semantic.Routing.RetryIntervalMs) * time.Millisecond
+			idleTimeout = time.Duration(l.svcCtx.Config.Router.Semantic.Routing.IdleTimeoutMs) * time.Millisecond
+			totalIdleTimeout = time.Duration(l.svcCtx.Config.Router.Semantic.Routing.TotalIdleTimeoutMs) * time.Millisecond
+		}
 	} else {
 		// Regular mode: use llmTimeout configuration
 		maxRetryCount = l.svcCtx.Config.LLMTimeout.MaxRetryCount

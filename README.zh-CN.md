@@ -199,32 +199,32 @@ router:
 
   # 优先级轮询策略（semantic 的替代方案）
   # 取消注释以使用优先级策略代替语义路由
-  # priority:
-  #   candidates:
-  #     - modelName: "gpt-4"
-  #       enabled: true
-  #       priority: 1           # 优先级（数字越小优先级越高，范围 0-999）
-  #       weight: 5             # 权重（同优先级内的负载均衡，范围 1-100）
-  #
-  #     - modelName: "claude-3-opus"
-  #       enabled: true
-  #       priority: 1           # 与 gpt-4 同优先级
-  #       weight: 3             # 权重比 gpt-4 低
-  #
-  #     - modelName: "gpt-3.5-turbo"
-  #       enabled: true
-  #       priority: 2           # 优先级较低，仅在优先级 1 失败时使用
-  #       weight: 10
-  #
-  #   fallbackModelName: "gpt-3.5-turbo"
-  #
-  #   # 超时配置（与语义路由相同）
-  #   idleTimeoutMs: 180000
-  #   totalIdleTimeoutMs: 180000
-  #
-  #   # 重试配置（与语义路由相同）
-  #   maxRetryCount: 1
-  #   retryIntervalMs: 5000
+  priority:
+    candidates:
+      - modelName: "gpt-4"
+        enabled: true
+        priority: 1           # 优先级（数字越小优先级越高，范围 0-999）
+        weight: 5             # 权重（同优先级内的负载均衡，范围 1-100）
+
+      - modelName: "claude-3-opus"
+        enabled: true
+        priority: 1           # 与 gpt-4 同优先级
+        weight: 3             # 权重比 gpt-4 低
+
+      - modelName: "gpt-3.5-turbo"
+        enabled: true
+        priority: 2           # 优先级较低，仅在优先级 1 失败时使用
+        weight: 10
+
+    fallbackModelName: "gpt-3.5-turbo"
+
+    # 超时配置（与语义路由相同）
+    idleTimeoutMs: 180000
+    totalIdleTimeoutMs: 180000
+
+    # 重试配置（与语义路由相同）
+    maxRetryCount: 1
+    retryIntervalMs: 5000
 ```
 
 #### 配置字段详解（节选）
