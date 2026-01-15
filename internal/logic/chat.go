@@ -172,7 +172,8 @@ func (l *ChatCompletionLogic) ChatCompletion() (resp *types.ChatCompletionRespon
 		logger.InfoC(l.ctx, "semantic router: auto mode routing start",
 			zap.String("strategy", l.svcCtx.Config.Router.Strategy),
 		)
-		if runner := router.NewRunner(*l.svcCtx.Config.Router); runner != nil {
+		// Use cached strategy instance to maintain state across requests (e.g., round-robin weights)
+		if runner := l.getOrCreateRouterStrategy(); runner != nil {
 			selected, current, ordered, rerr := runner.Run(l.ctx, l.svcCtx, l.headers, l.request)
 			if rerr == nil && selected != "" {
 				l.request.Model = selected
@@ -292,7 +293,8 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 		logger.InfoC(l.ctx, "semantic router: auto mode routing start",
 			zap.String("strategy", l.svcCtx.Config.Router.Strategy),
 		)
-		if runner := router.NewRunner(*l.svcCtx.Config.Router); runner != nil {
+		// Use cached strategy instance to maintain state across requests (e.g., round-robin weights)
+		if runner := l.getOrCreateRouterStrategy(); runner != nil {
 			selected, current, ordered, rerr := runner.Run(l.ctx, l.svcCtx, l.headers, l.request)
 			if rerr == nil && selected != "" {
 				l.request.Model = selected
@@ -952,6 +954,32 @@ func (l *ChatCompletionLogic) sendStreamContent(flusher http.Flusher, response *
 }
 
 // Helper methods
+
+// getOrCreateRouterStrategy returns the cached router strategy instance or creates a new one
+// This ensures that stateful strategies (like priority with round-robin) maintain their state across requests
+func (l *ChatCompletionLogic) getOrCreateRouterStrategy() router.Strategy {
+	// Try to get cached strategy from ServiceContext
+	if cachedStrategy := l.svcCtx.GetRouterStrategy(); cachedStrategy != nil {
+		if strategy, ok := cachedStrategy.(router.Strategy); ok {
+			return strategy
+		}
+	}
+
+	// Create new strategy if not cached
+	if l.svcCtx.Config.Router == nil {
+		return nil
+	}
+
+	strategy := router.NewRunner(*l.svcCtx.Config.Router)
+	if strategy != nil {
+		// Cache it for future requests
+		l.svcCtx.SetRouterStrategy(strategy)
+		logger.InfoC(l.ctx, "router strategy created and cached",
+			zap.String("strategy", strategy.Name()))
+	}
+
+	return strategy
+}
 
 func (l *ChatCompletionLogic) updateToolStatus(toolName string, status types.ToolStatus) {
 	if l.identity.RequestID == "" {
