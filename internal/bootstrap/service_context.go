@@ -199,6 +199,9 @@ func (svc *ServiceContext) initializeNacosConfig() error {
 	svc.Config.PreciseContextConfig = nacosResult.PreciseContextConfig
 	svc.Config.Router = nacosResult.RouterConfig
 
+	// Apply router defaults after loading from Nacos
+	config.ApplyRouterDefaults(&svc.Config)
+
 	logger.Info("Nacos configuration initialized successfully",
 		zap.String("serverAddr", svc.Config.Nacos.ServerAddr),
 		zap.Int("serverPort", svc.Config.Nacos.ServerPort),
@@ -401,10 +404,13 @@ func (svc *ServiceContext) updatePreciseContextConfig(config *config.PreciseCont
 	svc.Config.PreciseContextConfig = config
 }
 
-func (svc *ServiceContext) updateRouterConfig(config *config.RouterConfig) {
+func (svc *ServiceContext) updateRouterConfig(routerConfig *config.RouterConfig) {
 	svc.mu.Lock()
 	defer svc.mu.Unlock()
-	svc.Config.Router = config
+	svc.Config.Router = routerConfig
+
+	// Apply router defaults after updating from Nacos
+	config.ApplyRouterDefaults(&svc.Config)
 
 	// Clear cached router strategy so it will be recreated on next use with new config
 	svc.SetRouterStrategy(nil)
