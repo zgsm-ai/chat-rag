@@ -91,6 +91,13 @@ LLM:
   # 可选：支持函数调用的模型清单
   FuncCallingModels: ["gpt-4o-mini", "o4-mini"]
 
+# LLM 超时和重试配置（普通模式）
+LLMTimeout:
+  idleTimeoutMs: 180000          # 单次空闲超时（毫秒），默认 180000ms (180s)
+  totalIdleTimeoutMs: 180000     # 总空闲超时预算（毫秒），默认 180000ms (180s)
+  maxRetryCount: 1               # 最大重试次数，默认 1（即总共尝试 2 次）
+  retryIntervalMs: 5000          # 重试间隔（毫秒），默认 5000ms（5秒）
+
 # 上下文压缩
 ContextCompressConfig:
   EnableCompress: true
@@ -132,10 +139,10 @@ Redis:
   Password: ""
   DB: 0
 
-# 语义路由（从 ai-llm-router 迁移而来，需将请求体 model 置为 "auto" 才触发）
+# 模型选择路由（支持语义路由和优先级路由策略）
 router:
   enabled: true
-  strategy: semantic
+  strategy: semantic  # 可选: semantic（语义路由）, priority（优先级轮询）
   semantic:
     analyzer:
       model: gpt-4o-mini
@@ -176,37 +183,96 @@ router:
       minScore: 0
       tieBreakOrder: ["o4-mini", "gpt-4o-mini"]
       fallbackModelName: "gpt-4o-mini"
+
+      # 模型降级场景的超时配置（独立于普通模式）
+      idleTimeoutMs: 180000        # 单次空闲超时，默认 180000ms (180s)
+      totalIdleTimeoutMs: 180000   # 总空闲超时预算，默认 180000ms (180s)
+
+      # 模型降级场景的重试配置（独立于普通模式）
+      maxRetryCount: 1             # 最大重试次数，默认 1（总共尝试 2 次）
+      retryIntervalMs: 5000        # 重试间隔（毫秒），默认 5000ms
     ruleEngine:
       enabled: false
       inlineRules: []
       bodyPrefix: "body."
       headerPrefix: "header."
+
+  # 优先级轮询策略（semantic 的替代方案）
+  # 取消注释以使用优先级策略代替语义路由
+  priority:
+    candidates:
+      - modelName: "gpt-4"
+        enabled: true
+        priority: 1           # 优先级（数字越小优先级越高，范围 0-999）
+        weight: 5             # 权重（同优先级内的负载均衡，范围 1-100）
+
+      - modelName: "claude-3-opus"
+        enabled: true
+        priority: 1           # 与 gpt-4 同优先级
+        weight: 3             # 权重比 gpt-4 低
+
+      - modelName: "gpt-3.5-turbo"
+        enabled: true
+        priority: 2           # 优先级较低，仅在优先级 1 失败时使用
+        weight: 10
+
+    fallbackModelName: "gpt-3.5-turbo"
+
+    # 超时配置（与语义路由相同）
+    idleTimeoutMs: 180000
+    totalIdleTimeoutMs: 180000
+
+    # 重试配置（与语义路由相同）
+    maxRetryCount: 1
+    retryIntervalMs: 5000
 ```
 
 #### 配置字段详解（节选）
 
-- LLM
-  - Endpoint：统一的 Chat Completions 端点；最终模型名通过请求体 `model` 传递
-  - FuncCallingModels：具备函数调用能力的模型清单，便于按需启用工具
-- ContextCompressConfig
-  - EnableCompress：是否开启长上下文压缩
-  - TokenThreshold：超过此阈值触发压缩
-  - SummaryModel / SummaryModelTokenThreshold：用于摘要压缩的模型与阈值
-  - RecentUserMsgUsedNums：压缩流程中参照的最近用户消息数量
-- Tools（RAG）
-  - 各搜索模块提供 HTTP 端点；TopK/ScoreThreshold 控制召回数量与质量
-- Log
-  - LogFilePath：本地日志文件路径；后台进程会批量上传至 Loki
-  - LokiEndpoint：Loki Push 端点
-  - LogScanIntervalSec：日志扫描与上传周期
-  - ClassifyModel / EnableClassification：是否使用 LLM 对日志分类
-- Redis：可选；用于工具状态、路由动态指标等
-- router（语义路由）
-  - enabled/strategy：开启语义路由；当前策略为 `semantic`
-  - semantic.analyzer：分类模型/超时；支持仅对 analyzer 覆盖 endpoint/apiToken；在 auto 模式下使用独立的非流式客户端；可自定义 Prompt 与标签；可选动态指标（Redis）
-  - semantic.inputExtraction：控制用户输入与历史的抽取方式，支持去除代码块、限制历史长度
-  - semantic.routing：候选模型评分表；通过 `tieBreakOrder` 解决同分，`fallbackModelName` 兜底
-  - semantic.ruleEngine：可选的规则引擎预筛模型，默认关闭
+- **LLM**
+  - `Endpoint`：统一的 Chat Completions 端点；最终模型名通过请求体 `model` 传递
+  - `FuncCallingModels`：具备函数调用能力的模型清单，便于按需启用工具
+- **LLMTimeout**（普通模式 - 不使用路由或 model != "auto" 时）
+  - `idleTimeoutMs`：单次空闲超时（毫秒），默认 180000ms (180s)
+  - `totalIdleTimeoutMs`：总空闲超时预算（毫秒），默认 180000ms (180s)
+  - `maxRetryCount`：可重试错误的最大重试次数（超时、网络错误），默认 1（总共尝试 2 次）
+  - `retryIntervalMs`：重试间隔（毫秒），默认 5000ms（5秒）
+- **ContextCompressConfig**
+  - `EnableCompress`：是否开启长上下文压缩
+  - `TokenThreshold`：超过此阈值触发压缩
+  - `SummaryModel` / `SummaryModelTokenThreshold`：用于摘要压缩的模型与阈值
+  - `RecentUserMsgUsedNums`：压缩流程中参照的最近用户消息数量
+- **Tools**（RAG）
+  - 各搜索模块提供 HTTP 端点；`TopK`/`ScoreThreshold` 控制召回数量与质量
+- **Log**
+  - `LogFilePath`：本地日志文件路径；后台进程会批量上传至 Loki
+  - `LokiEndpoint`：Loki Push 端点
+  - `LogScanIntervalSec`：日志扫描与上传周期
+  - `ClassifyModel` / `EnableClassification`：是否使用 LLM 对日志分类
+- **Redis**：可选；用于工具状态、路由动态指标等
+- **router**（模型选择路由）
+  - `enabled` / `strategy`：启用路由；可选策略：`semantic`（语义路由）、`priority`（优先级轮询）
+  - **semantic** 策略配置：
+    - `analyzer`：分类模型/超时；支持仅对 analyzer 覆盖 endpoint/apiToken；在 auto 模式下使用独立的非流式客户端；可自定义 Prompt 与标签；可选动态指标（Redis）
+    - `inputExtraction`：控制用户输入与历史的抽取方式，支持去除代码块、限制历史长度
+    - `routing`：候选模型评分表；通过 `tieBreakOrder` 解决同分，`fallbackModelName` 兜底；支持模型降级场景的独立超时和重试配置：
+      - `idleTimeoutMs`：降级重试的单次空闲超时（毫秒），默认 180000ms (180s)
+      - `totalIdleTimeoutMs`：降级重试的总空闲超时预算（毫秒），默认 180000ms (180s)
+      - `maxRetryCount`：降级重试的最大重试次数，默认 1
+      - `retryIntervalMs`：降级重试的重试间隔（毫秒），默认 5000ms
+    - `ruleEngine`：可选的规则引擎预筛模型，默认关闭
+  - **priority** 策略配置（semantic 的替代方案）：
+    - 简单、低成本的策略，无需语义分析；根据优先级选择模型（数字越小优先级越高，范围 0-999）
+    - 使用平滑加权轮询算法在同优先级组内实现负载均衡
+    - 配置字段：
+      - `candidates`：候选模型列表，包含 `modelName`、`enabled`、`priority`（0-999）和 `weight`（1-100）
+      - `fallbackModelName`：所有候选模型失败时的回退模型
+      - 超时和重试配置（与语义路由相同）：
+        - `idleTimeoutMs`：单次空闲超时（毫秒），默认 180000ms (180s)
+        - `totalIdleTimeoutMs`：总空闲超时预算（毫秒），默认 180000ms (180s)
+        - `maxRetryCount`：最大重试次数，默认 1
+        - `retryIntervalMs`：重试间隔（毫秒），默认 5000ms
+    - **性能优化**：单模型优先级组使用快速路径，零锁开销
 
 ## 📡 API 端点
 

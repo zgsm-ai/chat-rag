@@ -172,7 +172,8 @@ func (l *ChatCompletionLogic) ChatCompletion() (resp *types.ChatCompletionRespon
 		logger.InfoC(l.ctx, "semantic router: auto mode routing start",
 			zap.String("strategy", l.svcCtx.Config.Router.Strategy),
 		)
-		if runner := router.NewRunner(*l.svcCtx.Config.Router); runner != nil {
+		// Use cached strategy instance to maintain state across requests (e.g., round-robin weights)
+		if runner := l.getOrCreateRouterStrategy(); runner != nil {
 			selected, current, ordered, rerr := runner.Run(l.ctx, l.svcCtx, l.headers, l.request)
 			if rerr == nil && selected != "" {
 				l.request.Model = selected
@@ -216,7 +217,8 @@ func (l *ChatCompletionLogic) ChatCompletion() (resp *types.ChatCompletionRespon
 	}
 
 	// Create shared idle tracker for the entire request (both retry and degradation)
-	idleTracker := timeout.NewIdleTracker(time.Duration(l.svcCtx.Config.LLMTimeout.TotalIdleTimeoutMs) * time.Millisecond)
+	_, _, _, totalIdleTimeout := l.getRetryConfig()
+	idleTracker := timeout.NewIdleTracker(totalIdleTimeout)
 
 	modelStart := time.Now()
 	var response types.ChatCompletionResponse
@@ -255,6 +257,34 @@ func (l *ChatCompletionLogic) ChatCompletion() (resp *types.ChatCompletionRespon
 	return &response, nil
 }
 
+// getRetryConfig returns retry and timeout configuration based on the current mode
+func (l *ChatCompletionLogic) getRetryConfig() (maxRetryCount int, retryInterval time.Duration, idleTimeout time.Duration, totalIdleTimeout time.Duration) {
+	isAutoMode := len(l.orderedModels) > 0
+	if isAutoMode {
+		// Model degradation mode: use routing configuration based on strategy
+		if l.svcCtx.Config.Router != nil && l.svcCtx.Config.Router.Strategy == "priority" {
+			// Priority strategy: use priority configuration
+			maxRetryCount = l.svcCtx.Config.Router.Priority.MaxRetryCount
+			retryInterval = time.Duration(l.svcCtx.Config.Router.Priority.RetryIntervalMs) * time.Millisecond
+			idleTimeout = time.Duration(l.svcCtx.Config.Router.Priority.IdleTimeoutMs) * time.Millisecond
+			totalIdleTimeout = time.Duration(l.svcCtx.Config.Router.Priority.TotalIdleTimeoutMs) * time.Millisecond
+		} else {
+			// Semantic strategy: use semantic routing configuration
+			maxRetryCount = l.svcCtx.Config.Router.Semantic.Routing.MaxRetryCount
+			retryInterval = time.Duration(l.svcCtx.Config.Router.Semantic.Routing.RetryIntervalMs) * time.Millisecond
+			idleTimeout = time.Duration(l.svcCtx.Config.Router.Semantic.Routing.IdleTimeoutMs) * time.Millisecond
+			totalIdleTimeout = time.Duration(l.svcCtx.Config.Router.Semantic.Routing.TotalIdleTimeoutMs) * time.Millisecond
+		}
+	} else {
+		// Regular mode: use llmTimeout configuration
+		maxRetryCount = l.svcCtx.Config.LLMTimeout.MaxRetryCount
+		retryInterval = time.Duration(l.svcCtx.Config.LLMTimeout.RetryIntervalMs) * time.Millisecond
+		idleTimeout = time.Duration(l.svcCtx.Config.LLMTimeout.IdleTimeoutMs) * time.Millisecond
+		totalIdleTimeout = time.Duration(l.svcCtx.Config.LLMTimeout.TotalIdleTimeoutMs) * time.Millisecond
+	}
+	return
+}
+
 // ChatCompletionStream handles streaming chat completion with SSE
 func (l *ChatCompletionLogic) ChatCompletionStream() error {
 	// Router: select model before streaming LLM client creation
@@ -263,7 +293,8 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 		logger.InfoC(l.ctx, "semantic router: auto mode routing start",
 			zap.String("strategy", l.svcCtx.Config.Router.Strategy),
 		)
-		if runner := router.NewRunner(*l.svcCtx.Config.Router); runner != nil {
+		// Use cached strategy instance to maintain state across requests (e.g., round-robin weights)
+		if runner := l.getOrCreateRouterStrategy(); runner != nil {
 			selected, current, ordered, rerr := runner.Run(l.ctx, l.svcCtx, l.headers, l.request)
 			if rerr == nil && selected != "" {
 				l.request.Model = selected
@@ -312,16 +343,19 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 	}
 
 	// Create shared idle tracker for the entire request (both retry and degradation)
-	idleTracker := timeout.NewIdleTracker(time.Duration(l.svcCtx.Config.LLMTimeout.TotalIdleTimeoutMs) * time.Millisecond)
+	_, _, _, totalIdleTimeout := l.getRetryConfig()
+	idleTracker := timeout.NewIdleTracker(totalIdleTimeout)
 
 	// Streaming degradation only for auto mode (when orderedModels is present)
 	if len(l.orderedModels) == 0 {
 		// No degradation list → single model streaming (non-auto path) with retry
+		maxRetryCount, retryInterval, _, _ := l.getRetryConfig()
 		var lastErr error
-		for attempt := 0; attempt < 2; attempt++ {
+		for attempt := 0; attempt <= maxRetryCount; attempt++ {
 			logger.InfoC(l.ctx, "single-model retry(stream): attempting model",
 				zap.String("model", l.request.Model),
 				zap.Int("attempt", attempt+1),
+				zap.Int("maxRetries", maxRetryCount),
 			)
 
 			llmClient, err := client.NewLLMClient(l.svcCtx.Config.LLM, l.svcCtx.Config.LLMTimeout, l.request.Model, l.headers)
@@ -350,15 +384,17 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 				zap.Bool("retryable", retryable),
 				zap.Error(err),
 			)
-			if retryable && attempt == 0 {
+			if retryable && attempt < maxRetryCount {
 				// Check if we have enough idle budget remaining for retry
 				remainingIdleBudget := idleTracker.Remaining()
-				if remainingIdleBudget < 5*time.Second {
+				minRequiredBudget := retryInterval
+				if remainingIdleBudget < minRequiredBudget {
 					logger.WarnC(l.ctx, "single-model retry(stream): insufficient idle budget for retry",
-						zap.Duration("remainingIdleBudget", remainingIdleBudget))
+						zap.Duration("remainingIdleBudget", remainingIdleBudget),
+						zap.Duration("minRequiredBudget", minRequiredBudget))
 					break
 				}
-				time.Sleep(5 * time.Second)
+				time.Sleep(retryInterval)
 				continue
 			}
 
@@ -370,6 +406,7 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 	// Degradation enabled (auto mode): only switch model if failure occurs before first token
 	models := l.orderedModels
 
+	maxRetryCount, retryInterval, _, _ := l.getRetryConfig()
 	var lastErr error
 	for _, modelName := range models {
 		// Update header immediately when switching to a different model in auto mode
@@ -378,10 +415,11 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 		}
 
 		attempt := 0
-		for attempt < 2 {
+		for attempt <= maxRetryCount {
 			logger.InfoC(l.ctx, "degradation(stream): attempting model",
 				zap.String("model", modelName),
 				zap.Int("attempt", attempt+1),
+				zap.Int("maxRetries", maxRetryCount),
 			)
 
 			l.request.Model = modelName
@@ -412,16 +450,18 @@ func (l *ChatCompletionLogic) ChatCompletionStream() error {
 				zap.Bool("retryable", retryable),
 				zap.Error(err),
 			)
-			if retryable && attempt == 0 {
+			if retryable && attempt < maxRetryCount {
 				// Check if we have enough idle budget remaining for retry
 				remainingIdleBudget := idleTracker.Remaining()
-				if remainingIdleBudget < 5*time.Second {
+				minRequiredBudget := retryInterval
+				if remainingIdleBudget < minRequiredBudget {
 					logger.WarnC(l.ctx, "degradation(stream): insufficient idle budget for retry",
 						zap.String("model", modelName),
-						zap.Duration("remainingIdleBudget", remainingIdleBudget))
+						zap.Duration("remainingIdleBudget", remainingIdleBudget),
+						zap.Duration("minRequiredBudget", minRequiredBudget))
 					break
 				}
-				time.Sleep(5 * time.Second)
+				time.Sleep(retryInterval)
 				attempt++
 				continue
 			}
@@ -523,7 +563,8 @@ func (l *ChatCompletionLogic) processStream(
 	idleTracker *timeout.IdleTracker,
 ) (bool, error) {
 	// Use the provided shared idle tracker instead of creating a new one
-	timerCtx, cancel, idleTimer := timeout.NewIdleTimer(ctx, time.Duration(l.svcCtx.Config.LLMTimeout.IdleTimeoutMs)*time.Millisecond, idleTracker)
+	_, _, idleTimeout, _ := l.getRetryConfig()
+	timerCtx, cancel, idleTimer := timeout.NewIdleTimer(ctx, idleTimeout, idleTracker)
 	defer func() {
 		idleTimer.Stop()
 		cancel()
@@ -914,6 +955,32 @@ func (l *ChatCompletionLogic) sendStreamContent(flusher http.Flusher, response *
 
 // Helper methods
 
+// getOrCreateRouterStrategy returns the cached router strategy instance or creates a new one
+// This ensures that stateful strategies (like priority with round-robin) maintain their state across requests
+func (l *ChatCompletionLogic) getOrCreateRouterStrategy() router.Strategy {
+	// Try to get cached strategy from ServiceContext
+	if cachedStrategy := l.svcCtx.GetRouterStrategy(); cachedStrategy != nil {
+		if strategy, ok := cachedStrategy.(router.Strategy); ok {
+			return strategy
+		}
+	}
+
+	// Create new strategy if not cached
+	if l.svcCtx.Config.Router == nil {
+		return nil
+	}
+
+	strategy := router.NewRunner(*l.svcCtx.Config.Router)
+	if strategy != nil {
+		// Cache it for future requests
+		l.svcCtx.SetRouterStrategy(strategy)
+		logger.InfoC(l.ctx, "router strategy created and cached",
+			zap.String("strategy", strategy.Name()))
+	}
+
+	return strategy
+}
+
 func (l *ChatCompletionLogic) updateToolStatus(toolName string, status types.ToolStatus) {
 	if l.identity.RequestID == "" {
 		logger.WarnC(l.ctx, "requestID is empty, skip updating tool status")
@@ -942,20 +1009,24 @@ func (l *ChatCompletionLogic) isContextLengthError(err error) bool {
 func (l *ChatCompletionLogic) callModelWithRetry(modelName string, params types.LLMRequestParams, idleTrackerOpt ...*timeout.IdleTracker) (types.ChatCompletionResponse, error) {
 	nilResp := types.ChatCompletionResponse{}
 
+	// Get config based on mode
+	maxRetryCount, retryInterval, idleTimeout, totalIdleTimeout := l.getRetryConfig()
+
 	// Use provided idle tracker if available, otherwise create a new one for this call
 	var sharedTracker *timeout.IdleTracker
 	if len(idleTrackerOpt) > 0 && idleTrackerOpt[0] != nil {
 		sharedTracker = idleTrackerOpt[0]
 	} else {
-		sharedTracker = timeout.NewIdleTracker(time.Duration(l.svcCtx.Config.LLMTimeout.TotalIdleTimeoutMs) * time.Millisecond)
+		sharedTracker = timeout.NewIdleTracker(totalIdleTimeout)
 	}
 
 	var lastErr error
 
-	for attempt := 0; attempt < 2; attempt++ {
+	for attempt := 0; attempt <= maxRetryCount; attempt++ {
 		logger.InfoC(l.ctx, "single-model retry: calling model",
 			zap.String("model", modelName),
 			zap.Int("attempt", attempt+1),
+			zap.Int("maxRetries", maxRetryCount),
 		)
 
 		llmClient, err := client.NewLLMClient(l.svcCtx.Config.LLM, l.svcCtx.Config.LLMTimeout, modelName, l.headers)
@@ -966,7 +1037,7 @@ func (l *ChatCompletionLogic) callModelWithRetry(modelName string, params types.
 		}
 
 		// Use the shared idle tracker instead of creating a new one
-		timerCtx, timerCancel, idleTimer := timeout.NewIdleTimer(l.ctx, time.Duration(l.svcCtx.Config.LLMTimeout.IdleTimeoutMs)*time.Millisecond, sharedTracker)
+		timerCtx, timerCancel, idleTimer := timeout.NewIdleTimer(l.ctx, idleTimeout, sharedTracker)
 		resp, err := llmClient.ChatLLMWithMessagesRaw(timerCtx, params, idleTimer)
 		idleTimer.Stop()
 		timerCancel()
@@ -987,15 +1058,17 @@ func (l *ChatCompletionLogic) callModelWithRetry(modelName string, params types.
 			zap.Error(err),
 		)
 
-		if retryable && attempt == 0 {
+		if retryable && attempt < maxRetryCount {
 			// Check if we have enough idle budget remaining for retry
 			remainingIdleBudget := sharedTracker.Remaining()
-			if remainingIdleBudget < 5*time.Second {
+			minRequiredBudget := retryInterval
+			if remainingIdleBudget < minRequiredBudget {
 				logger.WarnC(l.ctx, "single-model retry: insufficient idle budget for retry",
-					zap.Duration("remainingIdleBudget", remainingIdleBudget))
+					zap.Duration("remainingIdleBudget", remainingIdleBudget),
+					zap.Duration("minRequiredBudget", minRequiredBudget))
 				break
 			}
-			time.Sleep(5 * time.Second)
+			time.Sleep(retryInterval)
 			continue
 		}
 
@@ -1096,7 +1169,8 @@ func (l *ChatCompletionLogic) handleRawModeStream(
 	var firstTokenTime time.Time
 
 	// Use the provided shared idle tracker instead of creating a new one
-	timerCtx, cancel, idleTimer := timeout.NewIdleTimer(ctx, time.Duration(l.svcCtx.Config.LLMTimeout.IdleTimeoutMs)*time.Millisecond, idleTracker)
+	_, _, idleTimeout, _ := l.getRetryConfig()
+	timerCtx, cancel, idleTimer := timeout.NewIdleTimer(ctx, idleTimeout, idleTracker)
 	defer func() {
 		idleTimer.Stop()
 		cancel()

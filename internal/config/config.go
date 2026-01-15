@@ -28,8 +28,13 @@ type LLMConfig struct {
 
 // LLMTimeoutConfig holds idle timeout configuration for LLM requests
 type LLMTimeoutConfig struct {
+	// Regular mode timeout configuration
 	IdleTimeoutMs      int `mapstructure:"idleTimeoutMs" yaml:"idleTimeoutMs"`
 	TotalIdleTimeoutMs int `mapstructure:"totalIdleTimeoutMs" yaml:"totalIdleTimeoutMs"`
+
+	// Retry configuration for regular mode
+	MaxRetryCount   int `mapstructure:"maxRetryCount" yaml:"maxRetryCount"`
+	RetryIntervalMs int `mapstructure:"retryIntervalMs" yaml:"retryIntervalMs"`
 }
 
 // RedisConfig holds Redis configuration
@@ -176,6 +181,7 @@ type RouterConfig struct {
 	Enabled  bool           `mapstructure:"enabled" yaml:"enabled"`
 	Strategy string         `mapstructure:"strategy" yaml:"strategy"`
 	Semantic SemanticConfig `mapstructure:"semantic" yaml:"semantic"`
+	Priority PriorityConfig `mapstructure:"priority" yaml:"priority"`
 }
 
 // SemanticConfig holds semantic router strategy configuration
@@ -220,6 +226,14 @@ type RoutingConfig struct {
 	MinScore          int                `mapstructure:"minScore" yaml:"minScore"`
 	TieBreakOrder     []string           `mapstructure:"tieBreakOrder" yaml:"tieBreakOrder"`
 	FallbackModelName string             `mapstructure:"fallbackModelName" yaml:"fallbackModelName"`
+
+	// Timeout configuration for model degradation scenarios
+	IdleTimeoutMs      int `mapstructure:"idleTimeoutMs" yaml:"idleTimeoutMs"`
+	TotalIdleTimeoutMs int `mapstructure:"totalIdleTimeoutMs" yaml:"totalIdleTimeoutMs"`
+
+	// Retry configuration for model degradation scenarios
+	MaxRetryCount   int `mapstructure:"maxRetryCount" yaml:"maxRetryCount"`
+	RetryIntervalMs int `mapstructure:"retryIntervalMs" yaml:"retryIntervalMs"`
 }
 
 // RoutingCandidate defines a candidate model and its scores
@@ -242,6 +256,24 @@ type DynamicMetricsConfig struct {
 	Enabled     bool     `mapstructure:"enabled" yaml:"enabled"`
 	RedisPrefix string   `mapstructure:"redisPrefix" yaml:"redisPrefix"`
 	Metrics     []string `mapstructure:"metrics" yaml:"metrics"`
+}
+
+// PriorityConfig holds priority router strategy configuration
+type PriorityConfig struct {
+	Candidates         []PriorityCandidate `mapstructure:"candidates" yaml:"candidates"`
+	FallbackModelName  string              `mapstructure:"fallbackModelName" yaml:"fallbackModelName"`
+	IdleTimeoutMs      int                 `mapstructure:"idleTimeoutMs" yaml:"idleTimeoutMs"`
+	TotalIdleTimeoutMs int                 `mapstructure:"totalIdleTimeoutMs" yaml:"totalIdleTimeoutMs"`
+	MaxRetryCount      int                 `mapstructure:"maxRetryCount" yaml:"maxRetryCount"`
+	RetryIntervalMs    int                 `mapstructure:"retryIntervalMs" yaml:"retryIntervalMs"`
+}
+
+// PriorityCandidate defines a candidate model with priority and weight
+type PriorityCandidate struct {
+	ModelName string `mapstructure:"modelName" yaml:"modelName"`
+	Enabled   bool   `mapstructure:"enabled" yaml:"enabled"`
+	Priority  int    `mapstructure:"priority" yaml:"priority"` // Lower number = higher priority
+	Weight    int    `mapstructure:"weight" yaml:"weight"`     // Weight for round-robin within same priority
 }
 
 // AgentConfig holds configuration for a specific agent
