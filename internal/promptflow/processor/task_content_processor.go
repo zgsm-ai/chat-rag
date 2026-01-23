@@ -2,7 +2,6 @@ package processor
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 
 	"github.com/zgsm-ai/chat-rag/internal/config"
@@ -10,15 +9,6 @@ import (
 	"github.com/zgsm-ai/chat-rag/internal/model"
 	"github.com/zgsm-ai/chat-rag/internal/types"
 	"go.uber.org/zap"
-)
-
-const (
-	// TaskTagOpen defines the opening task tag
-	TaskTagOpen = "<task>"
-	// TaskTagClose defines the closing task tag
-	TaskTagClose = "</task>"
-	// TaskTagPattern defines the regex pattern to match task tags
-	TaskTagPattern = `(?s)<task>(.*?)</task>`
 )
 
 // TaskContentProcessor replaces content within <task>...</task> tags based on configuration
@@ -100,16 +90,9 @@ func (t *TaskContentProcessor) isRuleApplicable(ruleConfig config.TaskContentRep
 	return false
 }
 
-// applyReplacements applies key-value replacements to the content within task tags
+// applyReplacements applies key-value replacements to the content
 func (t *TaskContentProcessor) applyReplacements(content string, matchKeys map[string]string) (string, bool) {
 	changed := false
-
-	// Check if content contains task tags
-	taskRegex := regexp.MustCompile(TaskTagPattern)
-	if !taskRegex.MatchString(content) {
-		logger.Info("No task tags found in content for replacement")
-		return content, false
-	}
 
 	// Apply all replacements to the entire content
 	// Use strings.NewReplacer to perform a single-pass replacement
@@ -144,12 +127,6 @@ func (t *TaskContentProcessor) updateMessageContent(promptMsg *PromptMsg, applic
 		msg = &promptMsg.olderUserMsgList[0]
 	}
 
-	// Skip string type content as requested
-	if _, isString := msg.Content.(string); isString {
-		logger.Info("Skipping string type content")
-		return nil
-	}
-
 	// Use ExtractMsgContent to normalize content to []Content
 	var contentExtractor model.Content
 	contents, err := contentExtractor.ExtractMsgContent(msg)
@@ -157,15 +134,14 @@ func (t *TaskContentProcessor) updateMessageContent(promptMsg *PromptMsg, applic
 		return fmt.Errorf("failed to extract message content: %w", err)
 	}
 
-	// Find the content item that contains task tags
-	taskContentIndex := t.findTaskContentIndex(contents)
-	if taskContentIndex == -1 {
-		logger.Info("No task tags found in content")
+	// Use the first content directly
+	if len(contents) == 0 {
+		logger.Info("No content found in message")
 		return nil
 	}
 
 	// Process each applicable rule
-	modifiedContent := contents[taskContentIndex].Text
+	modifiedContent := contents[0].Text
 
 	for _, ruleKey := range applicableRuleKeys {
 		// Get rule config from TaskContentReplaceRule
@@ -193,21 +169,11 @@ func (t *TaskContentProcessor) updateMessageContent(promptMsg *PromptMsg, applic
 		}
 
 		modifiedContent = newContent
-		contents[taskContentIndex].Text = modifiedContent
+		contents[0].Text = modifiedContent
 		msg.Content = contents
 		logger.Info("Applied task content replacements",
 			zap.String("rule", ruleKey))
 	}
 
 	return nil
-}
-
-// findTaskContentIndex finds the index of the content item that contains task tags
-func (t *TaskContentProcessor) findTaskContentIndex(contents []model.Content) int {
-	for i, content := range contents {
-		if strings.Contains(content.Text, TaskTagOpen) && strings.Contains(content.Text, TaskTagClose) {
-			return i
-		}
-	}
-	return -1
 }
