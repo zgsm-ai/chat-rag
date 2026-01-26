@@ -1,6 +1,9 @@
 package types
 
-import "encoding/json"
+import (
+	"bytes"
+	"encoding/json"
+)
 
 const (
 	// RoleSystem System role message
@@ -136,7 +139,7 @@ func (e ExtraBody) MarshalJSON() ([]byte, error) {
 		result[k] = v
 	}
 
-	return json.Marshal(result)
+	return marshalJSONWithoutEscape(result)
 }
 
 type ChatCompletionResponse struct {
@@ -214,7 +217,7 @@ func (p LLMRequestParams) MarshalJSON() ([]byte, error) {
 		result[k] = v
 	}
 
-	return json.Marshal(result)
+	return marshalJSONWithoutEscape(result)
 }
 
 type ChatCompletionRequest struct {
@@ -302,7 +305,7 @@ func (m Message) MarshalJSON() ([]byte, error) {
 		result[k] = v
 	}
 
-	return json.Marshal(result)
+	return marshalJSONWithoutEscape(result)
 }
 
 type Delta struct {
@@ -367,4 +370,16 @@ type ToolStatusData struct {
 type ToolStatusDetail struct {
 	Status string      `json:"status"`
 	Result interface{} `json:"result,omitempty"`
+}
+
+// marshalJSONWithoutEscape marshals JSON without HTML escaping
+func marshalJSONWithoutEscape(v any) ([]byte, error) {
+	buf := &bytes.Buffer{}
+	encoder := json.NewEncoder(buf)
+	encoder.SetEscapeHTML(false)
+	if err := encoder.Encode(v); err != nil {
+		return nil, err
+	}
+	// Remove the trailing newline added by Encode
+	return bytes.TrimRight(buf.Bytes(), "\n"), nil
 }
