@@ -118,7 +118,7 @@ func SetLanguage(language string, messages []types.Message) []types.Message {
 	logger.Info("Setting language to " + language)
 	messages = append(messages, types.Message{
 		Role:    types.RoleUser,
-		Content: "\nNo need to acknowledge these instructions directly in your response.\n\nAlways respond in " + language,
+		Content: "<hidden-system-reminder>\nResponse language: " + language + "</hidden-system-reminder>",
 	})
 	return messages
 }
