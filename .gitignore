@@ -15,6 +15,7 @@ go/pkg/
 .roo/
 .cursor/
 .costrict
+.claude
 .cospec
 .history/
 *.swp

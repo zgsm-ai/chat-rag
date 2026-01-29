@@ -1195,6 +1195,12 @@ func (l *ChatCompletionLogic) handleRawModeStream(
 				idleTimer.SetFirstTokenReceived()
 			}
 
+			// Extract usage information from streaming response
+			_, usage, _ := l.responseHandler.extractStreamingData(llmResp.ResonseLine)
+			if usage != nil {
+				l.usage = usage
+			}
+
 			if _, err := fmt.Fprintf(l.writer, "%s\n\n", llmResp.ResonseLine); err != nil {
 				return err
 			}
@@ -1226,6 +1232,14 @@ func (l *ChatCompletionLogic) handleRawModeStream(
 	if firstTokenReceived {
 		logger.InfoC(ctx, "[last-token][raw mode] last token received",
 			zap.Duration("totalLatency", totalLatency))
+	}
+
+	// Record usage information
+	if l.usage != nil {
+		chatLog.Usage = *l.usage
+		logger.InfoC(ctx, "[raw mode] prompt usage", zap.Any("usage", chatLog.Usage))
+	} else {
+		logger.InfoC(ctx, "[raw mode] no usage information available in streaming response")
 	}
 
 	logger.InfoC(ctx, "raw mode streaming completed",
