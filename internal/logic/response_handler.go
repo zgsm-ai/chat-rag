@@ -36,7 +36,9 @@ func (h *ResponseHandler) extractResponseInfo(chatLog *model.ChatLog, response *
 	// Extract response content from choices
 	if len(response.Choices) > 0 {
 		contentStr := utils.GetContentAsString(response.Choices[0].Message.Content)
-		chatLog.ResponseContent = contentStr
+		chatLog.ResponseContent = &types.ResponseContent{
+			Content: contentStr,
+		}
 	}
 
 	// Extract usage information
@@ -50,7 +52,7 @@ func (h *ResponseHandler) extractResponseInfo(chatLog *model.ChatLog, response *
 		chatLog.Usage = response.Usage
 	} else {
 		// Calculate usage if not provided
-		chatLog.Usage = h.calculateUsage(chatLog.Tokens.Processed.All, chatLog.ResponseContent)
+		chatLog.Usage = h.calculateUsage(chatLog.Tokens.Processed.All, chatLog.ResponseContent.Content)
 		logger.Info("calculated usage",
 			zap.Int("totalTokens", chatLog.Usage.TotalTokens),
 		)
@@ -137,6 +139,105 @@ func (h *ResponseHandler) extractStreamingData(rawLine string) (content string, 
 	}
 
 	return
+}
+
+// extractSSEFunctionResp extracts delta content from streaming response and accumulates it
+func (h *ResponseHandler) extractSSEFunctionResp(
+	rawLine string,
+	accumulatedResp *types.ResponseContent,
+	toolCallsMap map[int]*types.ToolCallInfo,
+) {
+	// Skip non-data lines
+	if !strings.HasPrefix(rawLine, "data: ") {
+		return
+	}
+
+	// Extract JSON data
+	jsonData := strings.TrimPrefix(rawLine, "data: ")
+	if jsonData == "[DONE]" {
+		return
+	}
+
+	// Parse streaming chunk
+	var chunk map[string]interface{}
+	if err := json.Unmarshal([]byte(jsonData), &chunk); err != nil {
+		return
+	}
+
+	// Extract delta from choices
+	choices, ok := chunk["choices"].([]interface{})
+	if !ok || len(choices) == 0 {
+		return
+	}
+
+	choice, ok := choices[0].(map[string]interface{})
+	if !ok {
+		return
+	}
+
+	delta, ok := choice["delta"].(map[string]interface{})
+	if !ok {
+		return
+	}
+
+	// Extract role
+	if role, ok := delta["role"].(string); ok && role != "" {
+		accumulatedResp.Role = role
+	}
+
+	// Extract and accumulate content
+	if content, ok := delta["content"].(string); ok {
+		accumulatedResp.Content += content
+	}
+
+	// Extract and accumulate reasoning_content
+	if reasoningContent, ok := delta["reasoning_content"].(string); ok {
+		accumulatedResp.ReasoningContent += reasoningContent
+	}
+
+	// Extract and accumulate tool_calls
+	if toolCalls, ok := delta["tool_calls"].([]interface{}); ok {
+		for _, tc := range toolCalls {
+			toolCallMap, ok := tc.(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			// Get tool call index
+			index := 0
+			if idx, ok := toolCallMap["index"].(float64); ok {
+				index = int(idx)
+			}
+
+			// Initialize tool call info if not exists
+			if _, exists := toolCallsMap[index]; !exists {
+				toolCallsMap[index] = &types.ToolCallInfo{}
+			}
+
+			// Extract id
+			if id, ok := toolCallMap["id"].(string); ok && id != "" {
+				toolCallsMap[index].ID = id
+			}
+
+			// Extract type
+			if tcType, ok := toolCallMap["type"].(string); ok && tcType != "" {
+				toolCallsMap[index].Type = tcType
+			}
+
+			// Extract function details
+			if function, ok := toolCallMap["function"].(map[string]interface{}); ok {
+				// Extract function name
+				if name, ok := function["name"].(string); ok && name != "" {
+					toolCallsMap[index].Function.Name = name
+				}
+
+				// Accumulate function arguments
+				if arguments, ok := function["arguments"].(string); ok {
+					toolCallsMap[index].Function.Arguments += arguments
+				}
+			}
+		}
+	}
 }
 
 func (h *ResponseHandler) CreateSSEData(finalResponse *types.ChatCompletionResponse, content string) string {

@@ -910,14 +910,16 @@ func (l *ChatCompletionLogic) updateStreamStats(chatLog *model.ChatLog, state *s
 	endTime := time.Since(state.modelStart)
 	logger.InfoC(l.ctx, "[last-token] stream end", zap.Duration("totalLatency", endTime))
 	chatLog.Latency.MainModelLatency = endTime.Milliseconds()
-	chatLog.ResponseContent = state.fullContent.String()
+	chatLog.ResponseContent = &types.ResponseContent{
+		Content: state.fullContent.String(),
+	}
 
 	if l.usage != nil {
 		chatLog.Usage = *l.usage
 	} else {
 		chatLog.Usage = l.responseHandler.calculateUsage(
 			chatLog.Tokens.Processed.All,
-			chatLog.ResponseContent,
+			chatLog.ResponseContent.Content,
 		)
 		logger.InfoC(l.ctx, "calculated usage for streaming response")
 	}
@@ -1169,6 +1171,10 @@ func (l *ChatCompletionLogic) handleRawModeStream(
 	var firstTokenTime time.Time
 	var respStr strings.Builder // Accumulate full content for validation
 
+	// Initialize accumulated response for function call format
+	accumulatedResp := &types.ResponseContent{}
+	toolCallsMap := make(map[int]*types.ToolCallInfo) // Map to accumulate tool calls by index
+
 	// Use the provided shared idle tracker instead of creating a new one
 	_, _, idleTimeout, _ := l.getRetryConfig()
 	timerCtx, cancel, idleTimer := timeout.NewIdleTimer(ctx, idleTimeout, idleTracker)
@@ -1201,6 +1207,9 @@ func (l *ChatCompletionLogic) handleRawModeStream(
 			if usage != nil {
 				l.usage = usage
 			}
+
+			// Extract delta content for accumulated response
+			l.responseHandler.extractSSEFunctionResp(llmResp.ResonseLine, accumulatedResp, toolCallsMap)
 
 			// Check if the data line has valid content (not just "" or [DONE])
 			if strings.HasPrefix(llmResp.ResonseLine, "data: ") {
@@ -1270,7 +1279,36 @@ func (l *ChatCompletionLogic) handleRawModeStream(
 	logger.InfoC(ctx, "raw mode streaming completed",
 		zap.Int64("modelLatency", chatLog.Latency.MainModelLatency))
 
+	// Finalize and store accumulated response
+	l.recordFuncionCallResponse(ctx, accumulatedResp, toolCallsMap, chatLog)
+
 	return nil
+}
+
+// recordFuncionCallResponse converts tool calls map to slice and stores accumulated response in chatLog
+func (l *ChatCompletionLogic) recordFuncionCallResponse(
+	ctx context.Context,
+	funCallResp *types.ResponseContent,
+	toolCallsMap map[int]*types.ToolCallInfo,
+	chatLog *model.ChatLog,
+) {
+	// Convert tool calls map to slice
+	if len(toolCallsMap) > 0 {
+		toolCallsSlice := make([]types.ToolCallInfo, 0, len(toolCallsMap))
+		for i := 0; i < len(toolCallsMap); i++ {
+			if tc, ok := toolCallsMap[i]; ok {
+				toolCallsSlice = append(toolCallsSlice, *tc)
+			}
+		}
+		funCallResp.ToolCalls = toolCallsSlice
+	}
+
+	// Store accumulated response in chatLog
+	if funCallResp.Role != "" || funCallResp.Content != "" ||
+		funCallResp.ReasoningContent != "" || len(funCallResp.ToolCalls) > 0 {
+		chatLog.ResponseContent = funCallResp
+		logger.InfoC(ctx, "[raw mode] recorded response content")
+	}
 }
 
 // sanitizeHeaderValue removes CR/LF and control characters from header values and trims length.

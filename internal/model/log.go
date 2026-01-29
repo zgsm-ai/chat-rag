@@ -70,9 +70,9 @@ type ChatLog struct {
 	ProcessedPrompt []types.Message `json:"processed_prompt"`
 
 	// Response information
-	ResponseHeaders []map[string]string `json:"response_headers,omitempty"`
-	ResponseContent string              `json:"response_content,omitempty"`
-	Usage           types.Usage         `json:"usage,omitempty"`
+	ResponseHeaders []map[string]string  `json:"response_headers,omitempty"`
+	ResponseContent *types.ResponseContent `json:"response_content,omitempty"`
+	Usage           types.Usage          `json:"usage,omitempty"`
 
 	// Classification (will be filled by async processor)
 	Category string `json:"category,omitempty"`
