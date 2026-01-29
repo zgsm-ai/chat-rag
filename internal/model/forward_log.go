@@ -20,6 +20,7 @@ type ForwardLog struct {
 	Response  ForwardResponse `json:"response"`
 	TargetURL string          `json:"target_url"`
 	Duration  time.Duration   `json:"duration_ms"`
+	Error     string          `json:"error,omitempty"`
 }
 
 // ForwardRequest represents the forwarded request
