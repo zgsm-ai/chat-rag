@@ -118,6 +118,15 @@ func ForwardHandler(svcCtx *bootstrap.ServiceContext) gin.HandlerFunc {
 				zap.String("targetURL", targetURL),
 				zap.Error(err),
 			)
+
+			// Save the forward log with error
+			if saveErr := saveForwardLog(c, targetURL, nil, nil, time.Since(startTime), svcCtx.Config.Log.LogFilePath, err); saveErr != nil {
+				logger.Error("Failed to save forward log",
+					zap.String("targetURL", targetURL),
+					zap.Error(saveErr),
+				)
+			}
+
 			sendErrorResponse(c, http.StatusBadGateway, fmt.Errorf("failed to forward request: %w", err))
 			return
 		}
@@ -130,6 +139,15 @@ func ForwardHandler(svcCtx *bootstrap.ServiceContext) gin.HandlerFunc {
 				zap.String("targetURL", targetURL),
 				zap.Error(err),
 			)
+
+			// Save the forward log with error
+			if saveErr := saveForwardLog(c, targetURL, resp, nil, time.Since(startTime), svcCtx.Config.Log.LogFilePath, err); saveErr != nil {
+				logger.Error("Failed to save forward log",
+					zap.String("targetURL", targetURL),
+					zap.Error(saveErr),
+				)
+			}
+
 			sendErrorResponse(c, http.StatusInternalServerError, fmt.Errorf("failed to read response: %w", err))
 			return
 		}
@@ -142,7 +160,7 @@ func ForwardHandler(svcCtx *bootstrap.ServiceContext) gin.HandlerFunc {
 		)
 
 		// Save the forward log to file
-		if err := saveForwardLog(c, targetURL, resp, respBody, time.Since(startTime), svcCtx.Config.Log.LogFilePath); err != nil {
+		if err := saveForwardLog(c, targetURL, resp, respBody, time.Since(startTime), svcCtx.Config.Log.LogFilePath, nil); err != nil {
 			logger.Error("Failed to save forward log",
 				zap.String("targetURL", targetURL),
 				zap.Error(err),
@@ -180,7 +198,7 @@ func logIncomingRequest(c *gin.Context, targetURL string) {
 }
 
 // saveForwardLog saves the forward request and response to a log file
-func saveForwardLog(c *gin.Context, targetURL string, resp *http.Response, respBody []byte, duration time.Duration, logFilePath string) error {
+func saveForwardLog(c *gin.Context, targetURL string, resp *http.Response, respBody []byte, duration time.Duration, logFilePath string, requestErr error) error {
 	// Read the request body again
 	var bodyBytes []byte
 	if c.Request.Body != nil {
@@ -238,7 +256,7 @@ func saveForwardLog(c *gin.Context, targetURL string, resp *http.Response, respB
 	var beautyBody interface{}
 	var bodyContent string
 
-	if len(respBody) > 0 {
+	if resp != nil && len(respBody) > 0 {
 		respBodyStr := string(respBody)
 
 		// Check if the response is gzip compressed
@@ -301,12 +319,22 @@ func saveForwardLog(c *gin.Context, targetURL string, resp *http.Response, respB
 			Body:    reqBody,
 		},
 		Response: model.ForwardResponse{
-			StatusCode:  resp.StatusCode,
+			StatusCode:  0,
 			Headers:     make(map[string]string),
 			Body:        resBody,
 			BeautyBody:  beautyBody,  // Will be nil for JSON responses
 			BodyContent: bodyContent, // Will be empty for JSON responses
 		},
+	}
+
+	// If resp is not nil, set status code
+	if resp != nil {
+		forwardLog.Response.StatusCode = resp.StatusCode
+	}
+
+	// Add error message if present
+	if requestErr != nil {
+		forwardLog.Error = requestErr.Error()
 	}
 
 	// Copy request headers
@@ -316,10 +344,12 @@ func saveForwardLog(c *gin.Context, targetURL string, resp *http.Response, respB
 		}
 	}
 
-	// Copy response headers
-	for key, values := range resp.Header {
-		if len(values) > 0 {
-			forwardLog.Response.Headers[key] = values[0]
+	// Copy response headers (only if resp is not nil)
+	if resp != nil {
+		for key, values := range resp.Header {
+			if len(values) > 0 {
+				forwardLog.Response.Headers[key] = values[0]
+			}
 		}
 	}
 
