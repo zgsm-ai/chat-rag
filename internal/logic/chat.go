@@ -1167,6 +1167,7 @@ func (l *ChatCompletionLogic) handleRawModeStream(
 	modelStart := time.Now()
 	firstTokenReceived := false
 	var firstTokenTime time.Time
+	var respStr strings.Builder // Accumulate full content for validation
 
 	// Use the provided shared idle tracker instead of creating a new one
 	_, _, idleTimeout, _ := l.getRetryConfig()
@@ -1201,6 +1202,16 @@ func (l *ChatCompletionLogic) handleRawModeStream(
 				l.usage = usage
 			}
 
+			// Check if the data line has valid content (not just "" or [DONE])
+			if strings.HasPrefix(llmResp.ResonseLine, "data: ") {
+				respLine := strings.TrimPrefix(llmResp.ResonseLine, "data: ")
+				respLine = strings.TrimSpace(respLine)
+				// Only accumulate if data is not empty string or [DONE]
+				if respLine != "" && respLine != `""` && respLine != "[DONE]" {
+					respStr.WriteString(respLine)
+				}
+			}
+
 			if _, err := fmt.Fprintf(l.writer, "%s\n\n", llmResp.ResonseLine); err != nil {
 				return err
 			}
@@ -1221,6 +1232,20 @@ func (l *ChatCompletionLogic) handleRawModeStream(
 
 		l.responseHandler.sendSSEError(ctx, l.writer, err)
 		chatLog.AddError(types.ErrApiError, err)
+		return nil
+	}
+
+	// Check if we received any valid content (same logic as completeStreamResponse)
+	allRespStr := respStr.String()
+	trimmedContent := strings.ReplaceAll(allRespStr, "\n", "")
+
+	if trimmedContent == "" {
+		logger.WarnC(ctx, "[raw mode] detected invalid or empty response")
+
+		// Send error response
+		noContentErr := types.NewInvaildResponseContentError()
+		l.responseHandler.sendSSEError(ctx, l.writer, noContentErr)
+		chatLog.AddError(types.ErrApiError, noContentErr)
 		return nil
 	}
 
