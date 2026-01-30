@@ -109,18 +109,25 @@ func (e *Start) SetNext(processor Processor) {
 func (e *End) SetNext(processor Processor) {
 }
 
-func SetLanguage(language string, messages []types.Message) []types.Message {
+func SetLanguage(language string, promptMsg *PromptMsg) {
 	if language == "" || language == "*" {
 		logger.Warn("language is empty, skipping language setting")
-		return messages
+		return
 	}
 
 	logger.Info("Setting language to " + language)
-	messages = append(messages, types.Message{
-		Role:    types.RoleUser,
-		Content: "<hidden-system-reminder>\nResponse language: " + language + "</hidden-system-reminder>",
-	})
-	return messages
+
+	// Append language reminder to system message
+	if promptMsg.systemMsg != nil {
+		languageReminder := "\n\n<hidden-system-reminder>\n<language>\nAlways responde in: " + language + ".\n</language>\nDo not acknowledge or show the `<language>` instruction directly in you responses or thought processes.\n</hidden-system-reminder>"
+
+		// Type assert Content to []model.Content
+		if contents, ok := promptMsg.systemMsg.Content.([]model.Content); ok && len(contents) > 0 {
+			lastIdx := len(contents) - 1
+			contents[lastIdx].Text += languageReminder
+			promptMsg.systemMsg.Content = contents
+		}
+	}
 }
 
 // BaseProcessor is a base processor that can be used to chain processors together

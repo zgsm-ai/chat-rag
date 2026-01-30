@@ -182,9 +182,9 @@ func (p *RagCompressProcessor) buildProcessorChain() error {
 func (p *RagCompressProcessor) createProcessedPrompt(
 	promptMsg *processor.PromptMsg,
 ) *ds.ProcessedPrompt {
-	processedMsgs := processor.SetLanguage(p.identity.Language, promptMsg.AssemblePrompt())
+	processor.SetLanguage(p.identity.Language, promptMsg)
 	return &ds.ProcessedPrompt{
-		Messages:     processedMsgs,
+		Messages:     promptMsg.AssemblePrompt(),
 		Tools:        promptMsg.GetTools(),
 		Agent:        p.agentName,
 		TokenMetrics: p.userMsgFilter.TokenMetrics,
