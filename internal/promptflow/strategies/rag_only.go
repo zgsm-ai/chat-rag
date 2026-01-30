@@ -69,8 +69,8 @@ func (p *RagOnlyProcessor) buildProcessorChain() error {
 func (p *RagOnlyProcessor) createProcessedPrompt(
 	promptMsg *processor.PromptMsg,
 ) *ds.ProcessedPrompt {
-	processedMsgs := processor.SetLanguage(p.identity.Language, promptMsg.AssemblePrompt())
+	processor.SetLanguage(p.identity.Language, promptMsg)
 	return &ds.ProcessedPrompt{
-		Messages: processedMsgs,
+		Messages: promptMsg.AssemblePrompt(),
 	}
 }

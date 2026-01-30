@@ -3,7 +3,6 @@ package strategies
 import (
 	"github.com/zgsm-ai/chat-rag/internal/model"
 	"github.com/zgsm-ai/chat-rag/internal/promptflow/ds"
-	"github.com/zgsm-ai/chat-rag/internal/promptflow/processor"
 	"github.com/zgsm-ai/chat-rag/internal/types"
 )
 
@@ -21,6 +20,6 @@ func NewDirectProcessor(identity *model.Identity) *DirectProcessor {
 // Arrange implements the PromptProcessor interface for DirectProcessor
 func (d *DirectProcessor) Arrange(messages []types.Message) (*ds.ProcessedPrompt, error) {
 	return &ds.ProcessedPrompt{
-		Messages: processor.SetLanguage(d.identity.Language, messages),
+		Messages: messages,
 	}, nil
 }
