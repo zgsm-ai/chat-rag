@@ -46,8 +46,9 @@ jobs:
             rm -rf "target-repo/${{ steps.target_dir.outputs.target_dir }}"
           fi
           mkdir -p "target-repo/${{ steps.target_dir.outputs.target_dir }}"
-          cp -r --exclude=.git source-repo/* "target-repo/${{ steps.target_dir.outputs.target_dir }}/" 2>/dev/null || true
-          cp -r --exclude=.git source-repo/.[!.]* "target-repo/${{ steps.target_dir.outputs.target_dir }}/" 2>/dev/null || true
+          rm -rf source-repo/.git
+          cp -r source-repo/* "target-repo/${{ steps.target_dir.outputs.target_dir }}/" 2>/dev/null || true
+          cp -r source-repo/.[!.]* "target-repo/${{ steps.target_dir.outputs.target_dir }}/" 2>/dev/null || true
 
       - name: Commit and push changes
         run: |
@@ -57,3 +58,4 @@ jobs:
           git add -A "${{ steps.target_dir.outputs.target_dir }}"
           git diff --staged --quiet || git commit -m "chore: update ${{ github.event.repository.name }} to ${{ steps.version.outputs.version }}"
           git push origin main
+
