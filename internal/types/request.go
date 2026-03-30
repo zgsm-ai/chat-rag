@@ -94,6 +94,8 @@ type ExtraBody struct {
 
 	// Extra fields for transparent passthrough of unknown fields
 	Extra map[string]any `json:"-"`
+	// custom prompt tags
+	PromptTags string `json:"promptTags"`
 }
 
 // UnmarshalJSON implements custom JSON unmarshaling to capture unknown fields
