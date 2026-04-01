@@ -581,17 +581,6 @@ func (ls *LoggerRecordService) saveLogToPermanentStorage(chatLog *model.ChatLog)
 		)
 		return
 	}
-	if ls.metricsReporter != nil {
-		var e string = ""
-		if len(chatLog.Error) > 0 {
-			// first item's first key
-			for key, _ := range chatLog.Error[0] {
-				e = string(key)
-				break
-			}
-		}
-		go ls.metricsReporter.ReportMetrics(chatLog, e) // async report metrics
-	}
 
 	// Create new file instead of appending
 	if err := ls.writeLogToFile(logFile, jsonStr, os.O_CREATE|os.O_WRONLY); err != nil {
@@ -602,6 +591,43 @@ func (ls *LoggerRecordService) saveLogToPermanentStorage(chatLog *model.ChatLog)
 	}
 
 	logger.Info("Log saved in storage", zap.String("fileName", logFile))
+
+	// Report metrics only after successful file write
+	if ls.metricsReporter != nil {
+		relativeLogFile := ls.logPathForMetrics(logFile)
+		var e string = ""
+		if len(chatLog.Error) > 0 {
+			// first item's first key
+			for key, _ := range chatLog.Error[0] {
+				e = string(key)
+				break
+			}
+		}
+		go ls.metricsReporter.ReportMetrics(chatLog, relativeLogFile, e) // async report metrics with log path relative to the log root
+	}
+}
+
+func (ls *LoggerRecordService) logPathForMetrics(logFile string) string {
+	relativeLogFile, err := filepath.Rel(ls.logFilePath, logFile)
+	if err != nil {
+		logger.Warn("Failed to derive relative log path for metrics report",
+			zap.String("logFile", logFile),
+			zap.String("logRoot", ls.logFilePath),
+			zap.Error(err),
+		)
+		return logFile
+	}
+
+	if relativeLogFile == ".." || strings.HasPrefix(relativeLogFile, ".."+string(filepath.Separator)) {
+		logger.Warn("Derived log path escaped log root; keeping original path for metrics report",
+			zap.String("logFile", logFile),
+			zap.String("logRoot", ls.logFilePath),
+			zap.String("relativeLogFile", relativeLogFile),
+		)
+		return logFile
+	}
+
+	return relativeLogFile
 }
 
 /*

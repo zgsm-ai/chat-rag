@@ -53,6 +53,8 @@ type Label struct {
 	EndTime            string `json:"end_time,omitempty"`
 	Mode               string `json:"mode,omitempty"`
 	Model              string `json:"model,omitempty"`
+	TaskID             string `json:"task_id,omitempty"`
+	LocalLogPath       string `json:"local_log_path,omitempty"`
 }
 
 // MetricsReport 表示完整的指标上报数据
@@ -64,13 +66,13 @@ type MetricsReport struct {
 }
 
 // ReportMetrics 上报聊天指标,errors 为了防止并发问题,单独处理
-func (mr *ChatMetricsReporter) ReportMetrics(chatLog *model.ChatLog, errors ...string) {
+func (mr *ChatMetricsReporter) ReportMetrics(chatLog *model.ChatLog, localLogPath string, errors ...string) {
 	if mr.ReportUrl == "" {
 		logger.Debug("metrics report url is empty, skip reporting")
 		return
 	}
 
-	report := mr.convertChatLogToReport(chatLog, errors...)
+	report := mr.convertChatLogToReport(chatLog, localLogPath, errors...)
 
 	if err := mr.sendReport(report, chatLog.Identity.AuthToken); err != nil {
 		logger.Error("failed to report metrics", zap.String("request_id", chatLog.Identity.RequestID), zap.Error(err))
@@ -78,12 +80,12 @@ func (mr *ChatMetricsReporter) ReportMetrics(chatLog *model.ChatLog, errors ...s
 }
 
 // convertChatLogToReport 将 ChatLog 转换为 MetricsReport
-func (mr *ChatMetricsReporter) convertChatLogToReport(chatLog *model.ChatLog, errors ...string) *MetricsReport {
+func (mr *ChatMetricsReporter) convertChatLogToReport(chatLog *model.ChatLog, localLogPath string, errors ...string) *MetricsReport {
 	report := &MetricsReport{
 		RequestID:       chatLog.Identity.RequestID,
 		RequestMetrics:  mr.buildRequestMetrics(chatLog),
 		ResponseMetrics: mr.buildResponseMetrics(chatLog, errors),
-		Label:           mr.buildLabel(chatLog),
+		Label:           mr.buildLabel(chatLog, localLogPath),
 	}
 
 	return report
@@ -156,10 +158,12 @@ func (mr *ChatMetricsReporter) buildResponseMetrics(chatLog *model.ChatLog, erro
 }
 
 // buildLabel 构建标签
-func (mr *ChatMetricsReporter) buildLabel(chatLog *model.ChatLog) Label {
+func (mr *ChatMetricsReporter) buildLabel(chatLog *model.ChatLog, localLogPath string) Label {
 	label := Label{
 		ClientVersion: chatLog.Identity.ClientVersion,
 		Model:         chatLog.Params.Model,
+		TaskID:        chatLog.Identity.TaskID,
+		LocalLogPath:  localLogPath,
 	}
 
 	// 请求时间 - 使用chatLog的时间戳
