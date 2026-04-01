@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"unicode/utf8"
 
 	"github.com/zgsm-ai/chat-rag/internal/client"
 	"github.com/zgsm-ai/chat-rag/internal/config"
@@ -81,6 +82,8 @@ type LoggerRecordService struct {
 
 	// processorStarted bool
 }
+
+const metricsLocalLogPathMaxBytes = 128
 
 // NewLogRecordService creates a new logger service
 func NewLogRecordService(config config.Config) LogRecordInterface {
@@ -627,7 +630,29 @@ func (ls *LoggerRecordService) logPathForMetrics(logFile string) string {
 		return logFile
 	}
 
+	if len(relativeLogFile) > metricsLocalLogPathMaxBytes {
+		truncatedLogFile := truncateUTF8ByBytes(relativeLogFile, metricsLocalLogPathMaxBytes)
+		logger.Warn("Relative log path exceeded metrics limit and was truncated",
+			zap.String("relativeLogFile", relativeLogFile),
+			zap.String("truncatedLogFile", truncatedLogFile),
+			zap.Int("maxBytes", metricsLocalLogPathMaxBytes),
+		)
+		return truncatedLogFile
+	}
+
 	return relativeLogFile
+}
+
+func truncateUTF8ByBytes(s string, maxBytes int) string {
+	if len(s) <= maxBytes {
+		return s
+	}
+
+	truncated := s[:maxBytes]
+	for len(truncated) > 0 && !utf8.ValidString(truncated) {
+		truncated = truncated[:len(truncated)-1]
+	}
+	return truncated
 }
 
 /*
