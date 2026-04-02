@@ -53,6 +53,7 @@ type Label struct {
 	EndTime            string `json:"end_time,omitempty"`
 	Mode               string `json:"mode,omitempty"`
 	Model              string `json:"model,omitempty"`
+	RoutedModel        string `json:"routed_model,omitempty"`
 	TaskID             string `json:"task_id,omitempty"`
 	LocalLogPath       string `json:"local_log_path,omitempty"`
 }
@@ -167,6 +168,7 @@ func (mr *ChatMetricsReporter) buildLabel(chatLog *model.ChatLog, localLogPath s
 	label := Label{
 		ClientVersion: chatLog.Identity.ClientVersion,
 		Model:         chatLog.Params.Model,
+		RoutedModel:   chatLog.Params.RoutedModel,
 		TaskID:        chatLog.Identity.TaskID,
 		LocalLogPath:  localLogPath,
 	}
