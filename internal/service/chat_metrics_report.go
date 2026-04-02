@@ -60,6 +60,7 @@ type Label struct {
 // MetricsReport 表示完整的指标上报数据
 type MetricsReport struct {
 	RequestID       string          `json:"request_id"`
+	UserID          string          `json:"user_id,omitempty"`
 	RequestMetrics  RequestMetrics  `json:"request_metrics"`
 	ResponseMetrics ResponseMetrics `json:"response_metrics"`
 	Label           Label           `json:"label"`
@@ -86,6 +87,10 @@ func (mr *ChatMetricsReporter) convertChatLogToReport(chatLog *model.ChatLog, lo
 		RequestMetrics:  mr.buildRequestMetrics(chatLog),
 		ResponseMetrics: mr.buildResponseMetrics(chatLog, errors),
 		Label:           mr.buildLabel(chatLog, localLogPath),
+	}
+
+	if chatLog.Identity.UserInfo != nil && chatLog.Identity.UserInfo.EmployeeNumber != "" {
+		report.UserID = chatLog.Identity.UserInfo.EmployeeNumber
 	}
 
 	return report
