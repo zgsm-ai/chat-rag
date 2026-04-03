@@ -1,9 +1,7 @@
-package handler
+package helper
 
 import (
-	"context"
 	"fmt"
-	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -11,41 +9,11 @@ import (
 	"github.com/zgsm-ai/chat-rag/internal/bootstrap"
 	"github.com/zgsm-ai/chat-rag/internal/logger"
 	"github.com/zgsm-ai/chat-rag/internal/model"
-	"github.com/zgsm-ai/chat-rag/internal/types"
 	"go.uber.org/zap"
 )
 
-// IdentityMiddleware is an optional authentication middleware
-// It extracts identity information from request headers and stores it in context
-func IdentityMiddleware(svcCtx *bootstrap.ServiceContext) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		// Extract identity information from request headers
-		identity := getIdentityFromHeaders(c)
-
-		// Store identity information in context
-		ctxWithIdentity := context.WithValue(c.Request.Context(), model.IdentityContextKey, identity)
-
-		// Also store x-request-id directly in context for logger access
-		if identity.RequestID != "" {
-			ctxWithIdentity = context.WithValue(ctxWithIdentity, types.HeaderRequestId, identity.RequestID)
-		}
-		// If request verification is enabled, perform verification
-		if svcCtx.Config.RequestVerify.Enabled {
-			if err := verifyRequest(c, identity, svcCtx); err != nil {
-				sendErrorResponse(c, http.StatusBadRequest, err)
-				c.Abort()
-				return
-			}
-		}
-
-		c.Request = c.Request.WithContext(ctxWithIdentity)
-
-		// Continue processing the request
-		c.Next()
-	}
-}
-
-func verifyRequest(c *gin.Context, identity *model.Identity, svcCtx *bootstrap.ServiceContext) error {
+// VerifyRequest verifies the request
+func VerifyRequest(c *gin.Context, identity *model.Identity, svcCtx *bootstrap.ServiceContext) error {
 	// verify x-request-id
 	verifyTime := false
 	if identity == nil {

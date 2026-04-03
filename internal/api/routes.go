@@ -1,10 +1,12 @@
-package handler
+package api
 
 import (
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/zgsm-ai/chat-rag/internal/api/handler"
+	"github.com/zgsm-ai/chat-rag/internal/api/middleware"
 	"github.com/zgsm-ai/chat-rag/internal/bootstrap"
 )
 
@@ -12,12 +14,18 @@ func RegisterHandlers(router *gin.Engine, serverCtx *bootstrap.ServiceContext) {
 	apiGroup := router.Group("/chat-rag/api")
 	{
 		// 为需要身份验证的路由应用中间件
-		apiGroup.POST("/v1/chat/completions", IdentityMiddleware(serverCtx), ChatCompletionHandler(serverCtx))
-		apiGroup.GET("/v1/chat/requests/:requestId/status", ChatStatusHandler(serverCtx))
+		apiGroup.POST(
+			"/v1/chat/completions",
+			middleware.IdentityMiddleware(serverCtx),
+			middleware.VoucherActivityMiddleware(serverCtx),
+			handler.ChatCompletionHandler(serverCtx),
+		)
+		apiGroup.GET("/v1/chat/requests/:requestId/status", handler.ChatStatusHandler(serverCtx))
+		apiGroup.GET("/v1/voucher/activity/query", handler.VoucherActivityQueryHandler(serverCtx))
 
 		// 添加转发接口 - 支持所有HTTP方法（仅在启用时注册）
 		if serverCtx.Config.Forward.Enabled {
-			apiGroup.Any("/forward/*path", ForwardHandler(serverCtx))
+			apiGroup.Any("/forward/*path", handler.ForwardHandler(serverCtx))
 		}
 	}
 
@@ -28,7 +36,7 @@ func RegisterHandlers(router *gin.Engine, serverCtx *bootstrap.ServiceContext) {
 	router.GET("/ready", ReadyHandler(serverCtx))
 
 	// 指标端点
-	router.GET("/metrics", MetricsHandler(serverCtx))
+	router.GET("/metrics", handler.MetricsHandler(serverCtx))
 }
 
 // HealthHandler 处理健康检查请求

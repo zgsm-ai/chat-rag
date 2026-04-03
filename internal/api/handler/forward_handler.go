@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/zgsm-ai/chat-rag/internal/api/helper"
 	"github.com/zgsm-ai/chat-rag/internal/bootstrap"
 	"github.com/zgsm-ai/chat-rag/internal/client"
 	"github.com/zgsm-ai/chat-rag/internal/logger"
@@ -27,7 +28,7 @@ func ForwardHandler(svcCtx *bootstrap.ServiceContext) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Check if forwarding is enabled
 		if !svcCtx.Config.Forward.Enabled {
-			sendErrorResponse(c, http.StatusForbidden, fmt.Errorf("forwarding is disabled"))
+			helper.SendErrorResponse(c, http.StatusForbidden, fmt.Errorf("forwarding is disabled"))
 			return
 		}
 
@@ -47,7 +48,7 @@ func ForwardHandler(svcCtx *bootstrap.ServiceContext) gin.HandlerFunc {
 			// 提取 /chat-rag/api/forward/ 之后的 path
 			path := strings.TrimPrefix(c.Request.URL.Path, "/chat-rag/api/forward")
 			path = strings.TrimPrefix(path, "/")
-			
+
 			// 根据path是否为空决定如何拼接URL
 			if path != "" {
 				targetURL = baseURL + "/" + path
@@ -55,7 +56,7 @@ func ForwardHandler(svcCtx *bootstrap.ServiceContext) gin.HandlerFunc {
 				targetURL = baseURL
 			}
 		} else {
-			sendErrorResponse(c, http.StatusBadRequest, fmt.Errorf("target URL is required"))
+			helper.SendErrorResponse(c, http.StatusBadRequest, fmt.Errorf("target URL is required"))
 			return
 		}
 
@@ -127,7 +128,7 @@ func ForwardHandler(svcCtx *bootstrap.ServiceContext) gin.HandlerFunc {
 				)
 			}
 
-			sendErrorResponse(c, http.StatusBadGateway, fmt.Errorf("failed to forward request: %w", err))
+			helper.SendErrorResponse(c, http.StatusBadGateway, fmt.Errorf("failed to forward request: %w", err))
 			return
 		}
 		defer resp.Body.Close()
@@ -148,7 +149,7 @@ func ForwardHandler(svcCtx *bootstrap.ServiceContext) gin.HandlerFunc {
 				)
 			}
 
-			sendErrorResponse(c, http.StatusInternalServerError, fmt.Errorf("failed to read response: %w", err))
+			helper.SendErrorResponse(c, http.StatusInternalServerError, fmt.Errorf("failed to read response: %w", err))
 			return
 		}
 

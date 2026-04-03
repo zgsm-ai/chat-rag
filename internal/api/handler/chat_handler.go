@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/zgsm-ai/chat-rag/internal/api/helper"
 	"github.com/zgsm-ai/chat-rag/internal/bootstrap"
 	"github.com/zgsm-ai/chat-rag/internal/logger"
 	"github.com/zgsm-ai/chat-rag/internal/logic"
@@ -20,7 +21,7 @@ func ChatCompletionHandler(svcCtx *bootstrap.ServiceContext) gin.HandlerFunc {
 		// 1. Parse and validate request
 		var req types.ChatCompletionRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
-			sendErrorResponse(c, http.StatusBadRequest, err)
+			helper.SendErrorResponse(c, http.StatusBadRequest, err)
 			return
 		}
 
@@ -62,7 +63,7 @@ func ChatCompletionHandler(svcCtx *bootstrap.ServiceContext) gin.HandlerFunc {
 
 // handleStreamResponse handles streaming response
 func handleStreamResponse(c *gin.Context, l *logic.ChatCompletionLogic) {
-	setSSEResponseHeaders(c)
+	helper.SetSSEResponseHeaders(c)
 	c.Status(http.StatusOK)
 
 	flusher, _ := c.Writer.(http.Flusher)
@@ -76,32 +77,10 @@ func handleStreamResponse(c *gin.Context, l *logic.ChatCompletionLogic) {
 func handleNonStreamResponse(c *gin.Context, l *logic.ChatCompletionLogic) {
 	resp, err := l.ChatCompletion()
 	if err != nil {
-		sendErrorResponse(c, http.StatusInternalServerError, err)
+		helper.SendErrorResponse(c, http.StatusInternalServerError, err)
 		return
 	}
 	c.JSON(http.StatusOK, resp)
-}
-
-// sendErrorResponse sends a structured error response
-func sendErrorResponse(c *gin.Context, statusCode int, err error) {
-	fmt.Printf("==> sendErrorResponse: %+v\n", err)
-	message := err.Error()
-	errType := "server_error"
-
-	// Check if the error is an APIError with a specific status code
-	if apiErr, ok := err.(*types.APIError); ok {
-		statusCode = apiErr.StatusCode
-		message = apiErr.Message
-		errType = apiErr.Type
-	}
-
-	c.AbortWithStatusJSON(statusCode, gin.H{
-		"error": gin.H{
-			"message": message,
-			"type":    errType,
-			"code":    statusCode,
-		},
-	})
 }
 
 // sendStreamError sends an error in streaming format
