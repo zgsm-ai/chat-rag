@@ -24,6 +24,7 @@ const (
 // LLMConfig
 type LLMConfig struct {
 	Endpoint            string
+	ApiKey              string   `mapstructure:"apiKey" yaml:"apiKey"`
 	FuncCallingModels   []string
 	ChunkMetricsEnabled bool
 }
