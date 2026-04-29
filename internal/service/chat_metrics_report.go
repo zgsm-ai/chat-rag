@@ -140,7 +140,7 @@ func (mr *ChatMetricsReporter) buildResponseMetrics(chatLog *model.ChatLog, erro
 		Duration:         float64(chatLog.Latency.TotalLatency),
 		PromptTokens:     chatLog.Usage.PromptTokens,
 		CompletionTokens: chatLog.Usage.CompletionTokens,
-		CacheTokens:      0, // 默认为0，如果后续有缓存tokens数据可以添加
+		CacheTokens:      chatLog.Usage.CachedTokens, // 缓存
 	}
 
 	// 首token时长 (ms)
