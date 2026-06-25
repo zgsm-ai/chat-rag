@@ -130,13 +130,13 @@ func NewLogRecordService(cfg config.Config) LogRecordInterface {
 	}
 
 	return &LoggerRecordService{
-		logFilePath:  cfg.Log.LogFilePath, // Permanent storage directory
-		errorLogMode: errorLogMode,
-		errorSampler: errorSampler,
-		logChan:      make(chan *model.ChatLog, 1000),
-		stopChan:     make(chan struct{}),
-		instanceID:   instanceID,
-		deptClient:   deptClient,
+		logFilePath:     cfg.Log.LogFilePath, // Permanent storage directory
+		errorLogMode:    errorLogMode,
+		errorSampler:    errorSampler,
+		logChan:         make(chan *model.ChatLog, 1000),
+		stopChan:        make(chan struct{}),
+		instanceID:      instanceID,
+		deptClient:      deptClient,
 		metricsReporter: metricsReporter,
 	}
 }

@@ -3,8 +3,10 @@ package service
 import (
 	"testing"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/zgsm-ai/chat-rag/internal/config"
 	"github.com/zgsm-ai/chat-rag/internal/model"
+	"github.com/zgsm-ai/chat-rag/internal/storage"
 	"github.com/zgsm-ai/chat-rag/internal/types"
 )
 
@@ -242,5 +244,65 @@ func TestShouldSaveErrorLog_DifferentErrorTypesIndependentBuckets(t *testing.T) 
 	// Second call with ApiError: denied (same bucket exhausted).
 	if ls.shouldSaveErrorLog(logApiErr) {
 		t.Fatal("expected second ApiError save for alice to be dropped")
+	}
+}
+
+// --- Invariant: metrics are reported even when the error log is not persisted ---
+
+type fakeMetrics struct{ recordCalls int }
+
+func (f *fakeMetrics) RecordChatLog(*model.ChatLog)      { f.recordCalls++ }
+func (f *fakeMetrics) GetRegistry() *prometheus.Registry { return nil }
+
+type fakeStorage struct{ writes int }
+
+func (f *fakeStorage) Write(key string, data []byte) (*storage.WriteInfo, error) {
+	f.writes++
+	return &storage.WriteInfo{FilePath: key}, nil
+}
+func (f *fakeStorage) Close() error { return nil }
+
+func newErrorLogWithUser(user string) *model.ChatLog {
+	log := newErrorLog(user)
+	log.Identity.UserInfo = &model.UserInfo{}
+	return log
+}
+
+func TestLogDirectToStorage_NoneModeStillReportsMetrics(t *testing.T) {
+	metrics := &fakeMetrics{}
+	store := &fakeStorage{}
+	ls := &LoggerRecordService{errorLogMode: config.ErrorLogModeNone}
+	ls.SetMetricsService(metrics)
+	ls.SetStorageBackend(store)
+
+	ls.logDirectToStorage(newErrorLogWithUser("alice"))
+
+	if metrics.recordCalls != 1 {
+		t.Fatalf("expected RecordChatLog called once even when save skipped, got %d", metrics.recordCalls)
+	}
+	if store.writes != 0 {
+		t.Fatalf("expected no storage write in none mode, got %d", store.writes)
+	}
+}
+
+func TestLogDirectToStorage_SampledReportsMetricsOnDrop(t *testing.T) {
+	metrics := &fakeMetrics{}
+	store := &fakeStorage{}
+	ls := &LoggerRecordService{
+		errorLogMode: config.ErrorLogModeSampled,
+		errorSampler: NewErrorLogSampler(1, 60),
+	}
+	ls.SetMetricsService(metrics)
+	ls.SetStorageBackend(store)
+
+	for i := 0; i < 2; i++ {
+		ls.logDirectToStorage(newErrorLogWithUser("alice"))
+	}
+
+	if metrics.recordCalls != 2 {
+		t.Fatalf("expected RecordChatLog called twice (always reported), got %d", metrics.recordCalls)
+	}
+	if store.writes != 1 {
+		t.Fatalf("expected exactly one storage write (second sampled out), got %d", store.writes)
 	}
 }
